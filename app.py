@@ -8,48 +8,64 @@ from streamlit_gsheets import GSheetsConnection
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ============================================================
 st.set_page_config(
-    page_title="Navio-Patrula Macau",
+    page_title="Navio-Patrulha Macau",
     layout="wide",
     page_icon="⚓"
 )
 
-# Logo + título
-col_logo, col_titulo = st.columns([1, 5])
-with col_logo:
-    # Arquivo logo_npamacau.png deve estar na mesma pasta do app.py
-    st.image("logo_npamacau.png", width=90)
-with col_titulo:
-    st.title("Navio-Patrula Macau")
+# Cabeçalho centralizado: brasão + título colados
+c1, c2, c3 = st.columns([1, 4, 1])
+with c2:
+    st.image("logo_npamacau.png", width=80)
+    st.markdown(
+        """
+        <h1 style="text-align:center; margin-top:0.2rem; font-weight:700;">
+            Navio-Patrulha Macau
+        </h1>
+        """,
+        unsafe_allow_html=True
+    )
 
-# --- CSS para visual mais moderno ---
+# --- CSS para visual mais moderno e harmônico ---
 st.markdown(
     """
     <style>
+    * {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
     .stApp {
-        background: radial-gradient(circle at top left, #0f172a 0, #020617 45%, #000 100%);
+        background: radial-gradient(circle at top left, #020617 0, #020617 40%, #000 100%);
         color: #e5e7eb;
     }
-    h1 {
-        font-weight: 700 !important;
+    h1, h2, h3, h4 {
         color: #e5e7eb !important;
+        letter-spacing: 0.03em;
     }
     div[data-testid="metric-container"] {
-        background: rgba(15, 23, 42, 0.85);
+        background: rgba(15, 23, 42, 0.9);
         border-radius: 0.9rem;
         padding: 1rem;
         border: 1px solid #1f2937;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+        box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+    }
+    div[data-testid="metric-container"] > label {
+        color: #9ca3af !important;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
     }
     button[data-baseweb="tab"] {
         font-weight: 600;
+        border-radius: 999px !important;
+        padding: 0.4rem 1rem !important;
+        margin-right: 0.4rem;
     }
     button[data-baseweb="tab"]:hover {
-        background: #0f172a;
+        background: #0b1220;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        background: #0f172a;
-        color: #e5e7eb;
-        border-bottom: 2px solid #38bdf8;
+        background: linear-gradient(90deg, #38bdf8, #22c55e);
+        color: #020617;
     }
     .stDataFrame {
         background: #020617;
@@ -75,7 +91,7 @@ def parse_bool(value) -> bool:
     return s in ("true", "1", "sim", "yes", "y", "x")
 
 
-# Férias ainda são aquelas colunas sem acento, como já vimos:
+# Férias (mesmo esquema anterior – colunas sem acento)
 FERIAS_COLS = [
     ("Inicio",   "Fim"),    # Período 1 (I-J)
     ("Inicio.1", "Fim.1"),  # Período 2 (L-M)
@@ -113,16 +129,16 @@ except Exception as e:
 
 
 # ============================================================
-# 4. DESCOBRIR DINAMICAMENTE AS AUSÊNCIAS (INÍCIO/FIM/MOTIVO)
+# 4. DESCOBRIR DINAMICAMENTE AS AUSÊNCIAS (INÍCIO/FIM/MOTIVO/CURSO)
 #    – OUTRAS AUSÊNCIAS x CURSOS
 # ============================================================
 
 def descobrir_ausencias_triplets(df: pd.DataFrame):
     """
-    Busca todas as colunas de ausências do tipo:
-    'Início', 'FIm', 'Motivo', 'Início.1', 'FIm.1', 'Motivo.1', ...
-    Retorna uma lista ordenada: [(col_ini, col_fim, col_mot, tipo), ...]
-    onde tipo é 'Outros' para os 3 primeiros blocos e 'Curso' do 4º em diante.
+    Busca todas as colunas do tipo:
+    'Início', 'FIm', e um campo de motivo (Motivo ou Curso).
+    Retorna lista: [(col_ini, col_fim, col_mot, tipo), ...]
+    onde tipo = 'Outros' para os 3 primeiros blocos e 'Curso' do 4º em diante.
     """
     triplets = []
 
@@ -139,9 +155,20 @@ def descobrir_ausencias_triplets(df: pd.DataFrame):
 
         col_ini = col
         col_fim = f"FIm{sufixo}"
-        col_mot = f"Motivo{sufixo}"
 
-        if col_fim in df.columns and col_mot in df.columns:
+        # Motivo pode ser "Motivo", "Curso" ou variações com sufixo
+        candidatos_motivo = [
+            f"Motivo{sufixo}",
+            f"Curso{sufixo}",
+            f"Motivo Curso{sufixo}"
+        ]
+        col_mot = None
+        for c in candidatos_motivo:
+            if c in df.columns:
+                col_mot = c
+                break
+
+        if col_fim in df.columns and col_mot:
             ordem = df.columns.get_loc(col_ini)
             triplets.append((ordem, col_ini, col_fim, col_mot))
 
@@ -219,7 +246,6 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
                 if dur < 1 or dur > 365:
                     continue
 
-                # Para ambos: se motivo vier vazio, vira OUTROS
                 motivo_real = motivo_texto if motivo_texto and "nan" not in motivo_texto.lower() else "OUTROS"
 
                 eventos.append({
@@ -343,14 +369,48 @@ col4.metric("Prontidão", f"{percentual:.1f}%")
 
 
 # ============================================================
-# 10. TABS PRINCIPAIS
+# 10. FUNÇÃO PARA GRÁFICO DE PIZZA MODERNO
 # ============================================================
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+def grafico_pizza_motivos(df_motivos_dias, titulo):
+    fig = px.pie(
+        df_motivos_dias,
+        names="Motivo",
+        values="Duracao_dias",
+        hole=0.45,
+    )
+    fig.update_traces(
+        textposition="inside",
+        textinfo="percent+label",
+        hovertemplate="<b>%{label}</b><br>%{value} dias (%{percent})<extra></extra>"
+    )
+    fig.update_layout(
+        title=titulo,
+        showlegend=True,
+        legend_title_text="Motivo",
+        margin=dict(t=60, b=20, l=0, r=0),
+        uniformtext_minsize=12,
+        uniformtext_mode='hide',
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(
+            family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            color="#e5e7eb"
+        )
+    )
+    return fig
+
+
+# ============================================================
+# 11. TABS PRINCIPAIS
+# ============================================================
+
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📋 Situação Diária",
     "📅 Linha do Tempo (Gantt)",
     "📊 Estatísticas & Análises",
     "🏖️ Férias",
+    "🎓 Cursos",
     "🛠 Log / Debug"
 ])
 
@@ -455,7 +515,8 @@ with tab3:
         if df_evt.empty:
             st.info("Nenhum evento para os filtros selecionados.")
         else:
-            col_a1, col_a2, col_a3, col_a4 = st.columns(4)
+            # === métricas (sem "militar mais ausente") ===
+            col_a1, col_a2, col_a3 = st.columns(3)
 
             total_dias_ausencia = df_evt["Duracao_dias"].sum()
             media_dias_por_militar = df_evt.groupby("Nome")["Duracao_dias"].sum().mean()
@@ -466,38 +527,20 @@ with tab3:
                 if not df_ferias.empty else 0
             )
 
-            top_mais_ausentes = (
-                df_evt.groupby("Nome")["Duracao_dias"].sum()
-                .sort_values(ascending=False)
-                .head(1)
-            )
-            if not top_mais_ausentes.empty:
-                nome_top = top_mais_ausentes.index[0]
-                dias_top = int(top_mais_ausentes.iloc[0])
-                resumo_top = f"{nome_top} ({dias_top} dias)"
-            else:
-                resumo_top = "-"
-
             col_a1.metric("Dias de ausência (total)", int(total_dias_ausencia))
             col_a2.metric("Média de dias de ausência por militar", f"{media_dias_por_militar:.1f}")
             col_a3.metric("Média de dias de FÉRIAS por militar", f"{media_dias_ferias:.1f}")
-            col_a4.metric("Militar mais ausente (dias)", resumo_top)
 
             st.markdown("---")
 
-            # Gráfico de motivos – pizza (inclui Férias, Outros, Curso etc)
+            # Gráfico de motivos – donut moderno
             df_motivos_dias = (
                 df_evt.groupby("Motivo")["Duracao_dias"]
                 .sum()
                 .reset_index()
                 .sort_values("Duracao_dias", ascending=False)
             )
-            fig_motivos = px.pie(
-                df_motivos_dias,
-                names="Motivo",
-                values="Duracao_dias",
-                title="Proporção de Dias de Ausência por Motivo"
-            )
+            fig_motivos = grafico_pizza_motivos(df_motivos_dias, "Proporção de Dias de Ausência por Motivo")
             st.plotly_chart(fig_motivos, use_container_width=True)
 
             st.markdown("---")
@@ -517,6 +560,10 @@ with tab3:
                 color="Posto",
                 title="Top 10 – Dias de ausência por militar",
                 labels={"Duracao_dias": "Dias de ausência"}
+            )
+            fig_top10.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,0.8)",
             )
             st.plotly_chart(fig_top10, use_container_width=True)
 
@@ -552,6 +599,10 @@ with tab3:
                         markers=True,
                         title="Média de Ausentes por Dia – por Mês",
                         labels={"Mes": "Mês", "Media_ausentes_dia": "Média de ausentes/dia"}
+                    )
+                    fig_mensal.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(15,23,42,0.8)",
                     )
                     st.plotly_chart(fig_mensal, use_container_width=True)
                 else:
@@ -614,6 +665,10 @@ with tab4:
                 title="Quantidade de militares com férias por escala",
                 labels={"Militares": "Militares em férias (no ano)"}
             )
+            fig_escala.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,0.8)",
+            )
             col_fx1.plotly_chart(fig_escala, use_container_width=True)
 
             # 2 - Quantidade de militares de férias por mês
@@ -621,7 +676,6 @@ with tab4:
                 df_dias_ferias = df_dias[df_dias["Tipo"] == "Férias"].copy()
                 if not df_dias_ferias.empty:
                     df_dias_ferias["Mes"] = df_dias_ferias["Data"].dt.to_period("M").dt.to_timestamp()
-                    # Um militar conta 1 vez por mês, mesmo que fique o mês inteiro
                     df_mes_ferias = (
                         df_dias_ferias[["Mes", "Nome"]]
                         .drop_duplicates()
@@ -636,6 +690,10 @@ with tab4:
                         title="Quantidade de militares com férias previstas por mês",
                         labels={"Mes": "Mês", "Militares": "Militares com férias no mês"}
                     )
+                    fig_mes_ferias.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(15,23,42,0.8)",
+                    )
                     col_fx2.plotly_chart(fig_mes_ferias, use_container_width=True)
                 else:
                     col_fx2.info("Sem dados diários suficientes para calcular férias por mês.")
@@ -644,9 +702,128 @@ with tab4:
 
 
 # ------------------------------------------------------------
-# TAB 5 – LOG / DEBUG
+# TAB 5 – CURSOS
 # ------------------------------------------------------------
 with tab5:
+    st.subheader("Análises de Cursos")
+
+    if df_eventos.empty:
+        st.write("Sem dados de cursos registrados.")
+    else:
+        df_cursos = df_eventos[df_eventos["Tipo"] == "Curso"].copy()
+
+        if df_cursos.empty:
+            st.info("Nenhum curso cadastrado na planilha.")
+        else:
+            # Realizados = curso já terminou; Inscritos = fim >= hoje
+            realizados = df_cursos[df_cursos["Fim"] < hoje].copy()
+            inscritos = df_cursos[df_cursos["Fim"] >= hoje].copy()
+
+            col_c1, col_c2 = st.columns(2)
+
+            # ----- Tabela 1: cursos já realizados -----
+            with col_c1:
+                st.markdown("### ✅ Cursos já realizados")
+                if realizados.empty:
+                    st.info("Nenhum curso finalizado até a data de referência.")
+                else:
+                    t_real = realizados[["Posto", "Nome", "Motivo", "Inicio", "Fim", "Duracao_dias"]].copy()
+                    t_real["Início"] = t_real["Inicio"].dt.strftime("%d/%m/%Y")
+                    t_real["Término"] = t_real["Fim"].dt.strftime("%d/%m/%Y")
+                    t_real = t_real.drop(columns=["Inicio", "Fim"])
+                    t_real = t_real.rename(columns={"Motivo": "Curso", "Duracao_dias": "Dias"})
+                    t_real = t_real.sort_values(by=["Nome", "Início"])
+                    st.dataframe(t_real, use_container_width=True, hide_index=True)
+
+            # ----- Tabela 2: cursos em andamento / futuros -----
+            with col_c2:
+                st.markdown("### 📌 Cursos em andamento / futuros")
+                if inscritos.empty:
+                    st.info("Nenhum militar com curso em andamento ou futuro.")
+                else:
+                    t_insc = inscritos[["Posto", "Nome", "Motivo", "Inicio", "Fim", "Duracao_dias"]].copy()
+                    t_insc["Início"] = t_insc["Inicio"].dt.strftime("%d/%m/%Y")
+                    t_insc["Término"] = t_insc["Fim"].dt.strftime("%d/%m/%Y")
+                    t_insc = t_insc.drop(columns=["Inicio", "Fim"])
+                    t_insc = t_insc.rename(columns={"Motivo": "Curso", "Duracao_dias": "Dias"})
+                    t_insc = t_insc.sort_values(by=["Início", "Nome"])
+                    st.dataframe(t_insc, use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+            st.subheader("Estatísticas dos cursos realizados")
+
+            if realizados.empty:
+                st.info("Ainda não há cursos concluídos para gerar estatísticas.")
+            else:
+                col_k1, col_k2, col_k3 = st.columns(3)
+
+                total_cursos_realizados = len(realizados)
+                militares_com_curso = realizados["Nome"].nunique()
+                cursos_diferentes = realizados["Motivo"].nunique()
+
+                col_k1.metric("Cursos realizados (eventos)", total_cursos_realizados)
+                col_k2.metric("Militares que já realizaram curso", militares_com_curso)
+                col_k3.metric("Tipos diferentes de cursos", cursos_diferentes)
+
+                st.markdown("---")
+
+                col_g1, col_g2 = st.columns(2)
+
+                # Cursos mais frequentes (por nome de curso)
+                df_cursos_freq = (
+                    realizados.groupby("Motivo")["Nome"]
+                    .nunique()
+                    .reset_index(name="Militares")
+                    .sort_values("Militares", ascending=False)
+                )
+                fig_cursos_freq = px.bar(
+                    df_cursos_freq,
+                    x="Motivo",
+                    y="Militares",
+                    title="Cursos mais frequentes (militares que já realizaram)",
+                    labels={"Motivo": "Curso", "Militares": "Militares"}
+                )
+                fig_cursos_freq.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(15,23,42,0.8)",
+                )
+                col_g1.plotly_chart(fig_cursos_freq, use_container_width=True)
+
+                # Cursos realizados por mês
+                if not df_dias.empty:
+                    df_dias_cursos = df_dias[df_dias["Tipo"] == "Curso"].copy()
+                    if not df_dias_cursos.empty:
+                        df_dias_cursos["Mes"] = df_dias_cursos["Data"].dt.to_period("M").dt.to_timestamp()
+                        df_curso_mes = (
+                            df_dias_cursos[["Mes", "Nome"]]
+                            .drop_duplicates()
+                            .groupby("Mes")["Nome"]
+                            .nunique()
+                            .reset_index(name="Militares")
+                        )
+                        fig_curso_mes = px.line(
+                            df_curso_mes,
+                            x="Mes",
+                            y="Militares",
+                            markers=True,
+                            title="Militares em curso por mês",
+                            labels={"Mes": "Mês", "Militares": "Militares em curso"}
+                        )
+                        fig_curso_mes.update_layout(
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            plot_bgcolor="rgba(15,23,42,0.8)",
+                        )
+                        col_g2.plotly_chart(fig_curso_mes, use_container_width=True)
+                    else:
+                        col_g2.info("Sem dados diários suficientes para análise mensal de cursos.")
+                else:
+                    col_g2.info("Sem expansão diária para análise mensal de cursos.")
+
+
+# ------------------------------------------------------------
+# TAB 6 – LOG / DEBUG
+# ------------------------------------------------------------
+with tab6:
     st.subheader("Log / Debug")
 
     st.markdown("### 🔹 df_raw (dados brutos do Google Sheets)")
@@ -658,17 +835,17 @@ with tab5:
     st.dataframe(df_raw.head(15), use_container_width=True)
 
     st.markdown("---")
-    st.markdown("### 🔹 Mapeamento de Ausências (Início/FIm/Motivo)")
+    st.markdown("### 🔹 Mapeamento de Ausências (Início/FIm/Motivo/Curso)")
 
     if AUSENCIAS_TRIPLETS:
         debug_rows = []
         for idx, (c_ini, c_fim, c_mot, tipo) in enumerate(AUSENCIAS_TRIPLETS, start=1):
             debug_rows.append(
-                {"Bloco": idx, "Col_Inicio": c_ini, "Col_Fim": c_fim, "Col_Motivo": c_mot, "Tipo": tipo}
+                {"Bloco": idx, "Col_Inicio": c_ini, "Col_Fim": c_fim, "Col_Motivo/Curso": c_mot, "Tipo": tipo}
             )
         st.dataframe(pd.DataFrame(debug_rows), use_container_width=True)
     else:
-        st.info("Nenhum trio Início/FIm/Motivo encontrado.")
+        st.info("Nenhum trio Início/FIm/Motivo/Curso encontrado.")
 
     st.markdown("---")
     st.markdown("### 🔹 df_eventos (eventos gerados)")
@@ -686,7 +863,7 @@ with tab5:
 
 
 # ============================================================
-# 11. RODAPÉ
+# 12. RODAPÉ
 # ============================================================
 st.markdown("<hr style='border-color:#1f2937; margin-top:2rem;'/>", unsafe_allow_html=True)
 st.markdown(
