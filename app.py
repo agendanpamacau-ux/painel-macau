@@ -13,8 +13,8 @@ st.set_page_config(
     page_icon="logo_npamacau.png"
 )
 
-# Versão atualizada com correção de colunas
-APP_VERSION = "v1.9.1 (Full)"
+# 🔺 Sempre que você pedir alteração no app, eu subo a versão
+APP_VERSION = "v2.0.0"
 
 # --- CSS global / tema ---
 st.markdown(
@@ -106,9 +106,9 @@ st.markdown(
 
 HEADER_ROW = 2  # linha 3 na planilha
 
-# LISTA DE COLUNAS QUE ESTÃO VAZIAS NA PLANILHA
-# Se o pandas ignorar estas colunas, precisamos descontar do índice.
-KNOWN_EMPTY_COLS = ["H", "X", "AC", "AH", "AM", "AR", "AW", "IC"]
+BLANK_COL_LETTERS = [
+    "H", "X", "AC", "AH", "AM", "AR", "AW", "IC"
+]
 
 def parse_bool(value) -> bool:
     """Converte checkbox/texto da planilha em booleano robusto."""
@@ -117,48 +117,63 @@ def parse_bool(value) -> bool:
     s = str(value).strip().lower()
     return s in ("true", "1", "sim", "yes", "y", "x")
 
-def col_letter_to_index(col_letter: str) -> int:
+def iter_excel_letters(end_letter: str):
     """
-    Converte letra de coluna (A, B, ..., Z, AA, AB, ...) para índice 0-based.
+    Itera de 'A' até end_letter (inclusive) em formato de coluna Excel:
+    A, B, ..., Z, AA, AB, ...
     """
-    col_letter = col_letter.upper()
-    result = 0
-    for ch in col_letter:
-        if not ch.isalpha():
-            break
-        result = result * 26 + (ord(ch) - ord('A') + 1)
-    return result - 1  # 0-based
+    def next_col(col: str) -> str:
+        col = col.upper()
+        i = len(col) - 1
+        carry = True
+        res = list(col)
+        while i >= 0 and carry:
+            if res[i] == 'Z':
+                res[i] = 'A'
+                i -= 1
+            else:
+                res[i] = chr(ord(res[i]) + 1)
+                carry = False
+        if carry:
+            res.insert(0, 'A')
+        return "".join(res)
 
-def get_col_name(df: pd.DataFrame, letter: str):
+    current = "A"
+    while True:
+        yield current
+        if current == end_letter.upper():
+            break
+        current = next_col(current)
+
+def build_column_letter_map(df: pd.DataFrame, end_letter: str = "IG"):
+    """
+    Constrói um dicionário {letra_excel: nome_da_coluna_no_df},
+    compensando colunas vazias (que não existem no df).
+    """
+    cols = list(df.columns)
+    mapping = {}
+    idx_df = 0
+
+    for letter in iter_excel_letters(end_letter):
+        if letter in BLANK_COL_LETTERS:
+            # Coluna totalmente em branco na planilha → não existe no df
+            continue
+        if idx_df >= len(cols):
+            break
+        mapping[letter] = cols[idx_df]
+        idx_df += 1
+
+    return mapping
+
+# Será preenchido depois de carregar o df_raw
+COL_LETTER_MAP = {}
+
+def get_col_name(letter: str):
     """
     Retorna o nome da coluna do DataFrame correspondente à letra da planilha.
-    INCLUI LÓGICA DE CORREÇÃO: Se o DataFrame tiver menos colunas que o esperado,
-    tenta compensar as colunas vazias que foram dropadas.
+    Usa o mapa COL_LETTER_MAP, que já compensa colunas vazias.
     """
-    idx_teorico = col_letter_to_index(letter)
-    cols = list(df.columns)
-    total_cols = len(cols)
-
-    # 1. Tenta pegar pelo índice direto (caso o Pandas tenha lido as colunas vazias como Unnamed)
-    if 0 <= idx_teorico < total_cols:
-        col_candidata = cols[idx_teorico]
-        # Se achamos a coluna e ela não parece ser "Unnamed" (ou se a letra pedida não é uma das vazias), retornamos
-        if "Unnamed" not in str(col_candidata) or letter in KNOWN_EMPTY_COLS:
-            return col_candidata
-
-    # 2. Se falhou ou parece errado, tenta o Índice Ajustado (Descontando as vazias conhecidas)
-    # Conta quantas colunas vazias existem ANTES da letra solicitada
-    desconto = 0
-    for vazia in KNOWN_EMPTY_COLS:
-        if col_letter_to_index(vazia) < idx_teorico:
-            desconto += 1
-    
-    idx_ajustado = idx_teorico - desconto
-    
-    if 0 <= idx_ajustado < total_cols:
-        return cols[idx_ajustado]
-        
-    return None
+    return COL_LETTER_MAP.get(letter.upper())
 
 # ============================================================
 # 3. CARGA DE DADOS
@@ -174,14 +189,9 @@ def load_data():
         ttl="10m"
     )
 
-    # Remove linhas sem nome (coluna "Nome" ou coluna C se o nome mudar)
-    col_c_idx = col_letter_to_index("C")
-    # Tenta achar a coluna Nome pelo nome ou índice
+    # Remove linhas sem nome (coluna "Nome")
     if "Nome" in df.columns:
         df = df.dropna(subset=["Nome"])
-    elif len(df.columns) > col_c_idx:
-        c_nome = df.columns[col_c_idx] # Coluna C original
-        df = df.dropna(subset=[c_nome])
 
     df = df.reset_index(drop=True)
     return df
@@ -192,15 +202,17 @@ except Exception as e:
     st.error(f"Erro de conexão. Verifique o arquivo secrets.toml. Detalhe: {e}")
     st.stop()
 
+# Agora que df_raw existe, montamos o mapa de letras → colunas
+COL_LETTER_MAP = build_column_letter_map(df_raw, end_letter="IG")
+
 # ============================================================
-# 3.1 MAPEAMENTO EXPLÍCITO – FÉRIAS
+# 3.1 MAPEAMENTO EXPLÍCITO – FÉRIAS (I–J, L–M, O–P)
 # ============================================================
 
 FERIAS_COLS = []
-# Períodos 1, 2 e 3
 for ini_letter, fim_letter in [("I", "J"), ("L", "M"), ("O", "P")]:
-    c_ini = get_col_name(df_raw, ini_letter)
-    c_fim = get_col_name(df_raw, fim_letter)
+    c_ini = get_col_name(ini_letter)
+    c_fim = get_col_name(fim_letter)
     if c_ini and c_fim:
         FERIAS_COLS.append((c_ini, c_fim))
 
@@ -209,25 +221,20 @@ for ini_letter, fim_letter in [("I", "J"), ("L", "M"), ("O", "P")]:
 # ============================================================
 
 AUSENCIAS_TRIPLETS = []
-
-# Mapeamento completo baseado na sua descrição:
-# Período 4 (Y-Z), 5 (AD-AE), 6 (AI-AJ) -> Outros
-# Período 7 (AN-AO), 8 (AS-AT), 9 (DH-EL), 10 (ID-IE) -> Curso
-CONFIG_AUSENCIAS = [
-    ("Y",  "Z",  "AB", "Outros"), # P4
-    ("AD", "AE", "AG", "Outros"), # P5
-    ("AI", "AJ", "AL", "Outros"), # P6
-    ("AN", "AO", "AQ", "Curso"),  # P7
-    ("AS", "AT", "AV", "Curso"),  # P8
-    ("DH", "EL", "GW", "Curso"),  # P9
-    ("ID", "IE", "IG", "Curso"),  # P10
-]
-
-for ini_letter, fim_letter, tipo_letter, tipo_base in CONFIG_AUSENCIAS:
-    c_ini  = get_col_name(df_raw, ini_letter)
-    c_fim  = get_col_name(df_raw, fim_letter)
-    c_tipo = get_col_name(df_raw, tipo_letter)
-    
+# 4,5,6 – outras ausências
+# 7,8,9,10 – cursos
+for ini_letter, fim_letter, tipo_letter, tipo_base in [
+    ("Y",  "Z",  "AB", "Outros"),  # período 4
+    ("AD", "AE", "AG", "Outros"),  # período 5
+    ("AI", "AJ", "AL", "Outros"),  # período 6
+    ("AN", "AO", "AQ", "Curso"),   # período 7
+    ("AS", "AT", "AV", "Curso"),   # período 8
+    ("DH", "EL", "GW", "Curso"),   # período 9
+    ("ID", "IE", "IG", "Curso"),   # período 10
+]:
+    c_ini  = get_col_name(ini_letter)
+    c_fim  = get_col_name(fim_letter)
+    c_tipo = get_col_name(tipo_letter)
     if c_ini and c_fim and c_tipo:
         AUSENCIAS_TRIPLETS.append((c_ini, c_fim, c_tipo, tipo_base))
 
@@ -239,21 +246,13 @@ for ini_letter, fim_letter, tipo_letter, tipo_base in CONFIG_AUSENCIAS:
 def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
     eventos = []
 
-    # Identificar colunas base com segurança usando get_col_name
-    c_posto = get_col_name(df_raw, "B")
-    c_nome  = get_col_name(df_raw, "C")
-    c_sv    = get_col_name(df_raw, "D")
-    c_eq    = get_col_name(df_raw, "E")
-    c_gvi   = get_col_name(df_raw, "F")
-    c_in    = get_col_name(df_raw, "G")
-
     for _, row in df_raw.iterrows():
-        posto  = row.get(c_posto, "")
-        nome   = row.get(c_nome, "")
-        escala = row.get(c_sv, "")
-        eqman  = row.get(c_eq, "")
-        gvi    = row.get(c_gvi, "")
-        insp   = row.get(c_in, "")
+        posto  = row.get("Posto", "")
+        nome   = row.get("Nome", "")
+        escala = row.get("Serviço", "")
+        eqman  = row.get("EqMan", "")
+        gvi    = row.get("Gvi/GP", "")
+        insp   = row.get("IN", "")
 
         militar_info = {
             "Posto": posto,
@@ -298,6 +297,9 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
 
                 tipo_final = tipo_base  # "Outros" ou "Curso"
 
+                # Motivo:
+                # - para OUTROS: texto da listbox (Disp Médica, Destaque, etc) ou "OUTROS"
+                # - para CURSO: texto da listbox (C-ESP-..., C-EXP-...) ou "CURSO"
                 if motivo_texto and "nan" not in motivo_texto.lower():
                     motivo_real = motivo_texto
                 else:
@@ -357,16 +359,12 @@ df_dias = expandir_eventos_por_dia(df_eventos)
 
 def filtrar_tripulacao(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
     res = df.copy()
-    c_eq  = get_col_name(df_raw, "E")
-    c_in  = get_col_name(df_raw, "G")
-    c_gvi = get_col_name(df_raw, "F")
-
-    if apenas_eqman and c_eq in res.columns:
-        res = res[(res[c_eq].notna()) & (res[c_eq].astype(str) != "-") & (res[c_eq].astype(str) != "Não")]
-    if apenas_in and c_in in res.columns:
-        res = res[res[c_in].apply(parse_bool)]
-    if apenas_gvi and c_gvi in res.columns:
-        res = res[res[c_gvi].apply(parse_bool)]
+    if apenas_eqman and "EqMan" in res.columns:
+        res = res[(res["EqMan"].notna()) & (res["EqMan"].astype(str) != "-") & (res["EqMan"].astype(str) != "Não")]
+    if apenas_in and "IN" in res.columns:
+        res = res[res["IN"].apply(parse_bool)]
+    if apenas_gvi and "Gvi/GP" in res.columns:
+        res = res[res["Gvi/GP"].apply(parse_bool)]
     return res
 
 def filtrar_eventos(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
@@ -403,12 +401,8 @@ def load_percent_ferias_v2():
             header=None,
             ttl="10m"
         )
-        # Coluna V é a 22ª (A=0 -> V=21). 
-        # CUIDADO: Se colunas vazias sumiram, V não é 21.
-        # V é após Férias 3 (O-P), resumo (S-W).
-        # Vamos assumir leitura direta por enquanto, ou usar iloc relativo se falhar.
-        # Como read com header=None lê TUDO geralmente, vamos tentar o índice fixo.
-        valor = df_v.iloc[1, 21] 
+        # Coluna V é a 22ª (A=0 → V=21)
+        valor = df_v.iloc[1, 21]
 
         if pd.isna(valor):
             return None
@@ -433,11 +427,9 @@ def load_percent_ferias_v2():
 # 8. SIDEBAR – LOGO, PARÂMETROS E MENU LATERAL
 # ============================================================
 
-# Brasão na lateral, maior e centralizado
 st.sidebar.image("logo_npamacau.png", width=140)
 st.sidebar.markdown("<div class='sidebar-title'>Parâmetros</div>", unsafe_allow_html=True)
 
-# Dica: Se está testando dados de 2026, altere a data aqui manualmente
 data_ref = st.sidebar.date_input("Data de Referência", datetime.today())
 hoje = pd.to_datetime(data_ref)
 
@@ -520,16 +512,12 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 if pagina == "Presentes":
     st.subheader(f"Presentes a bordo em {hoje.strftime('%d/%m/%Y')}")
 
-    # Queremos a tabela acima dos filtros -> usamos containers
-    tabela_container = st.container()
-    filtros_container = st.container()
-
-    with filtros_container:
-        st.markdown("#### Filtros")
-        col_f1, col_f2, col_f3 = st.columns(3)
-        apenas_eqman = col_f1.checkbox("Apenas EqMan", key="pres_eqman")
-        apenas_in    = col_f2.checkbox("Apenas Inspetores Navais (IN)", key="pres_in")
-        apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="pres_gvi")
+    # Filtros (por enquanto acima da tabela para evitar "atraso" na atualização)
+    st.markdown("#### Filtros")
+    col_f1, col_f2, col_f3 = st.columns(3)
+    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="pres_eqman")
+    apenas_in    = col_f2.checkbox("Apenas Inspetores Navais (IN)", key="pres_in")
+    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="pres_gvi")
 
     df_trip = filtrar_tripulacao(df_raw, apenas_eqman, apenas_in, apenas_gvi)
 
@@ -543,41 +531,25 @@ if pagina == "Presentes":
     else:
         nomes_ausentes = set()
 
-    # Temos que pegar o nome da coluna correto no DF Trip
-    c_nome = get_col_name(df_raw, "C")
-    if c_nome:
-        df_presentes = df_trip[~df_trip[c_nome].isin(nomes_ausentes)].copy()
+    df_presentes = df_trip[~df_trip["Nome"].isin(nomes_ausentes)].copy()
+
+    st.markdown(f"Total de presentes (visão filtrada): **{len(df_presentes)}**")
+
+    if df_presentes.empty:
+        st.info("Nenhum militar presente para os filtros atuais.")
     else:
-        df_presentes = df_trip.copy()
+        colunas_desejadas = [c for c in ["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"] if c in df_presentes.columns]
+        tabela = df_presentes[colunas_desejadas].copy()
+        if "Gvi/GP" in tabela.columns:
+            tabela = tabela.rename(columns={"Gvi/GP": "GVI/GP"})
 
-    with tabela_container:
-        st.markdown(f"Total de presentes (visão filtrada): **{len(df_presentes)}**")
+        # GVI/GP e IN como SIM / NÃO
+        if "GVI/GP" in tabela.columns:
+            tabela["GVI/GP"] = tabela["GVI/GP"].apply(lambda v: "SIM" if parse_bool(v) else "NÃO")
+        if "IN" in tabela.columns:
+            tabela["IN"] = tabela["IN"].apply(lambda v: "SIM" if parse_bool(v) else "NÃO")
 
-        if df_presentes.empty:
-            st.info("Nenhum militar presente para os filtros atuais.")
-        else:
-            # Mapear colunas originais para nomes bonitos
-            mapa_colunas = {
-                get_col_name(df_raw, "B"): "Posto",
-                get_col_name(df_raw, "C"): "Nome",
-                get_col_name(df_raw, "D"): "Serviço",
-                get_col_name(df_raw, "E"): "EqMan",
-                get_col_name(df_raw, "F"): "GVI/GP",
-                get_col_name(df_raw, "G"): "IN"
-            }
-            # Remove chaves None caso alguma coluna não tenha sido achada
-            mapa_colunas = {k: v for k, v in mapa_colunas.items() if k is not None and k in df_presentes.columns}
-            
-            tabela = df_presentes[list(mapa_colunas.keys())].copy()
-            tabela = tabela.rename(columns=mapa_colunas)
-
-            # GVI/GP e IN como SIM / NÃO
-            if "GVI/GP" in tabela.columns:
-                tabela["GVI/GP"] = tabela["GVI/GP"].apply(lambda v: "SIM" if parse_bool(v) else "NÃO")
-            if "IN" in tabela.columns:
-                tabela["IN"] = tabela["IN"].apply(lambda v: "SIM" if parse_bool(v) else "NÃO")
-
-            st.dataframe(tabela, use_container_width=True, hide_index=True)
+        st.dataframe(tabela, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------
 # PÁGINA: AUSENTES
@@ -585,76 +557,71 @@ if pagina == "Presentes":
 elif pagina == "Ausentes":
     st.subheader(f"Ausentes em {hoje.strftime('%d/%m/%Y')}")
 
-    tabela_container = st.container()
-    filtros_container = st.container()
+    st.markdown("#### Filtros")
+    col_f1, col_f2, col_f3 = st.columns(3)
+    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman")
+    apenas_in    = col_f2.checkbox("Apenas Inspetores Navais (IN)", key="aus_in")
+    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="aus_gvi")
 
-    with filtros_container:
-        st.markdown("#### Filtros")
-        col_f1, col_f2, col_f3 = st.columns(3)
-        apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman")
-        apenas_in    = col_f2.checkbox("Apenas Inspetores Navais (IN)", key="aus_in")
-        apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="aus_gvi")
+    if df_eventos.empty:
+        st.info("Sem eventos de ausência registrados.")
+    else:
+        try:
+            ausentes_hoje = df_eventos[
+                (df_eventos["Inicio"] <= hoje) &
+                (df_eventos["Fim"] >= hoje)
+            ]
+            ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
 
-    with tabela_container:
-        if df_eventos.empty:
-            st.info("Sem eventos de ausência registrados.")
-        else:
-            try:
-                ausentes_hoje = df_eventos[
-                    (df_eventos["Inicio"] <= hoje) &
-                    (df_eventos["Fim"] >= hoje)
-                ]
-                ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
+            if ausentes_hoje.empty:
+                st.success("Todo o efetivo está a bordo para os filtros atuais.")
+            else:
+                colunas_desejadas = [c for c in ["Posto", "Nome", "Motivo", "Tipo", "EqMan", "Fim"]
+                                     if c in ausentes_hoje.columns]
+                show_df = ausentes_hoje[colunas_desejadas].copy()
 
-                if ausentes_hoje.empty:
-                    st.success("Todo o efetivo está a bordo para os filtros atuais.")
+                if "Fim" in show_df.columns:
+                    show_df["Retorno"] = show_df["Fim"].dt.strftime("%d/%m/%Y")
+                    show_df = show_df.drop(columns=["Fim"])
+
+                if "EqMan" in show_df.columns:
+                    tabela_aus = show_df.drop(columns=["EqMan"])
                 else:
-                    colunas_desejadas = [c for c in ["Posto", "Nome", "Motivo", "Tipo", "EqMan", "Fim"]
-                                         if c in ausentes_hoje.columns]
-                    show_df = ausentes_hoje[colunas_desejadas].copy()
+                    tabela_aus = show_df
 
-                    if "Fim" in show_df.columns:
-                        show_df["Retorno"] = show_df["Fim"].dt.strftime("%d/%m/%Y")
-                        show_df = show_df.drop(columns=["Fim"])
+                st.dataframe(tabela_aus, use_container_width=True, hide_index=True)
 
-                    if "EqMan" in show_df.columns:
-                        tabela_aus = show_df.drop(columns=["EqMan"])
-                    else:
-                        tabela_aus = show_df
+                # Alertas EqMan
+                if "EqMan" in ausentes_hoje.columns:
+                    eqman_fora = ausentes_hoje[ausentes_hoje["EqMan"] != "Não"]
+                else:
+                    eqman_fora = pd.DataFrame()
 
-                    st.dataframe(tabela_aus, use_container_width=True, hide_index=True)
+                if not eqman_fora.empty:
+                    lista_eqman = sorted(
+                        {f"{row['Posto']} {row['Nome']} ({row['EqMan']})" for _, row in eqman_fora.iterrows()}
+                    )
+                    st.error(
+                        "⚠️ Atenção! EqMan com desfalque: " +
+                        "; ".join(lista_eqman)
+                    )
 
-                    # Alertas EqMan
-                    if "EqMan" in ausentes_hoje.columns:
-                        eqman_fora = ausentes_hoje[ausentes_hoje["EqMan"] != "Não"]
-                    else:
-                        eqman_fora = pd.DataFrame()
+                # Alertas GVI/GP
+                if "GVI" in ausentes_hoje.columns:
+                    gvi_fora = ausentes_hoje[ausentes_hoje["GVI"] == True]
+                else:
+                    gvi_fora = pd.DataFrame()
 
-                    if not eqman_fora.empty:
-                        lista_eqman = sorted(
-                            {f"{row['Posto']} {row['Nome']} ({row['EqMan']})" for _, row in eqman_fora.iterrows()}
-                        )
-                        st.error(
-                            "⚠️ Atenção! EqMan com desfalque: " +
-                            "; ".join(lista_eqman)
-                        )
-
-                    # Alertas GVI/GP
-                    if "GVI" in ausentes_hoje.columns:
-                        gvi_fora = ausentes_hoje[ausentes_hoje["GVI"] == True]
-                    else:
-                        gvi_fora = pd.DataFrame()
-
-                    if not gvi_fora.empty:
-                        lista_gvi = sorted(
-                            {f"{row['Posto']} {row['Nome']}" for _, row in gvi_fora.iterrows()}
-                        )
-                        st.warning(
-                            "🚨 GVI/GP com desfalque: " +
-                            "; ".join(lista_gvi)
-                        )
-            except Exception as e:
-                st.error(f"Ocorreu um erro ao montar a lista de ausentes: {e}")
+                if not gvi_fora.empty:
+                    lista_gvi = sorted(
+                        {f"{row['Posto']} {row['Nome']}" for _, row in gvi_fora.iterrows()}
+                    )
+                    st.warning(
+                        "🚨 GVI/GP com desfalque: " +
+                        "; ".join(lista_gvi)
+                    )
+        except Exception as e:
+            st.error(f"Ocorreu um erro ao montar a lista de ausentes: {e}")
 
 # ------------------------------------------------------------
 # PÁGINA: LINHA DO TEMPO (GANTT)
@@ -1055,42 +1022,53 @@ elif pagina == "Log / Debug":
 
     st.markdown("### df_raw (dados brutos do Google Sheets)")
     st.write(f"Total de linhas em df_raw: **{len(df_raw)}**")
-    st.write("Colunas disponíveis em df_raw (lidas pelo Pandas):")
+    st.write("Colunas disponíveis em df_raw:")
     st.write(list(df_raw.columns))
 
     st.write("Prévia de df_raw (primeiras 15 linhas):")
     st.dataframe(df_raw.head(15), use_container_width=True)
 
     st.markdown("---")
-    st.markdown("### Mapeamento de Férias")
-    
+    st.markdown("### Mapeamento letras Excel → colunas do df_raw")
+    st.write("Colunas vazias consideradas (não existem no df):", BLANK_COL_LETTERS)
+    st.write(COL_LETTER_MAP)
+
+    st.markdown("---")
+    st.markdown("### Mapeamento de Ausências (Férias, Outras Ausências, Cursos)")
+
+    # Mostrar mapeamento de férias
     debug_ferias = []
     for idx, (c_ini, c_fim) in enumerate(FERIAS_COLS, start=1):
-        debug_ferias.append({"Bloco": idx, "Tipo": "Férias", "Col_Inicio (Lida)": c_ini, "Col_Fim (Lida)": c_fim})
+        debug_ferias.append({"Bloco": idx, "Tipo": "Férias", "Col_Inicio": c_ini, "Col_Fim": c_fim})
     if debug_ferias:
         st.dataframe(pd.DataFrame(debug_ferias), use_container_width=True)
     else:
         st.info("Nenhum bloco de férias mapeado.")
 
-    st.markdown("### Mapeamento de Ausências (Outros / Cursos)")
+    # Mapeamento de ausências (Outros + Curso)
+    st.markdown("#### Ausências / Cursos")
     debug_rows = []
     for idx, (c_ini, c_fim, c_mot, tipo_base) in enumerate(AUSENCIAS_TRIPLETS, start=1):
         debug_rows.append(
-            {"Bloco": idx, "Col_Inicio (Lida)": c_ini, "Col_Fim (Lida)": c_fim, "Col_Tipo (Lida)": c_mot, "Base": tipo_base}
+            {"Bloco": idx, "Col_Inicio": c_ini, "Col_Fim": c_fim, "Col_Tipo/Motivo": c_mot, "Tipo_base": tipo_base}
         )
     if debug_rows:
         st.dataframe(pd.DataFrame(debug_rows), use_container_width=True)
     else:
         st.info("Nenhum bloco de ausência/cursos mapeado.")
-    
+
     st.markdown("---")
     st.markdown("### df_eventos (eventos gerados)")
+
     st.write(f"Total de eventos em df_eventos: **{len(df_eventos)}**")
-    
+
     if not df_eventos.empty:
         st.dataframe(df_eventos.head(40), use_container_width=True)
+        st.write("Anos em Inicio:", df_eventos["Inicio"].dt.year.unique())
+        st.write("Anos em Fim:", df_eventos["Fim"].dt.year.unique())
+        st.write("Tipos registrados:", df_eventos["Tipo"].unique())
     else:
-        st.info("df_eventos está vazio. Verifique se as datas estão sendo lidas corretamente.")
+        st.info("df_eventos está vazio. Verifique se as colunas de datas e ausências estão corretamente preenchidas na planilha.")
 
 # ============================================================
 # 12. RODAPÉ
@@ -1098,7 +1076,7 @@ elif pagina == "Log / Debug":
 st.markdown("<hr style='border-color:#1f2937; margin-top:2rem;'/>", unsafe_allow_html=True)
 st.markdown(
     f"<div style='text-align:center; color:#9ca3af; padding:0.5rem 0;'>"
-    f"Created by <strong>Klismann Freitas</strong> · {APP_VERSION}"
+    f"Created by <strong>Klismann Freitas</strong> · Versão {APP_VERSION}"
     f"</div>",
     unsafe_allow_html=True
 )
