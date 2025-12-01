@@ -75,20 +75,11 @@ def parse_bool(value) -> bool:
     return s in ("true", "1", "sim", "yes", "y", "x")
 
 
-# Mapeamentos por NOME de coluna (conforme log do df_raw)
+# Férias ainda são aquelas colunas sem acento, como já vimos:
 FERIAS_COLS = [
-    ("Inicio",   "Fim"),    # Período 1
-    ("Inicio.1", "Fim.1"),  # Período 2
-    ("Inicio.2", "Fim.2"),  # Período 3
-]
-
-AUSENCIAS_COLS = [
-    ("Início",   "FIm",   "Motivo"),    # Período 4
-    ("Início.1", "FIm.1", "Motivo.1"),  # Período 5
-    ("Início.2", "FIm.2", "Motivo.2"),  # Período 6
-    ("Início.3", "FIm.3", "Motivo.3"),  # Período 7
-    ("Início.4", "FIm.4", "Motivo.4"),  # Período 8
-    # Existe ainda FIm.5 / Motivo.5, mas não usamos por enquanto
+    ("Inicio",   "Fim"),    # Período 1 (I-J)
+    ("Inicio.1", "Fim.1"),  # Período 2 (L-M)
+    ("Inicio.2", "Fim.2"),  # Período 3 (O-P)
 ]
 
 
@@ -122,7 +113,54 @@ except Exception as e:
 
 
 # ============================================================
-# 4. TRANSFORMAÇÃO EM EVENTOS (WIDE → LONG) POR NOME DE COLUNA
+# 4. DESCOBRIR DINAMICAMENTE AS AUSÊNCIAS (INÍCIO/FIM/MOTIVO)
+#    – OUTRAS AUSÊNCIAS x CURSOS
+# ============================================================
+
+def descobrir_ausencias_triplets(df: pd.DataFrame):
+    """
+    Busca todas as colunas de ausências do tipo:
+    'Início', 'FIm', 'Motivo', 'Início.1', 'FIm.1', 'Motivo.1', ...
+    Retorna uma lista ordenada: [(col_ini, col_fim, col_mot, tipo), ...]
+    onde tipo é 'Outros' para os 3 primeiros blocos e 'Curso' do 4º em diante.
+    """
+    triplets = []
+
+    for col in df.columns:
+        if not col.startswith("Início"):
+            continue
+
+        # Sufixo: "", ".1", ".2", ...
+        parts = col.split(".", 1)
+        if len(parts) == 1:
+            sufixo = ""
+        else:
+            sufixo = f".{parts[1]}"
+
+        col_ini = col
+        col_fim = f"FIm{sufixo}"
+        col_mot = f"Motivo{sufixo}"
+
+        if col_fim in df.columns and col_mot in df.columns:
+            ordem = df.columns.get_loc(col_ini)
+            triplets.append((ordem, col_ini, col_fim, col_mot))
+
+    # Ordena pela posição da coluna
+    triplets.sort(key=lambda x: x[0])
+
+    resultado = []
+    for idx, (_, c_ini, c_fim, c_mot) in enumerate(triplets):
+        tipo = "Outros" if idx < 3 else "Curso"   # 0,1,2 = Y–AL; 3+ = AN em diante (cursos)
+        resultado.append((c_ini, c_fim, c_mot, tipo))
+
+    return resultado
+
+
+AUSENCIAS_TRIPLETS = descobrir_ausencias_triplets(df_raw)
+
+
+# ============================================================
+# 5. TRANSFORMAÇÃO EM EVENTOS (WIDE → LONG)
 # ============================================================
 
 @st.cache_data(ttl=600)
@@ -168,11 +206,8 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
                         "Tipo": "Férias"
                     })
 
-        # --------- Bloco de Outras Ausências ----------
-        for col_ini, col_fim, col_mot in AUSENCIAS_COLS:
-            if col_ini not in df_raw.columns or col_fim not in df_raw.columns or col_mot not in df_raw.columns:
-                continue
-
+        # --------- Bloco de Outras Ausências + Cursos ----------
+        for col_ini, col_fim, col_mot, tipo in AUSENCIAS_TRIPLETS:
             ini = pd.to_datetime(row.get(col_ini, pd.NaT), dayfirst=True, errors="coerce")
             fim = pd.to_datetime(row.get(col_fim, pd.NaT), dayfirst=True, errors="coerce")
             motivo_texto = str(row.get(col_mot, "")).strip()
@@ -184,6 +219,7 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
                 if dur < 1 or dur > 365:
                     continue
 
+                # Para ambos: se motivo vier vazio, vira OUTROS
                 motivo_real = motivo_texto if motivo_texto and "nan" not in motivo_texto.lower() else "OUTROS"
 
                 eventos.append({
@@ -192,7 +228,7 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
                     "Fim": fim,
                     "Duracao_dias": dur,
                     "Motivo": motivo_real,
-                    "Tipo": "Outros"
+                    "Tipo": tipo  # "Outros" ou "Curso"
                 })
 
     df_eventos = pd.DataFrame(eventos)
@@ -203,7 +239,7 @@ df_eventos = construir_eventos(df_raw)
 
 
 # ============================================================
-# 5. EXPANSÃO POR DIA (PARA ANÁLISE MENSAL/DIÁRIA)
+# 6. EXPANSÃO POR DIA (PARA ANÁLISE MENSAL/DIÁRIA)
 # ============================================================
 
 @st.cache_data(ttl=600)
@@ -239,7 +275,7 @@ df_dias = expandir_eventos_por_dia(df_eventos)
 
 
 # ============================================================
-# 6. BARRA LATERAL (FILTROS)
+# 7. BARRA LATERAL (FILTROS)
 # ============================================================
 
 st.sidebar.header("🕹️ Centro de Controle")
@@ -271,7 +307,7 @@ if filtro_gvi and "Gvi/GP" in df_tripulacao_filtrada.columns:
 
 
 # ============================================================
-# 7. QUEM ESTÁ AUSENTE NA DATA DE REFERÊNCIA?
+# 8. QUEM ESTÁ AUSENTE NA DATA DE REFERÊNCIA?
 # ============================================================
 
 if not df_eventos.empty:
@@ -296,7 +332,7 @@ percentual = (total_presentes / total_efetivo * 100) if total_efetivo > 0 else 0
 
 
 # ============================================================
-# 8. MÉTRICAS DE TOPO
+# 9. MÉTRICAS DE TOPO
 # ============================================================
 
 col1, col2, col3, col4 = st.columns(4)
@@ -307,7 +343,7 @@ col4.metric("Prontidão", f"{percentual:.1f}%")
 
 
 # ============================================================
-# 9. TABS PRINCIPAIS
+# 10. TABS PRINCIPAIS
 # ============================================================
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -325,7 +361,7 @@ with tab1:
     st.subheader(f"Ausentes em {hoje.strftime('%d/%m/%Y')}")
 
     if total_ausentes > 0:
-        show_df = ausentes_hoje[["Posto", "Nome", "Motivo", "Fim"]].copy()
+        show_df = ausentes_hoje[["Posto", "Nome", "Motivo", "Tipo", "Fim"]].copy()
         show_df["Retorno"] = show_df["Fim"].dt.strftime("%d/%m/%Y")
         show_df = show_df.drop(columns=["Fim"])
         st.dataframe(show_df, use_container_width=True, hide_index=True)
@@ -449,7 +485,7 @@ with tab3:
 
             st.markdown("---")
 
-            # Gráfico de motivos – pizza
+            # Gráfico de motivos – pizza (inclui Férias, Outros, Curso etc)
             df_motivos_dias = (
                 df_evt.groupby("Motivo")["Duracao_dias"]
                 .sum()
@@ -622,6 +658,19 @@ with tab5:
     st.dataframe(df_raw.head(15), use_container_width=True)
 
     st.markdown("---")
+    st.markdown("### 🔹 Mapeamento de Ausências (Início/FIm/Motivo)")
+
+    if AUSENCIAS_TRIPLETS:
+        debug_rows = []
+        for idx, (c_ini, c_fim, c_mot, tipo) in enumerate(AUSENCIAS_TRIPLETS, start=1):
+            debug_rows.append(
+                {"Bloco": idx, "Col_Inicio": c_ini, "Col_Fim": c_fim, "Col_Motivo": c_mot, "Tipo": tipo}
+            )
+        st.dataframe(pd.DataFrame(debug_rows), use_container_width=True)
+    else:
+        st.info("Nenhum trio Início/FIm/Motivo encontrado.")
+
+    st.markdown("---")
     st.markdown("### 🔹 df_eventos (eventos gerados)")
 
     st.write(f"Total de eventos em df_eventos: **{len(df_eventos)}**")
@@ -631,12 +680,13 @@ with tab5:
         st.dataframe(df_evt_preview.head(30), use_container_width=True)
         st.write("Anos em Inicio:", df_eventos["Inicio"].dt.year.unique())
         st.write("Anos em Fim:", df_eventos["Fim"].dt.year.unique())
+        st.write("Tipos registrados:", df_eventos["Tipo"].unique())
     else:
         st.info("df_eventos está vazio. Verifique se as colunas de datas estão corretamente preenchidas na planilha.")
 
 
 # ============================================================
-# 10. RODAPÉ
+# 11. RODAPÉ
 # ============================================================
 st.markdown("<hr style='border-color:#1f2937; margin-top:2rem;'/>", unsafe_allow_html=True)
 st.markdown(
