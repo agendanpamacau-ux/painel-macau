@@ -449,7 +449,7 @@ with tab3:
 
             st.markdown("---")
 
-            # Só 1 gráfico aqui agora (pizza por motivo)
+            # Gráfico de motivos – pizza
             df_motivos_dias = (
                 df_evt.groupby("Motivo")["Duracao_dias"]
                 .sum()
@@ -526,7 +526,7 @@ with tab3:
 # TAB 4 – SOMENTE FÉRIAS
 # ------------------------------------------------------------
 with tab4:
-    st.subheader("Análises Específicas de Férias")
+    st.subheader("Férias cadastradas")
 
     if df_eventos.empty:
         st.write("Sem dados de férias registrados.")
@@ -536,7 +536,23 @@ with tab4:
         if df_ferias.empty:
             st.info("Nenhuma férias cadastrada na planilha.")
         else:
-            # KPIs férias
+            # ===== 1) TABELA COM TODAS AS FÉRIAS =====
+            tabela_ferias = df_ferias[["Posto", "Nome", "Escala", "Inicio", "Fim", "Duracao_dias"]].copy()
+            tabela_ferias["Início"] = tabela_ferias["Inicio"].dt.strftime("%d/%m/%Y")
+            tabela_ferias["Término"] = tabela_ferias["Fim"].dt.strftime("%d/%m/%Y")
+            tabela_ferias = tabela_ferias.drop(columns=["Inicio", "Fim"])
+            tabela_ferias = tabela_ferias.rename(columns={"Duracao_dias": "Dias"})
+
+            # Ordena por Nome e Início
+            tabela_ferias = tabela_ferias.sort_values(by=["Nome", "Início"])
+
+            st.markdown("### 📋 Todos os períodos de férias registrados")
+            st.dataframe(tabela_ferias, use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+            st.subheader("Análises Específicas de Férias")
+
+            # ===== 2) KPIs DE FÉRIAS =====
             col_f1, col_f2 = st.columns(2)
             total_militares_com_ferias = df_ferias["Nome"].nunique()
             dias_totais_ferias = df_ferias["Duracao_dias"].sum()
