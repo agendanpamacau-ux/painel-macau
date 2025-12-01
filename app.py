@@ -1,36 +1,82 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
 
 # ============================================================
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ============================================================
 st.set_page_config(
-    page_title="Painel NPaMacau",
+    page_title="Controle de ausências - NPaMacau",  # <<< ALTERADO
     layout="wide",
     page_icon="⚓"
 )
-st.title("⚓ Dashboard de Comando - NPaMacau")
+st.title("⚓ Controle de ausências - NPaMacau")  # <<< ALTERADO
 
+# --- CSS para visual mais moderno ---
+st.markdown(
+    """
+    <style>
+    /* Fundo mais limpo */
+    .stApp {
+        background: radial-gradient(circle at top left, #0f172a 0, #020617 45%, #000 100%);
+        color: #e5e7eb;
+    }
+
+    /* Título principal */
+    h1 {
+        font-weight: 700 !important;
+        color: #e5e7eb !important;
+    }
+
+    /* Cards dos metrics */
+    div[data-testid="metric-container"] {
+        background: rgba(15, 23, 42, 0.85);
+        border-radius: 0.9rem;
+        padding: 1rem;
+        border: 1px solid #1f2937;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+    }
+
+    /* Tabs */
+    button[data-baseweb="tab"] {
+        font-weight: 600;
+    }
+    button[data-baseweb="tab"]:hover {
+        background: #0f172a;
+    }
+    button[data-baseweb="tab"][aria-selected="true"] {
+        background: #0f172a;
+        color: #e5e7eb;
+        border-bottom: 2px solid #38bdf8;
+    }
+
+    /* Dataframes */
+    .stDataFrame {
+        background: #020617;
+        border-radius: 0.75rem;
+        padding: 0.5rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # ============================================================
 # 2. CONSTANTES E HELPERS
 # ============================================================
 
-# Linha de cabeçalho na planilha (0-based para o pandas)
-HEADER_ROW = 2  # linha 3 da planilha
+HEADER_ROW = 2  # linha 3 na planilha
 
-# Índices de colunas (0-based) — de acordo com a tua descrição
 COL = {
     "NUMERO": 0,    # A
     "POSTO": 1,     # B
     "NOME": 2,      # C
     "SERVICO": 3,   # D
     "EQMAN": 4,     # E
-    "GVI": 5,       # F (checkbox)
-    "INSP": 6,      # G (checkbox)
+    "GVI": 5,       # F
+    "INSP": 6,      # G
 }
 
 # Férias: (inicio_idx, fim_idx)
@@ -58,9 +104,27 @@ def parse_bool(value) -> bool:
     return s in ("true", "1", "sim", "yes", "y", "x")
 
 
-def safe_to_datetime(value):
-    """Converte para datetime (dia primeiro) com segurança."""
-    return pd.to_datetime(value, dayfirst=True, errors="coerce")
+def to_date(value):
+    """
+    Converte valor vindo do Sheets em datetime:
+    - Trata string no formato brasileiro (dayfirst=True)
+    - Trata números seriais do Sheets (≈ dias desde 1899-12-30)
+    """
+    if pd.isna(value) or value == "":
+        return pd.NaT
+
+    # Se vier como número (float/int) tipo 45000, tratar como serial do Sheets
+    if isinstance(value, (int, float)):
+        # faixa típica de datas (ano ~1950–2100)
+        if 30000 <= value <= 60000:
+            base = datetime(1899, 12, 30)  # base usada por Google Sheets
+            return base + timedelta(days=int(value))
+        else:
+            # tenta interpretar como timestamp ou outra coisa
+            return pd.to_datetime(value, errors="coerce", dayfirst=True)
+
+    # Texto normal (ex: 30/11/25)
+    return pd.to_datetime(str(value), errors="coerce", dayfirst=True)
 
 
 # ============================================================
@@ -121,9 +185,14 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
         for inicio_idx, fim_idx in FERIAS_PARES:
             if len(row) <= fim_idx:
                 continue
-            ini = safe_to_datetime(row.iloc[inicio_idx])
-            fim = safe_to_datetime(row.iloc[fim_idx])
+            ini = to_date(row.iloc[inicio_idx])
+            fim = to_date(row.iloc[fim_idx])
+
             if pd.notnull(ini) and pd.notnull(fim):
+                # Garante que início <= fim (evita duração negativa)
+                if fim < ini:
+                    ini, fim = fim, ini
+
                 eventos.append({
                     **militar_info,
                     "Inicio": ini,
@@ -136,11 +205,14 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
         for ini_idx, fim_idx, mot_idx in AUSENCIAS_TRIOS:
             if len(row) <= mot_idx:
                 continue
-            ini = safe_to_datetime(row.iloc[ini_idx])
-            fim = safe_to_datetime(row.iloc[fim_idx])
+            ini = to_date(row.iloc[ini_idx])
+            fim = to_date(row.iloc[fim_idx])
             motivo_texto = str(row.iloc[mot_idx])
 
             if pd.notnull(ini) and pd.notnull(fim):
+                if fim < ini:
+                    ini, fim = fim, ini
+
                 motivo_real = (motivo_texto.strip()
                                if len(motivo_texto) > 2
                                and "nan" not in motivo_texto.lower()
@@ -157,6 +229,8 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
 
     if not df_eventos.empty:
         df_eventos["Duracao_dias"] = (df_eventos["Fim"] - df_eventos["Inicio"]).dt.days + 1
+        # Garante apenas durações positivas
+        df_eventos = df_eventos[df_eventos["Duracao_dias"] > 0]
 
     return df_eventos
 
@@ -170,10 +244,6 @@ df_eventos = construir_eventos(df_raw)
 
 @st.cache_data(ttl=600)
 def expandir_eventos_por_dia(df_eventos: pd.DataFrame) -> pd.DataFrame:
-    """
-    Cria um DataFrame com uma linha por dia de ausência por militar.
-    Útil para análise diária/mensal (média de ausentes/dia etc.).
-    """
     if df_eventos.empty:
         return pd.DataFrame()
 
@@ -209,7 +279,6 @@ st.sidebar.header("🕹️ Centro de Controle")
 data_ref = st.sidebar.date_input("Data de Referência", datetime.today())
 hoje = pd.to_datetime(data_ref)
 
-# Filtro de posto
 todos_postos = df_raw.iloc[:, COL["POSTO"]].dropna().unique()
 filtro_posto = st.sidebar.multiselect(
     "Filtrar Posto",
@@ -217,12 +286,10 @@ filtro_posto = st.sidebar.multiselect(
     default=sorted(todos_postos)
 )
 
-# Filtros especiais
 filtro_eqman = st.sidebar.checkbox("Apenas EqMan")
 filtro_in = st.sidebar.checkbox("Apenas Inspetores Navais (IN)")
 filtro_gvi = st.sidebar.checkbox("Apenas GVI/GP")
 
-# Aplica filtro de efetivo (df_raw)
 df_tripulacao_filtrada = df_raw[df_raw.iloc[:, COL["POSTO"]].isin(filtro_posto)].copy()
 
 if filtro_eqman:
@@ -262,7 +329,6 @@ if not df_eventos.empty:
 else:
     ausentes_hoje = pd.DataFrame()
 
-# KPIs básicos
 total_efetivo = len(df_tripulacao_filtrada)
 total_ausentes = len(ausentes_hoje["Nome"].unique()) if not ausentes_hoje.empty else 0
 total_presentes = total_efetivo - total_ausentes
@@ -302,7 +368,6 @@ with tab1:
         show_df = show_df.drop(columns=["Fim"])
         st.dataframe(show_df, use_container_width=True, hide_index=True)
 
-        # Alerta EqMan
         eqman_fora = ausentes_hoje[ausentes_hoje["EqMan"] != "Não"]
         if not eqman_fora.empty:
             st.error(
@@ -310,7 +375,6 @@ with tab1:
                 ", ".join(sorted(eqman_fora["Nome"].unique()))
             )
 
-        # Alerta GVI
         gvi_fora = ausentes_hoje[ausentes_hoje["GVI"] == True]
         if not gvi_fora.empty:
             st.warning(
@@ -353,15 +417,12 @@ with tab2:
                 title="Cronograma de Ausências"
             )
             fig.update_yaxes(autorange="reversed")
-
-            # Linha vertical no dia selecionado
             fig.add_vline(
                 x=hoje,
                 line_width=2,
                 line_dash="dash",
                 line_color="red"
             )
-
             st.plotly_chart(fig, use_container_width=True)
 
 
@@ -374,7 +435,6 @@ with tab3:
     if df_eventos.empty:
         st.write("Sem dados suficientes para estatísticas.")
     else:
-        # Filtrar df_eventos de acordo com filtros laterais
         df_evt = df_eventos[df_eventos["Posto"].isin(filtro_posto)].copy()
         if filtro_eqman:
             df_evt = df_evt[df_evt["EqMan"] != "Não"]
@@ -383,11 +443,9 @@ with tab3:
         if filtro_gvi:
             df_evt = df_evt[df_evt["GVI"] == True]
 
-        # Se ainda tiver algo:
         if df_evt.empty:
             st.info("Nenhum evento para os filtros selecionados.")
         else:
-            # ---- KPIs analíticos ----
             col_a1, col_a2, col_a3, col_a4 = st.columns(4)
 
             total_dias_ausencia = df_evt["Duracao_dias"].sum()
@@ -418,10 +476,8 @@ with tab3:
 
             st.markdown("---")
 
-            # ---- Gráficos principais ----
             col_b1, col_b2 = st.columns(2)
 
-            # 1) Distribuição de motivos (por dias)
             df_motivos_dias = (
                 df_evt.groupby("Motivo")["Duracao_dias"]
                 .sum()
@@ -437,7 +493,6 @@ with tab3:
             )
             col_b1.plotly_chart(fig_motivos, use_container_width=True)
 
-            # 2) Volume de ausências por Posto (por dias)
             df_posto_dias = (
                 df_evt.groupby("Posto")["Duracao_dias"]
                 .sum()
@@ -455,7 +510,6 @@ with tab3:
 
             st.markdown("---")
 
-            # ---- TOP 10 mais ausentes ----
             st.subheader("Top 10 militares com mais dias de ausência (qualquer motivo)")
             df_top10 = (
                 df_evt.groupby(["Nome", "Posto"])["Duracao_dias"]
@@ -474,12 +528,10 @@ with tab3:
             )
             st.plotly_chart(fig_top10, use_container_width=True)
 
-            # ---- Análise mensal (média de ausentes/dia) ----
             if not df_dias.empty:
                 st.markdown("---")
                 st.subheader("Média de militares ausentes por dia (por mês)")
 
-                # Aplica filtros também na visão diária
                 df_dias_filtrado = df_dias[df_dias["Posto"].isin(filtro_posto)].copy()
                 if filtro_eqman:
                     df_dias_filtrado = df_dias_filtrado[df_dias_filtrado["EqMan"] != "Não"]
