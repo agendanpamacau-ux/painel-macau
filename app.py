@@ -8,29 +8,24 @@ from streamlit_gsheets import GSheetsConnection
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ============================================================
 st.set_page_config(
-    page_title="Controle de ausências - NPaMacau",  # <<< ALTERADO
+    page_title="Controle de ausências - NPaMacau",
     layout="wide",
     page_icon="⚓"
 )
-st.title("⚓ Controle de ausências - NPaMacau")  # <<< ALTERADO
+st.title("⚓ Controle de ausências - NPaMacau")
 
 # --- CSS para visual mais moderno ---
 st.markdown(
     """
     <style>
-    /* Fundo mais limpo */
     .stApp {
         background: radial-gradient(circle at top left, #0f172a 0, #020617 45%, #000 100%);
         color: #e5e7eb;
     }
-
-    /* Título principal */
     h1 {
         font-weight: 700 !important;
         color: #e5e7eb !important;
     }
-
-    /* Cards dos metrics */
     div[data-testid="metric-container"] {
         background: rgba(15, 23, 42, 0.85);
         border-radius: 0.9rem;
@@ -38,8 +33,6 @@ st.markdown(
         border: 1px solid #1f2937;
         box-shadow: 0 10px 25px rgba(0,0,0,0.35);
     }
-
-    /* Tabs */
     button[data-baseweb="tab"] {
         font-weight: 600;
     }
@@ -51,8 +44,6 @@ st.markdown(
         color: #e5e7eb;
         border-bottom: 2px solid #38bdf8;
     }
-
-    /* Dataframes */
     .stDataFrame {
         background: #020617;
         border-radius: 0.75rem;
@@ -97,7 +88,6 @@ AUSENCIAS_TRIOS = [
 
 
 def parse_bool(value) -> bool:
-    """Converte checkbox/texto da planilha em booleano robusto."""
     if pd.isna(value):
         return False
     s = str(value).strip().lower()
@@ -113,17 +103,14 @@ def to_date(value):
     if pd.isna(value) or value == "":
         return pd.NaT
 
-    # Se vier como número (float/int) tipo 45000, tratar como serial do Sheets
     if isinstance(value, (int, float)):
         # faixa típica de datas (ano ~1950–2100)
         if 30000 <= value <= 60000:
-            base = datetime(1899, 12, 30)  # base usada por Google Sheets
+            base = datetime(1899, 12, 30)
             return base + timedelta(days=int(value))
         else:
-            # tenta interpretar como timestamp ou outra coisa
             return pd.to_datetime(value, errors="coerce", dayfirst=True)
 
-    # Texto normal (ex: 30/11/25)
     return pd.to_datetime(str(value), errors="coerce", dayfirst=True)
 
 
@@ -189,7 +176,6 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
             fim = to_date(row.iloc[fim_idx])
 
             if pd.notnull(ini) and pd.notnull(fim):
-                # Garante que início <= fim (evita duração negativa)
                 if fim < ini:
                     ini, fim = fim, ini
 
@@ -229,7 +215,6 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
 
     if not df_eventos.empty:
         df_eventos["Duracao_dias"] = (df_eventos["Fim"] - df_eventos["Inicio"]).dt.days + 1
-        # Garante apenas durações positivas
         df_eventos = df_eventos[df_eventos["Duracao_dias"] > 0]
 
     return df_eventos
@@ -271,7 +256,7 @@ df_dias = expandir_eventos_por_dia(df_eventos)
 
 
 # ============================================================
-# 6. BARRA LATERAL (FILTROS)
+# 6. BARRA LATERAL (FILTROS) – sem filtro de posto
 # ============================================================
 
 st.sidebar.header("🕹️ Centro de Controle")
@@ -279,18 +264,15 @@ st.sidebar.header("🕹️ Centro de Controle")
 data_ref = st.sidebar.date_input("Data de Referência", datetime.today())
 hoje = pd.to_datetime(data_ref)
 
+# SEM filtro de posto: considera todos
 todos_postos = df_raw.iloc[:, COL["POSTO"]].dropna().unique()
-filtro_posto = st.sidebar.multiselect(
-    "Filtrar Posto",
-    options=sorted(todos_postos),
-    default=sorted(todos_postos)
-)
+filtro_posto = sorted(todos_postos)  # lista completa sempre
 
 filtro_eqman = st.sidebar.checkbox("Apenas EqMan")
 filtro_in = st.sidebar.checkbox("Apenas Inspetores Navais (IN)")
 filtro_gvi = st.sidebar.checkbox("Apenas GVI/GP")
 
-df_tripulacao_filtrada = df_raw[df_raw.iloc[:, COL["POSTO"]].isin(filtro_posto)].copy()
+df_tripulacao_filtrada = df_raw.copy()
 
 if filtro_eqman:
     df_tripulacao_filtrada = df_tripulacao_filtrada[
@@ -316,8 +298,7 @@ if filtro_gvi:
 if not df_eventos.empty:
     ausentes_hoje = df_eventos[
         (df_eventos["Inicio"] <= hoje) &
-        (df_eventos["Fim"] >= hoje) &
-        (df_eventos["Posto"].isin(filtro_posto))
+        (df_eventos["Fim"] >= hoje)
     ]
 
     if filtro_eqman:
@@ -395,7 +376,7 @@ with tab2:
     if df_eventos.empty:
         st.info("Planilha parece não ter datas preenchidas.")
     else:
-        df_gantt = df_eventos[df_eventos["Posto"].isin(filtro_posto)].copy()
+        df_gantt = df_eventos.copy()
 
         if filtro_eqman:
             df_gantt = df_gantt[df_gantt["EqMan"] != "Não"]
@@ -435,7 +416,7 @@ with tab3:
     if df_eventos.empty:
         st.write("Sem dados suficientes para estatísticas.")
     else:
-        df_evt = df_eventos[df_eventos["Posto"].isin(filtro_posto)].copy()
+        df_evt = df_eventos.copy()
         if filtro_eqman:
             df_evt = df_evt[df_evt["EqMan"] != "Não"]
         if filtro_in:
@@ -532,7 +513,7 @@ with tab3:
                 st.markdown("---")
                 st.subheader("Média de militares ausentes por dia (por mês)")
 
-                df_dias_filtrado = df_dias[df_dias["Posto"].isin(filtro_posto)].copy()
+                df_dias_filtrado = df_dias.copy()
                 if filtro_eqman:
                     df_dias_filtrado = df_dias_filtrado[df_dias_filtrado["EqMan"] != "Não"]
                 if filtro_in:
