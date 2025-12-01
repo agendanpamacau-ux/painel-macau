@@ -10,7 +10,7 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(
     page_title="Navio-Patrulha Macau",
     layout="wide",
-    page_icon="⚓"
+    page_icon="logo_npamacau.png"
 )
 
 # --- CSS global / tema ---
