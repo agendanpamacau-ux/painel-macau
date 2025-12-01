@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime, timedelta
+from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
 # ============================================================
@@ -55,37 +55,10 @@ st.markdown(
 )
 
 # ============================================================
-# 2. CONSTANTES E HELPERS
+# 2. HELPERS E CONSTANTES
 # ============================================================
 
 HEADER_ROW = 2  # linha 3 na planilha
-
-COL = {
-    "NUMERO": 0,    # A
-    "POSTO": 1,     # B
-    "NOME": 2,      # C
-    "SERVICO": 3,   # D - escala
-    "EQMAN": 4,     # E
-    "GVI": 5,       # F
-    "INSP": 6,      # G
-}
-
-# Férias: (inicio_idx, fim_idx)
-FERIAS_PARES = [
-    (8, 9),   # I-J - Período 1
-    (11, 12), # L-M - Período 2
-    (14, 15)  # O-P - Período 3
-]
-
-# Outras ausências: (inicio_idx, fim_idx, motivo_idx)
-AUSENCIAS_TRIOS = [
-    (24, 25, 27),  # Y-Z, motivo AB - Período 4
-    (29, 30, 32),  # AD-AE, motivo AG - Período 5
-    (34, 35, 37),  # AI-AJ, motivo AL - Período 6
-    (39, 40, 42),  # AN-AO, motivo AQ - Período 7
-    (44, 45, 47),  # AS-AT, motivo AV - Período 8
-]
-
 
 def parse_bool(value) -> bool:
     """Converte checkbox/texto da planilha em booleano robusto."""
@@ -95,45 +68,21 @@ def parse_bool(value) -> bool:
     return s in ("true", "1", "sim", "yes", "y", "x")
 
 
-def parse_sheet_date(value):
-    """
-    Converte valor do Google Sheets em datetime, aceitando:
-    - datetime / Timestamp
-    - número serial (ex: 45686)
-    - string numérica ("45686")
-    - string de data brasileira ("30/11/2025", "30/11/25")
-    """
-    if pd.isna(value) or value == "":
-        return pd.NaT
+# Mapeamentos por NOME de coluna (conforme log do df_raw)
+FERIAS_COLS = [
+    ("Inicio",   "Fim"),    # Período 1
+    ("Inicio.1", "Fim.1"),  # Período 2
+    ("Inicio.2", "Fim.2"),  # Período 3
+]
 
-    # já é datetime
-    if isinstance(value, (pd.Timestamp, datetime)):
-        return value.normalize()
-
-    # número serial (int/float)
-    if isinstance(value, (int, float)):
-        base = datetime(1899, 12, 30)  # base do Sheets/Excel
-        dt = base + timedelta(days=float(value))
-        return dt.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    # string
-    s = str(value).strip()
-    if s == "":
-        return pd.NaT
-
-    # string numérica (ex: "45686")
-    s_num = s.replace(".", "", 1)
-    if s_num.isdigit():
-        base = datetime(1899, 12, 30)
-        dt = base + timedelta(days=float(s))
-        return dt.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    # tenta como data (formato BR)
-    dt = pd.to_datetime(s, dayfirst=True, errors="coerce")
-    if pd.isna(dt):
-        return pd.NaT
-
-    return dt.normalize()
+AUSENCIAS_COLS = [
+    ("Início",   "FIm",   "Motivo"),    # Período 4
+    ("Início.1", "FIm.1", "Motivo.1"),  # Período 5
+    ("Início.2", "FIm.2", "Motivo.2"),  # Período 6
+    ("Início.3", "FIm.3", "Motivo.3"),  # Período 7
+    ("Início.4", "FIm.4", "Motivo.4"),  # Período 8
+    # Existe ainda FIm.5 / Motivo.5, mas não vou usar por enquanto
+]
 
 
 # ============================================================
@@ -150,9 +99,9 @@ def load_data():
         ttl="10m"
     )
 
-    # Remove linhas sem nome (coluna C / índice 2)
-    if len(df.columns) > COL["NOME"]:
-        df = df.dropna(subset=[df.columns[COL["NOME"]]])
+    # Remove linhas sem nome (coluna "Nome")
+    if "Nome" in df.columns:
+        df = df.dropna(subset=["Nome"])
 
     df = df.reset_index(drop=True)
     return df
@@ -166,7 +115,7 @@ except Exception as e:
 
 
 # ============================================================
-# 4. TRANSFORMAÇÃO EM LISTA DE EVENTOS (WIDE → LONG)
+# 4. TRANSFORMAÇÃO EM EVENTOS (WIDE → LONG) POR NOME DE COLUNA
 # ============================================================
 
 @st.cache_data(ttl=600)
@@ -174,79 +123,72 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
     eventos = []
 
     for _, row in df_raw.iterrows():
-        posto = row.iloc[COL["POSTO"]]
-        nome = row.iloc[COL["NOME"]]
-        escala = row.iloc[COL["SERVICO"]] if len(row) > COL["SERVICO"] else ""
-        eqman_raw = row.iloc[COL["EQMAN"]] if len(row) > COL["EQMAN"] else None
-        gvi_raw = row.iloc[COL["GVI"]] if len(row) > COL["GVI"] else None
-        insp_raw = row.iloc[COL["INSP"]] if len(row) > COL["INSP"] else None
+        posto  = row.get("Posto", "")
+        nome   = row.get("Nome", "")
+        escala = row.get("Serviço", "")
+        eqman  = row.get("EqMan", "")
+        gvi    = row.get("Gvi/GP", "")
+        insp   = row.get("IN", "")
 
         militar_info = {
             "Posto": posto,
             "Nome": nome,
             "Escala": escala,
-            "EqMan": (
-                eqman_raw if pd.notnull(eqman_raw) and str(eqman_raw) != "-" else "Não"
-            ),
-            "GVI": parse_bool(gvi_raw),
-            "IN": parse_bool(insp_raw),
+            "EqMan": eqman if pd.notna(eqman) and str(eqman) != "-" else "Não",
+            "GVI": parse_bool(gvi),
+            "IN": parse_bool(insp),
         }
 
         # --------- Bloco de Férias ----------
-        for inicio_idx, fim_idx in FERIAS_PARES:
-            if len(row) <= fim_idx:
+        for col_ini, col_fim in FERIAS_COLS:
+            if col_ini not in df_raw.columns or col_fim not in df_raw.columns:
                 continue
 
-            ini = parse_sheet_date(row.iloc[inicio_idx])
-            fim = parse_sheet_date(row.iloc[fim_idx])
+            ini = pd.to_datetime(row.get(col_ini, pd.NaT), dayfirst=True, errors="coerce")
+            fim = pd.to_datetime(row.get(col_fim, pd.NaT), dayfirst=True, errors="coerce")
 
-            if pd.notnull(ini) and pd.notnull(fim):
+            if pd.notna(ini) and pd.notna(fim):
                 if fim < ini:
                     ini, fim = fim, ini
-
-                eventos.append({
-                    **militar_info,
-                    "Inicio": ini,
-                    "Fim": fim,
-                    "Motivo": "FÉRIAS",
-                    "Tipo": "Férias"
-                })
+                dur = (fim - ini).days + 1
+                if 1 <= dur <= 365:
+                    eventos.append({
+                        **militar_info,
+                        "Inicio": ini,
+                        "Fim": fim,
+                        "Duracao_dias": dur,
+                        "Motivo": "FÉRIAS",
+                        "Tipo": "Férias"
+                    })
 
         # --------- Bloco de Outras Ausências ----------
-        for ini_idx, fim_idx, mot_idx in AUSENCIAS_TRIOS:
-            if len(row) <= mot_idx:
+        for col_ini, col_fim, col_mot in AUSENCIAS_COLS:
+            if col_ini not in df_raw.columns or col_fim not in df_raw.columns or col_mot not in df_raw.columns:
                 continue
 
-            ini = parse_sheet_date(row.iloc[ini_idx])
-            fim = parse_sheet_date(row.iloc[fim_idx])
-            motivo_texto = str(row.iloc[mot_idx])
+            ini = pd.to_datetime(row.get(col_ini, pd.NaT), dayfirst=True, errors="coerce")
+            fim = pd.to_datetime(row.get(col_fim, pd.NaT), dayfirst=True, errors="coerce")
+            motivo_texto = str(row.get(col_mot, "")).strip()
 
-            if pd.notnull(ini) and pd.notnull(fim):
+            if pd.notna(ini) and pd.notna(fim):
                 if fim < ini:
                     ini, fim = fim, ini
+                dur = (fim - ini).days + 1
+                if dur < 1 or dur > 365:
+                    continue
 
-                motivo_real = (
-                    motivo_texto.strip()
-                    if len(motivo_texto) > 2
-                    and "nan" not in motivo_texto.lower()
-                    else "OUTROS"
-                )
+                motivo_real = motivo_texto if motivo_texto and "nan" not in motivo_texto.lower() else "OUTROS"
 
                 eventos.append({
                     **militar_info,
                     "Inicio": ini,
                     "Fim": fim,
+                    "Duracao_dias": dur,
                     "Motivo": motivo_real,
                     "Tipo": "Outros"
                 })
 
     df_eventos = pd.DataFrame(eventos)
-
-    if not df_eventos.empty:
-        df_eventos["Duracao_dias"] = (df_eventos["Fim"] - df_eventos["Inicio"]).dt.days + 1
-        # Mantém só durações razoáveis (evita datas lixo gigantes)
-        df_eventos = df_eventos[df_eventos["Duracao_dias"].between(1, 365)]
-
     return df_eventos
 
 
@@ -264,9 +206,12 @@ def expandir_eventos_por_dia(df_eventos: pd.DataFrame) -> pd.DataFrame:
 
     linhas = []
     for _, ev in df_eventos.iterrows():
-        if pd.isna(ev["Inicio"]) or pd.isna(ev["Fim"]):
+        ini = ev["Inicio"]
+        fim = ev["Fim"]
+        if pd.isna(ini) or pd.isna(fim):
             continue
-        for data in pd.date_range(ev["Inicio"], ev["Fim"]):
+
+        for data in pd.date_range(ini, fim):
             linhas.append({
                 "Data": data,
                 "Posto": ev["Posto"],
@@ -287,7 +232,7 @@ df_dias = expandir_eventos_por_dia(df_eventos)
 
 
 # ============================================================
-# 6. BARRA LATERAL (FILTROS) – sem filtro de posto
+# 6. BARRA LATERAL (FILTROS)
 # ============================================================
 
 st.sidebar.header("🕹️ Centro de Controle")
@@ -301,20 +246,20 @@ filtro_gvi = st.sidebar.checkbox("Apenas GVI/GP")
 
 df_tripulacao_filtrada = df_raw.copy()
 
-if filtro_eqman:
+if filtro_eqman and "EqMan" in df_tripulacao_filtrada.columns:
     df_tripulacao_filtrada = df_tripulacao_filtrada[
-        (df_tripulacao_filtrada.iloc[:, COL["EQMAN"]].notnull()) &
-        (df_tripulacao_filtrada.iloc[:, COL["EQMAN"]].astype(str) != "-")
+        (df_tripulacao_filtrada["EqMan"].notna()) &
+        (df_tripulacao_filtrada["EqMan"].astype(str) != "-")
     ]
 
-if filtro_in:
+if filtro_in and "IN" in df_tripulacao_filtrada.columns:
     df_tripulacao_filtrada = df_tripulacao_filtrada[
-        df_tripulacao_filtrada.iloc[:, COL["INSP"]].apply(parse_bool)
+        df_tripulacao_filtrada["IN"].apply(parse_bool)
     ]
 
-if filtro_gvi:
+if filtro_gvi and "Gvi/GP" in df_tripulacao_filtrada.columns:
     df_tripulacao_filtrada = df_tripulacao_filtrada[
-        df_tripulacao_filtrada.iloc[:, COL["GVI"]].apply(parse_bool)
+        df_tripulacao_filtrada["Gvi/GP"].apply(parse_bool)
     ]
 
 
@@ -355,7 +300,7 @@ col4.metric("Prontidão", f"{percentual:.1f}%")
 
 
 # ============================================================
-# 9. TABS PRINCIPAIS (incluindo aba só de Férias e Log)
+# 9. TABS PRINCIPAIS
 # ============================================================
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -677,18 +622,13 @@ with tab5:
     st.write(f"Total de eventos em df_eventos: **{len(df_eventos)}**")
 
     if not df_eventos.empty:
-        # Uma visão resumida dos eventos
         df_evt_preview = df_eventos.copy()
-        df_evt_preview["Inicio"] = df_evt_preview["Inicio"].astype(str)
-        df_evt_preview["Fim"] = df_evt_preview["Fim"].astype(str)
         st.dataframe(df_evt_preview.head(30), use_container_width=True)
-
-        anos_inicio = df_eventos["Inicio"].dt.year.unique()
-        anos_fim = df_eventos["Fim"].dt.year.unique()
-        st.write("Anos detectados em **Inicio**:", anos_inicio)
-        st.write("Anos detectados em **Fim**:", anos_fim)
+        st.write("Anos em Inicio:", df_eventos["Inicio"].dt.year.unique())
+        st.write("Anos em Fim:", df_eventos["Fim"].dt.year.unique())
     else:
-        st.info("df_eventos está vazio. Verifique se as colunas de datas (I, J, Y, Z etc.) estão realmente preenchidas na planilha.")
+        st.info("df_eventos está vazio. Verifique se as colunas de datas estão corretamente preenchidas na planilha.")
+
 
 # ============================================================
 # 10. RODAPÉ
