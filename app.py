@@ -8,11 +8,18 @@ from streamlit_gsheets import GSheetsConnection
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ============================================================
 st.set_page_config(
-    page_title="Controle de ausências - NPaMacau",
+    page_title="Navio-Patrula Macau",
     layout="wide",
     page_icon="⚓"
 )
-st.title("⚓ Controle de ausências - NPaMacau")
+
+# Logo + título
+col_logo, col_titulo = st.columns([1, 5])
+with col_logo:
+    # Arquivo logo_npamacau.png deve estar na mesma pasta do app.py
+    st.image("logo_npamacau.png", width=90)
+with col_titulo:
+    st.title("Navio-Patrula Macau")
 
 # --- CSS para visual mais moderno ---
 st.markdown(
@@ -81,7 +88,7 @@ AUSENCIAS_COLS = [
     ("Início.2", "FIm.2", "Motivo.2"),  # Período 6
     ("Início.3", "FIm.3", "Motivo.3"),  # Período 7
     ("Início.4", "FIm.4", "Motivo.4"),  # Período 8
-    # Existe ainda FIm.5 / Motivo.5, mas não vou usar por enquanto
+    # Existe ainda FIm.5 / Motivo.5, mas não usamos por enquanto
 ]
 
 
@@ -442,9 +449,7 @@ with tab3:
 
             st.markdown("---")
 
-            col_b1, col_b2 = st.columns(2)
-
-            # Gráfico de motivos – pizza
+            # Só 1 gráfico aqui agora (pizza por motivo)
             df_motivos_dias = (
                 df_evt.groupby("Motivo")["Duracao_dias"]
                 .sum()
@@ -457,23 +462,7 @@ with tab3:
                 values="Duracao_dias",
                 title="Proporção de Dias de Ausência por Motivo"
             )
-            col_b1.plotly_chart(fig_motivos, use_container_width=True)
-
-            # Ausência por posto – barra
-            df_posto_dias = (
-                df_evt.groupby("Posto")["Duracao_dias"]
-                .sum()
-                .reset_index()
-                .sort_values("Duracao_dias", ascending=False)
-            )
-            fig_posto = px.bar(
-                df_posto_dias,
-                x="Posto",
-                y="Duracao_dias",
-                title="Dias de Ausência por Posto",
-                labels={"Duracao_dias": "Dias de ausência"}
-            )
-            col_b2.plotly_chart(fig_posto, use_container_width=True)
+            st.plotly_chart(fig_motivos, use_container_width=True)
 
             st.markdown("---")
 
