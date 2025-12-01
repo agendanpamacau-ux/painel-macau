@@ -13,34 +13,31 @@ st.set_page_config(
     page_icon="⚓"
 )
 
-# Cabeçalho centralizado: brasão + título colados
-c1, c2, c3 = st.columns([1, 4, 1])
-with c2:
-    st.image("logo_npamacau.png", width=80)
-    st.markdown(
-        """
-        <h1 style="text-align:center; margin-top:0.2rem; font-weight:700;">
-            Navio-Patrulha Macau
-        </h1>
-        """,
-        unsafe_allow_html=True
-    )
-
-# --- CSS para visual mais moderno e harmônico ---
+# --- CSS global / tema ---
 st.markdown(
     """
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&display=swap');
+
     * {
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
+
     .stApp {
         background: radial-gradient(circle at top left, #020617 0, #020617 40%, #000 100%);
         color: #e5e7eb;
     }
+
     h1, h2, h3, h4 {
         color: #e5e7eb !important;
         letter-spacing: 0.03em;
     }
+
+    h1 {
+        font-family: 'Raleway', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-weight: 700 !important;
+    }
+
     div[data-testid="metric-container"] {
         background: rgba(15, 23, 42, 0.9);
         border-radius: 0.9rem;
@@ -48,25 +45,31 @@ st.markdown(
         border: 1px solid #1f2937;
         box-shadow: 0 12px 30px rgba(0,0,0,0.45);
     }
+
     div[data-testid="metric-container"] > label {
         color: #9ca3af !important;
-        font-size: 0.85rem;
+        font-size: 0.80rem;
         text-transform: uppercase;
         letter-spacing: 0.08em;
     }
+
+    /* Tabs - estilo minimalista, sem contorno verde */
     button[data-baseweb="tab"] {
         font-weight: 600;
         border-radius: 999px !important;
         padding: 0.4rem 1rem !important;
-        margin-right: 0.4rem;
+        margin-right: 0.3rem;
+        border: none;
     }
     button[data-baseweb="tab"]:hover {
-        background: #0b1220;
+        background: #0b1120;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        background: linear-gradient(90deg, #38bdf8, #22c55e);
-        color: #020617;
+        background: #0b1120;
+        color: #e5e7eb;
+        box-shadow: 0 2px 0 0 #38bdf8 inset;
     }
+
     .stDataFrame {
         background: #020617;
         border-radius: 0.75rem;
@@ -76,6 +79,20 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
+# Cabeçalho: logo + título lado a lado
+col_logo, col_title = st.columns([1, 5])
+with col_logo:
+    st.image("logo_npamacau.png", width=80)
+with col_title:
+    st.markdown(
+        """
+        <h1 style="margin-top:0.2rem; margin-bottom:0.2rem;">
+            Navio-Patrulha Macau
+        </h1>
+        """,
+        unsafe_allow_html=True
+    )
 
 # ============================================================
 # 2. HELPERS E CONSTANTES
@@ -90,14 +107,12 @@ def parse_bool(value) -> bool:
     s = str(value).strip().lower()
     return s in ("true", "1", "sim", "yes", "y", "x")
 
-
-# Férias (mesmo esquema anterior – colunas sem acento)
+# Férias: colunas sem acento (como o Pandas costuma ler)
 FERIAS_COLS = [
-    ("Inicio",   "Fim"),    # Período 1 (I-J)
-    ("Inicio.1", "Fim.1"),  # Período 2 (L-M)
-    ("Inicio.2", "Fim.2"),  # Período 3 (O-P)
+    ("Inicio",   "Fim"),    # Período 1
+    ("Inicio.1", "Fim.1"),  # Período 2
+    ("Inicio.2", "Fim.2"),  # Período 3
 ]
-
 
 # ============================================================
 # 3. CARGA DE DADOS
@@ -120,7 +135,6 @@ def load_data():
     df = df.reset_index(drop=True)
     return df
 
-
 try:
     df_raw = load_data()
 except Exception as e:
@@ -130,15 +144,14 @@ except Exception as e:
 
 # ============================================================
 # 4. DESCOBRIR DINAMICAMENTE AS AUSÊNCIAS (INÍCIO/FIM/MOTIVO/CURSO)
-#    – OUTRAS AUSÊNCIAS x CURSOS
 # ============================================================
 
 def descobrir_ausencias_triplets(df: pd.DataFrame):
     """
     Busca todas as colunas do tipo:
-    'Início', 'FIm', e um campo de motivo (Motivo ou Curso).
-    Retorna lista: [(col_ini, col_fim, col_mot, tipo), ...]
-    onde tipo = 'Outros' para os 3 primeiros blocos e 'Curso' do 4º em diante.
+    'Início', 'FIm', e motivo (Motivo ou Curso).
+    Retorna lista: [(col_ini, col_fim, col_mot, tipo_base), ...]
+    onde tipo_base = 'Outros' para os 3 primeiros blocos e 'Curso' do 4º em diante.
     """
     triplets = []
 
@@ -156,7 +169,7 @@ def descobrir_ausencias_triplets(df: pd.DataFrame):
         col_ini = col
         col_fim = f"FIm{sufixo}"
 
-        # Motivo pode ser "Motivo", "Curso" ou variações com sufixo
+        # Motivo pode ser "Motivo", "Curso" etc com mesmo sufixo
         candidatos_motivo = [
             f"Motivo{sufixo}",
             f"Curso{sufixo}",
@@ -177,11 +190,10 @@ def descobrir_ausencias_triplets(df: pd.DataFrame):
 
     resultado = []
     for idx, (_, c_ini, c_fim, c_mot) in enumerate(triplets):
-        tipo = "Outros" if idx < 3 else "Curso"   # 0,1,2 = Y–AL; 3+ = AN em diante (cursos)
-        resultado.append((c_ini, c_fim, c_mot, tipo))
+        tipo_base = "Outros" if idx < 3 else "Curso"   # 0,1,2 => Y–AL ; 3+ => AN em diante (cursos)
+        resultado.append((c_ini, c_fim, c_mot, tipo_base))
 
     return resultado
-
 
 AUSENCIAS_TRIPLETS = descobrir_ausencias_triplets(df_raw)
 
@@ -211,7 +223,7 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
             "IN": parse_bool(insp),
         }
 
-        # --------- Bloco de Férias ----------
+        # --------- BLOCO DE FÉRIAS ----------
         for col_ini, col_fim in FERIAS_COLS:
             if col_ini not in df_raw.columns or col_fim not in df_raw.columns:
                 continue
@@ -233,8 +245,8 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
                         "Tipo": "Férias"
                     })
 
-        # --------- Bloco de Outras Ausências + Cursos ----------
-        for col_ini, col_fim, col_mot, tipo in AUSENCIAS_TRIPLETS:
+        # --------- BLOCO DE OUTRAS AUSÊNCIAS + CURSOS ----------
+        for col_ini, col_fim, col_mot, tipo_base in AUSENCIAS_TRIPLETS:
             ini = pd.to_datetime(row.get(col_ini, pd.NaT), dayfirst=True, errors="coerce")
             fim = pd.to_datetime(row.get(col_fim, pd.NaT), dayfirst=True, errors="coerce")
             motivo_texto = str(row.get(col_mot, "")).strip()
@@ -246,7 +258,23 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
                 if dur < 1 or dur > 365:
                     continue
 
-                motivo_real = motivo_texto if motivo_texto and "nan" not in motivo_texto.lower() else "OUTROS"
+                # Decide TIPO FINAL (Curso ou Outros)
+                tipo_final = tipo_base
+                if motivo_texto and "curso" in motivo_texto.lower():
+                    tipo_final = "Curso"
+
+                # Decide MOTIVO REAL
+                if tipo_final == "Curso":
+                    if motivo_texto and "nan" not in motivo_texto.lower():
+                        motivo_real = motivo_texto  # nome do curso
+                    else:
+                        motivo_real = "CURSO (não especificado)"
+                else:
+                    motivo_real = (
+                        motivo_texto
+                        if motivo_texto and "nan" not in motivo_texto.lower()
+                        else "OUTROS"
+                    )
 
                 eventos.append({
                     **militar_info,
@@ -254,12 +282,11 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
                     "Fim": fim,
                     "Duracao_dias": dur,
                     "Motivo": motivo_real,
-                    "Tipo": tipo  # "Outros" ou "Curso"
+                    "Tipo": tipo_final    # "Curso" ou "Outros"
                 })
 
     df_eventos = pd.DataFrame(eventos)
     return df_eventos
-
 
 df_eventos = construir_eventos(df_raw)
 
@@ -296,76 +323,75 @@ def expandir_eventos_por_dia(df_eventos: pd.DataFrame) -> pd.DataFrame:
     df_dias = pd.DataFrame(linhas)
     return df_dias
 
-
 df_dias = expandir_eventos_por_dia(df_eventos)
 
 
 # ============================================================
-# 7. BARRA LATERAL (FILTROS)
+# 7. FUNÇÕES DE FILTRO
 # ============================================================
 
-st.sidebar.header("🕹️ Centro de Controle")
+def filtrar_tripulacao(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
+    res = df.copy()
+    if apenas_eqman and "EqMan" in res.columns:
+        res = res[(res["EqMan"].notna()) & (res["EqMan"].astype(str) != "-")]
+    if apenas_in and "IN" in res.columns:
+        res = res[res["IN"].apply(parse_bool)]
+    if apenas_gvi and "Gvi/GP" in res.columns:
+        res = res[res["Gvi/GP"].apply(parse_bool)]
+    return res
 
+def filtrar_eventos(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
+    res = df.copy()
+    if apenas_eqman:
+        res = res[res["EqMan"] != "Não"]
+    if apenas_in:
+        res = res[res["IN"] == True]
+    if apenas_gvi:
+        res = res[res["GVI"] == True]
+    return res
+
+def filtrar_dias(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
+    res = df.copy()
+    if apenas_eqman:
+        res = res[res["EqMan"] != "Não"]
+    if apenas_in:
+        res = res[res["IN"] == True]
+    if apenas_gvi:
+        res = res[res["GVI"] == True]
+    return res
+
+
+# ============================================================
+# 8. DATA DE REFERÊNCIA (GLOBAL)
+# ============================================================
+
+st.sidebar.header("Parâmetros")
 data_ref = st.sidebar.date_input("Data de Referência", datetime.today())
 hoje = pd.to_datetime(data_ref)
 
-filtro_eqman = st.sidebar.checkbox("Apenas EqMan")
-filtro_in = st.sidebar.checkbox("Apenas Inspetores Navais (IN)")
-filtro_gvi = st.sidebar.checkbox("Apenas GVI/GP")
-
-df_tripulacao_filtrada = df_raw.copy()
-
-if filtro_eqman and "EqMan" in df_tripulacao_filtrada.columns:
-    df_tripulacao_filtrada = df_tripulacao_filtrada[
-        (df_tripulacao_filtrada["EqMan"].notna()) &
-        (df_tripulacao_filtrada["EqMan"].astype(str) != "-")
-    ]
-
-if filtro_in and "IN" in df_tripulacao_filtrada.columns:
-    df_tripulacao_filtrada = df_tripulacao_filtrada[
-        df_tripulacao_filtrada["IN"].apply(parse_bool)
-    ]
-
-if filtro_gvi and "Gvi/GP" in df_tripulacao_filtrada.columns:
-    df_tripulacao_filtrada = df_tripulacao_filtrada[
-        df_tripulacao_filtrada["Gvi/GP"].apply(parse_bool)
-    ]
-
 
 # ============================================================
-# 8. QUEM ESTÁ AUSENTE NA DATA DE REFERÊNCIA?
+# 9. MÉTRICAS GLOBAIS (SEM FILTRO)
 # ============================================================
 
 if not df_eventos.empty:
-    ausentes_hoje = df_eventos[
+    ausentes_hoje_global = df_eventos[
         (df_eventos["Inicio"] <= hoje) &
         (df_eventos["Fim"] >= hoje)
     ]
-
-    if filtro_eqman:
-        ausentes_hoje = ausentes_hoje[ausentes_hoje["EqMan"] != "Não"]
-    if filtro_in:
-        ausentes_hoje = ausentes_hoje[ausentes_hoje["IN"] == True]
-    if filtro_gvi:
-        ausentes_hoje = ausentes_hoje[ausentes_hoje["GVI"] == True]
 else:
-    ausentes_hoje = pd.DataFrame()
+    ausentes_hoje_global = pd.DataFrame()
 
-total_efetivo = len(df_tripulacao_filtrada)
-total_ausentes = len(ausentes_hoje["Nome"].unique()) if not ausentes_hoje.empty else 0
-total_presentes = total_efetivo - total_ausentes
-percentual = (total_presentes / total_efetivo * 100) if total_efetivo > 0 else 0
-
-
-# ============================================================
-# 9. MÉTRICAS DE TOPO
-# ============================================================
+total_efetivo_global = len(df_raw)
+total_ausentes_global = len(ausentes_hoje_global["Nome"].unique()) if not ausentes_hoje_global.empty else 0
+total_presentes_global = total_efetivo_global - total_ausentes_global
+percentual_global = (total_presentes_global / total_efetivo_global * 100) if total_efetivo_global > 0 else 0
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Efetivo Total", total_efetivo)
-col2.metric("A Bordo", total_presentes)
-col3.metric("Ausentes", total_ausentes, delta_color="inverse")
-col4.metric("Prontidão", f"{percentual:.1f}%")
+col1.metric("Efetivo Total", total_efetivo_global)
+col2.metric("A Bordo", total_presentes_global)
+col3.metric("Ausentes", total_ausentes_global, delta_color="inverse")
+col4.metric("Prontidão", f"{percentual_global:.1f}%")
 
 
 # ============================================================
@@ -405,8 +431,9 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 # 11. TABS PRINCIPAIS
 # ============================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "📋 Situação Diária",
+tab_presentes, tab_ausentes, tab_gantt, tab_stats, tab_ferias, tab_cursos, tab_log = st.tabs([
+    "🟢 Presentes",
+    "📋 Ausentes",
     "📅 Linha do Tempo (Gantt)",
     "📊 Estatísticas & Análises",
     "🏖️ Férias",
@@ -415,52 +442,106 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 ])
 
 # ------------------------------------------------------------
-# TAB 1 – SITUAÇÃO DIÁRIA
+# TAB 1 – PRESENTES
 # ------------------------------------------------------------
-with tab1:
+with tab_presentes:
+    st.subheader(f"Presentes a bordo em {hoje.strftime('%d/%m/%Y')}")
+
+    col_f1, col_f2, col_f3 = st.columns(3)
+    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="pres_eqman")
+    apenas_in    = col_f2.checkbox("Apenas Inspetores Navais (IN)", key="pres_in")
+    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="pres_gvi")
+
+    df_trip = filtrar_tripulacao(df_raw, apenas_eqman, apenas_in, apenas_gvi)
+
+    if not df_eventos.empty:
+        ausentes_hoje = df_eventos[
+            (df_eventos["Inicio"] <= hoje) &
+            (df_eventos["Fim"] >= hoje)
+        ]
+        ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
+        nomes_ausentes = set(ausentes_hoje["Nome"].unique())
+    else:
+        nomes_ausentes = set()
+
+    df_presentes = df_trip[~df_trip["Nome"].isin(nomes_ausentes)].copy()
+
+    st.markdown(f"Total de presentes (visão filtrada): **{len(df_presentes)}**")
+
+    if df_presentes.empty:
+        st.info("Nenhum militar presente para os filtros atuais.")
+    else:
+        tabela = df_presentes[["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"]].copy()
+        tabela = tabela.rename(columns={"Gvi/GP": "GVI/GP"})
+        st.dataframe(tabela, use_container_width=True, hide_index=True)
+
+
+# ------------------------------------------------------------
+# TAB 2 – AUSENTES
+# ------------------------------------------------------------
+with tab_ausentes:
     st.subheader(f"Ausentes em {hoje.strftime('%d/%m/%Y')}")
 
-    if total_ausentes > 0:
-        show_df = ausentes_hoje[["Posto", "Nome", "Motivo", "Tipo", "Fim"]].copy()
-        show_df["Retorno"] = show_df["Fim"].dt.strftime("%d/%m/%Y")
-        show_df = show_df.drop(columns=["Fim"])
-        st.dataframe(show_df, use_container_width=True, hide_index=True)
+    col_f1, col_f2, col_f3 = st.columns(3)
+    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman")
+    apenas_in    = col_f2.checkbox("Apenas Inspetores Navais (IN)", key="aus_in")
+    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="aus_gvi")
 
-        eqman_fora = ausentes_hoje[ausentes_hoje["EqMan"] != "Não"]
-        if not eqman_fora.empty:
-            st.error(
-                "⚠️ Atenção! EqMan com desfalque: " +
-                ", ".join(sorted(eqman_fora["Nome"].unique()))
-            )
-
-        gvi_fora = ausentes_hoje[ausentes_hoje["GVI"] == True]
-        if not gvi_fora.empty:
-            st.warning(
-                "🚨 GVI/GP com desfalque: " +
-                ", ".join(sorted(gvi_fora["Nome"].unique()))
-            )
-
+    if df_eventos.empty:
+        st.info("Sem eventos de ausência registrados.")
     else:
-        st.success("Todo o efetivo está a bordo para os filtros atuais.")
+        ausentes_hoje = df_eventos[
+            (df_eventos["Inicio"] <= hoje) &
+            (df_eventos["Fim"] >= hoje)
+        ]
+        ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
+
+        if ausentes_hoje.empty:
+            st.success("Todo o efetivo está a bordo para os filtros atuais.")
+        else:
+            show_df = ausentes_hoje[["Posto", "Nome", "Motivo", "Tipo", "EqMan", "Fim"]].copy()
+            show_df["Retorno"] = show_df["Fim"].dt.strftime("%d/%m/%Y")
+            show_df = show_df.drop(columns=["Fim"])
+            st.dataframe(show_df.drop(columns=["EqMan"]), use_container_width=True, hide_index=True)
+
+            # Alertas EqMan
+            eqman_fora = ausentes_hoje[ausentes_hoje["EqMan"] != "Não"]
+            if not eqman_fora.empty:
+                lista_eqman = sorted(
+                    {f"{row['Posto']} {row['Nome']} ({row['EqMan']})" for _, row in eqman_fora.iterrows()}
+                )
+                st.error(
+                    "⚠️ Atenção! EqMan com desfalque: " +
+                    "; ".join(lista_eqman)
+                )
+
+            # Alertas GVI/GP
+            gvi_fora = ausentes_hoje[ausentes_hoje["GVI"] == True]
+            if not gvi_fora.empty:
+                lista_gvi = sorted(
+                    {f"{row['Posto']} {row['Nome']}" for _, row in gvi_fora.iterrows()}
+                )
+                st.warning(
+                    "🚨 GVI/GP com desfalque: " +
+                    "; ".join(lista_gvi)
+                )
 
 
 # ------------------------------------------------------------
-# TAB 2 – LINHA DO TEMPO (GANTT)
+# TAB 3 – LINHA DO TEMPO (GANTT)
 # ------------------------------------------------------------
-with tab2:
+with tab_gantt:
     st.subheader("Planejamento Anual de Ausências")
+
+    col_f1, col_f2, col_f3 = st.columns(3)
+    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="gantt_eqman")
+    apenas_in    = col_f2.checkbox("Apenas Inspetores Navais (IN)", key="gantt_in")
+    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="gantt_gvi")
 
     if df_eventos.empty:
         st.info("Planilha parece não ter datas preenchidas.")
     else:
-        df_gantt = df_eventos.copy()
-
-        if filtro_eqman:
-            df_gantt = df_gantt[df_gantt["EqMan"] != "Não"]
-        if filtro_in:
-            df_gantt = df_gantt[df_gantt["IN"] == True]
-        if filtro_gvi:
-            df_gantt = df_gantt[df_gantt["GVI"] == True]
+        df_gantt = filtrar_eventos(df_eventos, apenas_eqman, apenas_in, apenas_gvi)
 
         if df_gantt.empty:
             st.info("Nenhum evento encontrado para os filtros atuais.")
@@ -492,30 +573,32 @@ with tab2:
                 line_dash="dash",
                 line_color="red"
             )
+            fig.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,0.8)",
+            )
             st.plotly_chart(fig, use_container_width=True)
 
 
 # ------------------------------------------------------------
-# TAB 3 – ESTATÍSTICAS E ANÁLISES
+# TAB 4 – ESTATÍSTICAS & ANÁLISES
 # ------------------------------------------------------------
-with tab3:
+with tab_stats:
     st.subheader("Visão Analítica de Ausências")
+
+    col_f1, col_f2, col_f3 = st.columns(3)
+    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="stats_eqman")
+    apenas_in    = col_f2.checkbox("Apenas Inspetores Navais (IN)", key="stats_in")
+    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="stats_gvi")
 
     if df_eventos.empty:
         st.write("Sem dados suficientes para estatísticas.")
     else:
-        df_evt = df_eventos.copy()
-        if filtro_eqman:
-            df_evt = df_evt[df_evt["EqMan"] != "Não"]
-        if filtro_in:
-            df_evt = df_evt[df_evt["IN"] == True]
-        if filtro_gvi:
-            df_evt = df_evt[df_evt["GVI"] == True]
+        df_evt = filtrar_eventos(df_eventos, apenas_eqman, apenas_in, apenas_gvi)
 
         if df_evt.empty:
             st.info("Nenhum evento para os filtros selecionados.")
         else:
-            # === métricas (sem "militar mais ausente") ===
             col_a1, col_a2, col_a3 = st.columns(3)
 
             total_dias_ausencia = df_evt["Duracao_dias"].sum()
@@ -571,13 +654,7 @@ with tab3:
                 st.markdown("---")
                 st.subheader("Média de militares ausentes por dia (por mês)")
 
-                df_dias_filtrado = df_dias.copy()
-                if filtro_eqman:
-                    df_dias_filtrado = df_dias_filtrado[df_dias_filtrado["EqMan"] != "Não"]
-                if filtro_in:
-                    df_dias_filtrado = df_dias_filtrado[df_dias_filtrado["IN"] == True]
-                if filtro_gvi:
-                    df_dias_filtrado = df_dias_filtrado[df_dias_filtrado["GVI"] == True]
+                df_dias_filtrado = filtrar_dias(df_dias, apenas_eqman, apenas_in, apenas_gvi)
 
                 if not df_dias_filtrado.empty:
                     df_diario = (
@@ -610,27 +687,31 @@ with tab3:
 
 
 # ------------------------------------------------------------
-# TAB 4 – SOMENTE FÉRIAS
+# TAB 5 – FÉRIAS
 # ------------------------------------------------------------
-with tab4:
+with tab_ferias:
     st.subheader("Férias cadastradas")
+
+    col_f1, col_f2, col_f3 = st.columns(3)
+    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="fer_eqman")
+    apenas_in    = col_f2.checkbox("Apenas Inspetores Navais (IN)", key="fer_in")
+    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="fer_gvi")
 
     if df_eventos.empty:
         st.write("Sem dados de férias registrados.")
     else:
         df_ferias = df_eventos[df_eventos["Tipo"] == "Férias"].copy()
+        df_ferias = filtrar_eventos(df_ferias, apenas_eqman, apenas_in, apenas_gvi)
 
         if df_ferias.empty:
-            st.info("Nenhuma férias cadastrada na planilha.")
+            st.info("Nenhuma férias cadastrada na visão atual.")
         else:
-            # ===== 1) TABELA COM TODAS AS FÉRIAS =====
+            # 1) Tabela com todas as férias
             tabela_ferias = df_ferias[["Posto", "Nome", "Escala", "Inicio", "Fim", "Duracao_dias"]].copy()
             tabela_ferias["Início"] = tabela_ferias["Inicio"].dt.strftime("%d/%m/%Y")
             tabela_ferias["Término"] = tabela_ferias["Fim"].dt.strftime("%d/%m/%Y")
             tabela_ferias = tabela_ferias.drop(columns=["Inicio", "Fim"])
             tabela_ferias = tabela_ferias.rename(columns={"Duracao_dias": "Dias"})
-
-            # Ordena por Nome e Início
             tabela_ferias = tabela_ferias.sort_values(by=["Nome", "Início"])
 
             st.markdown("### 📋 Todos os períodos de férias registrados")
@@ -639,19 +720,18 @@ with tab4:
             st.markdown("---")
             st.subheader("Análises Específicas de Férias")
 
-            # ===== 2) KPIs DE FÉRIAS =====
-            col_f1, col_f2 = st.columns(2)
+            col_f1m, col_f2m = st.columns(2)
             total_militares_com_ferias = df_ferias["Nome"].nunique()
             dias_totais_ferias = df_ferias["Duracao_dias"].sum()
 
-            col_f1.metric("Militares com férias cadastradas", total_militares_com_ferias)
-            col_f2.metric("Dias totais de férias", int(dias_totais_ferias))
+            col_f1m.metric("Militares com férias cadastradas", total_militares_com_ferias)
+            col_f2m.metric("Dias totais de férias", int(dias_totais_ferias))
 
             st.markdown("---")
 
             col_fx1, col_fx2 = st.columns(2)
 
-            # 1 - Quantidade de militares de férias por escala
+            # 1 - Férias por escala
             df_escala = (
                 df_ferias.groupby("Escala")["Nome"]
                 .nunique()
@@ -671,9 +751,11 @@ with tab4:
             )
             col_fx1.plotly_chart(fig_escala, use_container_width=True)
 
-            # 2 - Quantidade de militares de férias por mês
+            # 2 - Férias por mês
             if not df_dias.empty:
                 df_dias_ferias = df_dias[df_dias["Tipo"] == "Férias"].copy()
+                df_dias_ferias = filtrar_dias(df_dias_ferias, apenas_eqman, apenas_in, apenas_gvi)
+
                 if not df_dias_ferias.empty:
                     df_dias_ferias["Mes"] = df_dias_ferias["Data"].dt.to_period("M").dt.to_timestamp()
                     df_mes_ferias = (
@@ -696,32 +778,38 @@ with tab4:
                     )
                     col_fx2.plotly_chart(fig_mes_ferias, use_container_width=True)
                 else:
-                    col_fx2.info("Sem dados diários suficientes para calcular férias por mês.")
+                    col_fx2.info("Sem dados diários suficientes para calcular férias por mês com os filtros atuais.")
             else:
                 col_fx2.info("Sem expansão diária para análise mensal.")
 
 
 # ------------------------------------------------------------
-# TAB 5 – CURSOS
+# TAB 6 – CURSOS
 # ------------------------------------------------------------
-with tab5:
+with tab_cursos:
     st.subheader("Análises de Cursos")
+
+    col_f1, col_f2, col_f3 = st.columns(3)
+    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="cur_eqman")
+    apenas_in    = col_f2.checkbox("Apenas Inspetores Navais (IN)", key="cur_in")
+    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="cur_gvi")
 
     if df_eventos.empty:
         st.write("Sem dados de cursos registrados.")
     else:
         df_cursos = df_eventos[df_eventos["Tipo"] == "Curso"].copy()
+        df_cursos = filtrar_eventos(df_cursos, apenas_eqman, apenas_in, apenas_gvi)
 
         if df_cursos.empty:
-            st.info("Nenhum curso cadastrado na planilha.")
+            st.info("Nenhum curso cadastrado na visão atual.")
         else:
-            # Realizados = curso já terminou; Inscritos = fim >= hoje
+            # Realizados x em andamento/futuros
             realizados = df_cursos[df_cursos["Fim"] < hoje].copy()
-            inscritos = df_cursos[df_cursos["Fim"] >= hoje].copy()
+            inscritos  = df_cursos[df_cursos["Fim"] >= hoje].copy()
 
             col_c1, col_c2 = st.columns(2)
 
-            # ----- Tabela 1: cursos já realizados -----
+            # Cursos já realizados
             with col_c1:
                 st.markdown("### ✅ Cursos já realizados")
                 if realizados.empty:
@@ -735,7 +823,7 @@ with tab5:
                     t_real = t_real.sort_values(by=["Nome", "Início"])
                     st.dataframe(t_real, use_container_width=True, hide_index=True)
 
-            # ----- Tabela 2: cursos em andamento / futuros -----
+            # Cursos em andamento / futuros
             with col_c2:
                 st.markdown("### 📌 Cursos em andamento / futuros")
                 if inscritos.empty:
@@ -769,7 +857,7 @@ with tab5:
 
                 col_g1, col_g2 = st.columns(2)
 
-                # Cursos mais frequentes (por nome de curso)
+                # Cursos mais frequentes
                 df_cursos_freq = (
                     realizados.groupby("Motivo")["Nome"]
                     .nunique()
@@ -789,9 +877,11 @@ with tab5:
                 )
                 col_g1.plotly_chart(fig_cursos_freq, use_container_width=True)
 
-                # Cursos realizados por mês
+                # Militares em curso por mês
                 if not df_dias.empty:
                     df_dias_cursos = df_dias[df_dias["Tipo"] == "Curso"].copy()
+                    df_dias_cursos = filtrar_dias(df_dias_cursos, apenas_eqman, apenas_in, apenas_gvi)
+
                     if not df_dias_cursos.empty:
                         df_dias_cursos["Mes"] = df_dias_cursos["Data"].dt.to_period("M").dt.to_timestamp()
                         df_curso_mes = (
@@ -815,15 +905,15 @@ with tab5:
                         )
                         col_g2.plotly_chart(fig_curso_mes, use_container_width=True)
                     else:
-                        col_g2.info("Sem dados diários suficientes para análise mensal de cursos.")
+                        col_g2.info("Sem dados diários suficientes para análise mensal de cursos com os filtros atuais.")
                 else:
                     col_g2.info("Sem expansão diária para análise mensal de cursos.")
 
 
 # ------------------------------------------------------------
-# TAB 6 – LOG / DEBUG
+# TAB 7 – LOG / DEBUG
 # ------------------------------------------------------------
-with tab6:
+with tab_log:
     st.subheader("Log / Debug")
 
     st.markdown("### 🔹 df_raw (dados brutos do Google Sheets)")
@@ -839,9 +929,9 @@ with tab6:
 
     if AUSENCIAS_TRIPLETS:
         debug_rows = []
-        for idx, (c_ini, c_fim, c_mot, tipo) in enumerate(AUSENCIAS_TRIPLETS, start=1):
+        for idx, (c_ini, c_fim, c_mot, tipo_base) in enumerate(AUSENCIAS_TRIPLETS, start=1):
             debug_rows.append(
-                {"Bloco": idx, "Col_Inicio": c_ini, "Col_Fim": c_fim, "Col_Motivo/Curso": c_mot, "Tipo": tipo}
+                {"Bloco": idx, "Col_Inicio": c_ini, "Col_Fim": c_fim, "Col_Motivo/Curso": c_mot, "Tipo_base": tipo_base}
             )
         st.dataframe(pd.DataFrame(debug_rows), use_container_width=True)
     else:
@@ -853,8 +943,7 @@ with tab6:
     st.write(f"Total de eventos em df_eventos: **{len(df_eventos)}**")
 
     if not df_eventos.empty:
-        df_evt_preview = df_eventos.copy()
-        st.dataframe(df_evt_preview.head(30), use_container_width=True)
+        st.dataframe(df_eventos.head(40), use_container_width=True)
         st.write("Anos em Inicio:", df_eventos["Inicio"].dt.year.unique())
         st.write("Anos em Fim:", df_eventos["Fim"].dt.year.unique())
         st.write("Tipos registrados:", df_eventos["Tipo"].unique())
