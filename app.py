@@ -355,14 +355,15 @@ col4.metric("Prontidão", f"{percentual:.1f}%")
 
 
 # ============================================================
-# 9. TABS PRINCIPAIS (incluindo aba só de Férias)
+# 9. TABS PRINCIPAIS (incluindo aba só de Férias e Log)
 # ============================================================
 
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📋 Situação Diária",
     "📅 Linha do Tempo (Gantt)",
     "📊 Estatísticas & Análises",
-    "🏖️ Férias"
+    "🏖️ Férias",
+    "🛠 Log / Debug"
 ])
 
 # ------------------------------------------------------------
@@ -654,3 +655,48 @@ with tab4:
                     col_fx2.info("Sem dados diários suficientes para calcular férias por mês.")
             else:
                 col_fx2.info("Sem expansão diária para análise mensal.")
+
+
+# ------------------------------------------------------------
+# TAB 5 – LOG / DEBUG
+# ------------------------------------------------------------
+with tab5:
+    st.subheader("Log / Debug")
+
+    st.markdown("### 🔹 df_raw (dados brutos do Google Sheets)")
+    st.write(f"Total de linhas em df_raw: **{len(df_raw)}**")
+    st.write("Colunas disponíveis em df_raw:")
+    st.write(list(df_raw.columns))
+
+    st.write("Prévia de df_raw (primeiras 15 linhas):")
+    st.dataframe(df_raw.head(15), use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("### 🔹 df_eventos (eventos gerados)")
+
+    st.write(f"Total de eventos em df_eventos: **{len(df_eventos)}**")
+
+    if not df_eventos.empty:
+        # Uma visão resumida dos eventos
+        df_evt_preview = df_eventos.copy()
+        df_evt_preview["Inicio"] = df_evt_preview["Inicio"].astype(str)
+        df_evt_preview["Fim"] = df_evt_preview["Fim"].astype(str)
+        st.dataframe(df_evt_preview.head(30), use_container_width=True)
+
+        anos_inicio = df_eventos["Inicio"].dt.year.unique()
+        anos_fim = df_eventos["Fim"].dt.year.unique()
+        st.write("Anos detectados em **Inicio**:", anos_inicio)
+        st.write("Anos detectados em **Fim**:", anos_fim)
+    else:
+        st.info("df_eventos está vazio. Verifique se as colunas de datas (I, J, Y, Z etc.) estão realmente preenchidas na planilha.")
+
+# ============================================================
+# 10. RODAPÉ
+# ============================================================
+st.markdown("<hr style='border-color:#1f2937; margin-top:2rem;'/>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align:center; color:#9ca3af; padding:0.5rem 0;'>"
+    "Created by <strong>Klismann Freitas</strong>"
+    "</div>",
+    unsafe_allow_html=True
+)
