@@ -13,8 +13,8 @@ st.set_page_config(
     page_icon="logo_npamacau.png"
 )
 
-# 🔺 Sempre que você pedir alteração no app, eu vou subir essa versão
-APP_VERSION = "v1.2.0"
+# 🔺 Sempre que você pedir alteração no app, eu subo a versão
+APP_VERSION = "v1.6.0"
 
 # --- CSS global / tema ---
 st.markdown(
@@ -57,43 +57,38 @@ st.markdown(
         letter-spacing: 0.08em;
     }
 
-    /* Tabs – só linha inferior na aba selecionada */
-    button[data-baseweb="tab"] {
-        font-weight: 600;
-        border-radius: 0 !important;
-        padding: 0.35rem 0.9rem !important;
-        margin-right: 0.3rem;
-        border: none;
-        background: transparent;
-        color: #9ca3af;
-    }
-    button[data-baseweb="tab"]:hover {
-        background: transparent;
-        border-bottom: 1px solid #1f2937;
-    }
-    button[data-baseweb="tab"][aria-selected="true"] {
-        background: transparent;
-        color: #e5e7eb;
-        border: none;
-        border-bottom: 2px solid #f97316;
-        box-shadow: none;
-    }
-
     .stDataFrame {
         background: #020617;
         border-radius: 0.75rem;
         padding: 0.5rem;
     }
 
+    /* Centralizar e aumentar imagem da sidebar */
     section[data-testid="stSidebar"] img {
         display: block;
         margin: 0.5rem auto 0.5rem auto;
+    }
+
+    /* Sidebar: deixar menu mais organizado */
+    .sidebar-title {
+        text-align: center;
+        font-weight: 600;
+        margin-top: 0.3rem;
+        margin-bottom: 0.4rem;
+    }
+    .sidebar-section {
+        margin-top: 0.8rem;
+        margin-bottom: 0.4rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #9ca3af;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
-
 
 # Cabeçalho: apenas título (sem brasão ao lado)
 st.markdown(
@@ -118,13 +113,6 @@ def parse_bool(value) -> bool:
     s = str(value).strip().lower()
     return s in ("true", "1", "sim", "yes", "y", "x")
 
-# Férias: colunas sem acento (como o Pandas costuma ler)
-FERIAS_COLS = [
-    ("Inicio",   "Fim"),    # Período 1
-    ("Inicio.1", "Fim.1"),  # Período 2
-    ("Inicio.2", "Fim.2"),  # Período 3
-]
-
 # Conversão de letra de coluna (tipo "AQ") para índice 0-based
 def col_letter_to_index(col_letter: str) -> int:
     col_letter = col_letter.upper()
@@ -135,6 +123,13 @@ def col_letter_to_index(col_letter: str) -> int:
         result = result * 26 + (ord(ch) - ord('A') + 1)
     return result - 1  # 0-based
 
+def get_col_name(df: pd.DataFrame, letter: str):
+    """Retorna o nome da coluna do DataFrame correspondente à letra (A, B, ... , AA, AB, etc)."""
+    idx = col_letter_to_index(letter)
+    cols = list(df.columns)
+    if 0 <= idx < len(cols):
+        return cols[idx]
+    return None
 
 # ============================================================
 # 3. CARGA DE DADOS
@@ -163,86 +158,40 @@ except Exception as e:
     st.error(f"Erro de conexão. Verifique o arquivo secrets.toml. Detalhe: {e}")
     st.stop()
 
-# Colunas do tipo de curso (listbox) conforme informado: AQ, AV, GW, IG
-COURSE_TYPE_LETTERS = ["AQ", "AV", "GW", "IG"]
-COURSE_TYPE_COLS = []
-cols_list = list(df_raw.columns)
-for letter in COURSE_TYPE_LETTERS:
-    idx = col_letter_to_index(letter)
-    if 0 <= idx < len(cols_list):
-        COURSE_TYPE_COLS.append(cols_list[idx])
-
-def extrair_cursos_listbox(row) -> list:
-    """Extrai os tipos de curso das colunas de listbox (AQ, AV, GW, IG)."""
-    cursos = []
-    for col in COURSE_TYPE_COLS:
-        val = row.get(col, "")
-        if pd.notna(val):
-            s = str(val).strip()
-            if s and s.lower() != "nan":
-                cursos.append(s)
-    # Remove duplicados preservando ordem
-    return list(dict.fromkeys(cursos))
-
-
 # ============================================================
-# 4. DESCOBRIR DINAMICAMENTE AS AUSÊNCIAS (INÍCIO/FIM/MOTIVO/CURSO)
+# 3.1 MAPEAMENTO EXPLÍCITO DE FÉRIAS, OUTRAS AUSÊNCIAS E CURSOS
 # ============================================================
 
-def descobrir_ausencias_triplets(df: pd.DataFrame):
-    """
-    Busca todas as colunas do tipo:
-    'Início', 'FIm', e motivo (Motivo ou Curso).
-    Retorna lista: [(col_ini, col_fim, col_mot, tipo_base), ...]
-    onde tipo_base = 'Outros' para os 3 primeiros blocos e 'Curso' do 4º em diante.
-    """
-    triplets = []
+# Férias – períodos 1, 2 e 3 (I–J), (L–M), (O–P)
+FERIAS_COLS = []
+for ini_letter, fim_letter in [("I", "J"), ("L", "M"), ("O", "P")]:
+    c_ini = get_col_name(df_raw, ini_letter)
+    c_fim = get_col_name(df_raw, fim_letter)
+    if c_ini and c_fim:
+        FERIAS_COLS.append((c_ini, c_fim))
 
-    for col in df.columns:
-        if not col.startswith("Início"):
-            continue
-
-        # Sufixo: "", ".1", ".2", ...
-        parts = col.split(".", 1)
-        if len(parts) == 1:
-            sufixo = ""
-        else:
-            sufixo = f".{parts[1]}"
-
-        col_ini = col
-        col_fim = f"FIm{sufixo}"
-
-        # Motivo pode ser "Motivo", "Curso" etc com mesmo sufixo
-        candidatos_motivo = [
-            f"Motivo{sufixo}",
-            f"Curso{sufixo}",
-            f"Motivo Curso{sufixo}"
-        ]
-        col_mot = None
-        for c in candidatos_motivo:
-            if c in df.columns:
-                col_mot = c
-                break
-
-        if col_fim in df.columns and col_mot:
-            ordem = df.columns.get_loc(col_ini)
-            triplets.append((ordem, col_ini, col_fim, col_mot))
-
-    # Ordena pela posição da coluna
-    triplets.sort(key=lambda x: x[0])
-
-    resultado = []
-    for idx, (_, c_ini, c_fim, c_mot) in enumerate(triplets):
-        tipo_base = "Outros" if idx < 3 else "Curso"   # 0,1,2 => outros motivos ; 3+ => cursos
-        resultado.append((c_ini, c_fim, c_mot, tipo_base))
-
-    return resultado
-
-AUSENCIAS_TRIPLETS = descobrir_ausencias_triplets(df_raw)
-
+# Outras ausências (não curso) – períodos 4, 5 e 6
+# Y–Z–AB ; AD–AE–AG ; AI–AJ–AL
+AUSENCIAS_TRIPLETS = []
+for ini_letter, fim_letter, tipo_letter, tipo_base in [
+    ("Y",  "Z",  "AB", "Outros"),
+    ("AD", "AE", "AG", "Outros"),
+    ("AI", "AJ", "AL", "Outros"),
+    # Cursos – períodos 7, 8, 9 e 10:
+    # AN–AO–AQ ; AS–AT–AV ; DH–EL–GW ; ID–IE–IG
+    ("AN", "AO", "AQ", "Curso"),
+    ("AS", "AT", "AV", "Curso"),
+    ("DH", "EL", "GW", "Curso"),
+    ("ID", "IE", "IG", "Curso"),
+]:
+    c_ini  = get_col_name(df_raw, ini_letter)
+    c_fim  = get_col_name(df_raw, fim_letter)
+    c_tipo = get_col_name(df_raw, tipo_letter)
+    if c_ini and c_fim and c_tipo:
+        AUSENCIAS_TRIPLETS.append((c_ini, c_fim, c_tipo, tipo_base))
 
 # ============================================================
-# 5. TRANSFORMAÇÃO EM EVENTOS (WIDE → LONG)
+# 4. TRANSFORMAÇÃO EM EVENTOS (WIDE → LONG)
 # ============================================================
 
 @st.cache_data(ttl=600)
@@ -261,13 +210,11 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
             "Posto": posto,
             "Nome": nome,
             "Escala": escala,
-            "EqMan": eqman if pd.notna(eqman) and str(eqman) != "-" else "Não",
+            # EqMan é texto com função (OLP, Líder, etc.) ou vazio/- → tratamos como "Não"
+            "EqMan": eqman if pd.notna(eqman) and str(eqman).strip() not in ("-", "") else "Não",
             "GVI": parse_bool(gvi),
             "IN": parse_bool(insp),
         }
-
-        # Cursos selecionados nas colunas de listbox (AQ, AV, GW, IG)
-        cursos_listbox = extrair_cursos_listbox(row)
 
         # --------- BLOCO DE FÉRIAS ----------
         for col_ini, col_fim in FERIAS_COLS:
@@ -304,26 +251,15 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
                 if dur < 1 or dur > 365:
                     continue
 
-                # Decide TIPO FINAL (Curso ou Outros)
-                tipo_final = tipo_base
-                if motivo_texto and "curso" in motivo_texto.lower():
-                    tipo_final = "Curso"
+                tipo_final = tipo_base  # "Outros" ou "Curso"
 
-                # Decide MOTIVO REAL
-                if tipo_final == "Curso":
-                    if motivo_texto and "nan" not in motivo_texto.lower():
-                        motivo_real = motivo_texto  # nome do curso vindo da coluna Motivo/Curso
-                    elif cursos_listbox:
-                        # Se não houver motivo na coluna, usa o(s) curso(s) das listbox (AQ, AV, GW, IG)
-                        motivo_real = ", ".join(cursos_listbox)
-                    else:
-                        motivo_real = "CURSO (não especificado)"
+                # Motivo:
+                # - para OUTROS: texto da listbox (Disp Médica, Destaque, etc) ou "OUTROS"
+                # - para CURSO: texto da listbox (C-ESP-..., C-EXP-...) ou "CURSO"
+                if motivo_texto and "nan" not in motivo_texto.lower():
+                    motivo_real = motivo_texto
                 else:
-                    motivo_real = (
-                        motivo_texto
-                        if motivo_texto and "nan" not in motivo_texto.lower()
-                        else "OUTROS"
-                    )
+                    motivo_real = "CURSO" if tipo_final == "Curso" else "OUTROS"
 
                 eventos.append({
                     **militar_info,
@@ -331,7 +267,7 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
                     "Fim": fim,
                     "Duracao_dias": dur,
                     "Motivo": motivo_real,
-                    "Tipo": tipo_final    # "Curso" ou "Outros"
+                    "Tipo": tipo_final
                 })
 
     df_eventos = pd.DataFrame(eventos)
@@ -339,9 +275,8 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
 
 df_eventos = construir_eventos(df_raw)
 
-
 # ============================================================
-# 6. EXPANSÃO POR DIA (PARA ANÁLISE MENSAL/DIÁRIA)
+# 5. EXPANSÃO POR DIA (PARA ANÁLISE MENSAL/DIÁRIA)
 # ============================================================
 
 @st.cache_data(ttl=600)
@@ -374,15 +309,14 @@ def expandir_eventos_por_dia(df_eventos: pd.DataFrame) -> pd.DataFrame:
 
 df_dias = expandir_eventos_por_dia(df_eventos)
 
-
 # ============================================================
-# 7. FUNÇÕES DE FILTRO
+# 6. FUNÇÕES DE FILTRO
 # ============================================================
 
 def filtrar_tripulacao(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
     res = df.copy()
     if apenas_eqman and "EqMan" in res.columns:
-        res = res[(res["EqMan"].notna()) & (res["EqMan"].astype(str) != "-")]
+        res = res[(res["EqMan"].notna()) & (res["EqMan"].astype(str) != "-") & (res["EqMan"].astype(str) != "Não")]
     if apenas_in and "IN" in res.columns:
         res = res[res["IN"].apply(parse_bool)]
     if apenas_gvi and "Gvi/GP" in res.columns:
@@ -409,21 +343,68 @@ def filtrar_dias(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_g
         res = res[res["GVI"] == True]
     return res
 
+# ============================================================
+# 7. LEITURA DO % DE FÉRIAS (CÉLULA V2)
+# ============================================================
+
+@st.cache_data(ttl=600)
+def load_percent_ferias_v2():
+    """Lê o valor da célula V2 da planilha Afastamento 2026 para usar na aba Férias."""
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        # Lê a planilha inteira sem header para conseguir acessar V2 (linha 2, coluna V)
+        df_v = conn.read(
+            worksheet="Afastamento 2026",
+            header=None,
+            ttl="10m"
+        )
+        # Coluna V é a 22ª coluna -> índice 21
+        valor = df_v.iloc[1, 21]
+
+        if pd.isna(valor):
+            return None
+
+        s = str(valor).strip()
+        if s.endswith("%"):
+            s = s[:-1].strip()
+        # Trata vírgula como decimal
+        s = s.replace(",", ".")
+        numero = float(s)
+
+        # Se vier como 40 ao invés de 0.4, normaliza
+        if numero > 1:
+            numero = numero / 100.0
+
+        numero = max(0.0, min(1.0, numero))
+        return numero
+
+    except Exception:
+        return None
 
 # ============================================================
-# 8. DATA DE REFERÊNCIA (GLOBAL) + LOGO NA LATERAL
+# 8. SIDEBAR – LOGO, PARÂMETROS E MENU LATERAL
 # ============================================================
 
-# Brasão na lateral, um pouco maior e centralizado (CSS já centraliza)
-st.sidebar.image("logo_npamacau.png", width=130)
-st.sidebar.markdown(
-    "<div style='text-align:center; font-weight:600; margin-top:0.3rem; margin-bottom:0.8rem;'>Parâmetros</div>",
-    unsafe_allow_html=True
-)
+# Brasão na lateral, maior e centralizado
+st.sidebar.image("logo_npamacau.png", width=140)
+st.sidebar.markdown("<div class='sidebar-title'>Parâmetros</div>", unsafe_allow_html=True)
 
 data_ref = st.sidebar.date_input("Data de Referência", datetime.today())
 hoje = pd.to_datetime(data_ref)
 
+st.sidebar.markdown("<div class='sidebar-section'>Navegação</div>", unsafe_allow_html=True)
+pagina = st.sidebar.radio(
+    "",
+    [
+        "Presentes",
+        "Ausentes",
+        "Linha do Tempo (Gantt)",
+        "Estatísticas & Análises",
+        "Férias",
+        "Cursos",
+        "Log / Debug",
+    ]
+)
 
 # ============================================================
 # 9. MÉTRICAS GLOBAIS (SEM FILTRO)
@@ -447,7 +428,6 @@ col1.metric("Efetivo Total", total_efetivo_global)
 col2.metric("A Bordo", total_presentes_global)
 col3.metric("Ausentes", total_ausentes_global, delta_color="inverse")
 col4.metric("Prontidão", f"{percentual_global:.1f}%")
-
 
 # ============================================================
 # 10. FUNÇÃO PARA GRÁFICO DE PIZZA MODERNO
@@ -481,71 +461,19 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
     )
     return fig
 
-
 # ============================================================
-# 10.1. LEITURA DO % DE FÉRIAS (CÉLULA V2)
+# 11. PÁGINAS (MENU LATERAL)
 # ============================================================
-
-@st.cache_data(ttl=600)
-def load_percent_ferias_v2():
-    """Lê o valor da célula V2 da planilha Afastamento 2026 para usar na aba Férias."""
-    try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        # Lê a planilha inteira sem header para conseguir acessar V2 (linha 2, coluna V)
-        df_v = conn.read(
-            worksheet="Afastamento 2026",
-            header=None,
-            ttl="10m"
-        )
-        # Coluna V é a 22ª coluna -> índice 21
-        valor = df_v.iloc[1, 21]
-
-        if pd.isna(valor):
-            return None
-
-        # Trata casos tipo "40%", "40,5%", "0,4", etc.
-        s = str(valor).strip()
-        if s.endswith("%"):
-            s = s[:-1].strip()
-        s = s.replace(".", "").replace(",", ".") if s.count(",") == 1 and s.count(".") == 1 else s.replace(",", ".")
-        numero = float(s)
-
-        # Se vier como 40 ao invés de 0.4, normaliza
-        if numero > 1:
-            numero = numero / 100.0
-
-        # Limita entre 0 e 1
-        numero = max(0.0, min(1.0, numero))
-        return numero
-
-    except Exception:
-        return None
-
-
-# ============================================================
-# 11. TABS PRINCIPAIS (SEM EMOJIS NOS TÍTULOS)
-# ============================================================
-
-tab_presentes, tab_ausentes, tab_gantt, tab_stats, tab_ferias, tab_cursos, tab_log = st.tabs([
-    "Presentes",
-    "Ausentes",
-    "Linha do Tempo (Gantt)",
-    "Estatísticas & Análises",
-    "Férias",
-    "Cursos",
-    "Log / Debug"
-])
 
 # ------------------------------------------------------------
-# TAB 1 – PRESENTES
+# PÁGINA: PRESENTES
 # ------------------------------------------------------------
-with tab_presentes:
+if pagina == "Presentes":
     st.subheader(f"Presentes a bordo em {hoje.strftime('%d/%m/%Y')}")
 
-    # Placeholder para a tabela ficar ACIMA dos filtros
+    # Tabela acima dos filtros
     placeholder_tabela = st.empty()
 
-    # Filtros abaixo da tabela
     st.markdown("#### Filtros")
     col_f1, col_f2, col_f3 = st.columns(3)
     apenas_eqman = col_f1.checkbox("Apenas EqMan", key="pres_eqman")
@@ -572,26 +500,27 @@ with tab_presentes:
         if df_presentes.empty:
             st.info("Nenhum militar presente para os filtros atuais.")
         else:
-            tabela = df_presentes[["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"]].copy()
-            tabela = tabela.rename(columns={"Gvi/GP": "GVI/GP"})
+            colunas_desejadas = [c for c in ["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"] if c in df_presentes.columns]
+            tabela = df_presentes[colunas_desejadas].copy()
+            if "Gvi/GP" in tabela.columns:
+                tabela = tabela.rename(columns={"Gvi/GP": "GVI/GP"})
 
-            # ✅ GVI/GP e IN como SIM / NÃO (e não 0 / False)
-            tabela["GVI/GP"] = tabela["GVI/GP"].apply(lambda v: "SIM" if parse_bool(v) else "NÃO")
-            tabela["IN"]     = tabela["IN"].apply(lambda v: "SIM" if parse_bool(v) else "NÃO")
+            # GVI/GP e IN como SIM / NÃO
+            if "GVI/GP" in tabela.columns:
+                tabela["GVI/GP"] = tabela["GVI/GP"].apply(lambda v: "SIM" if parse_bool(v) else "NÃO")
+            if "IN" in tabela.columns:
+                tabela["IN"] = tabela["IN"].apply(lambda v: "SIM" if parse_bool(v) else "NÃO")
 
             st.dataframe(tabela, use_container_width=True, hide_index=True)
 
-
 # ------------------------------------------------------------
-# TAB 2 – AUSENTES
+# PÁGINA: AUSENTES
 # ------------------------------------------------------------
-with tab_ausentes:
+elif pagina == "Ausentes":
     st.subheader(f"Ausentes em {hoje.strftime('%d/%m/%Y')}")
 
-    # Placeholder para a tabela ficar ACIMA dos filtros
     placeholder_tabela_aus = st.empty()
 
-    # Filtros abaixo da tabela
     st.markdown("#### Filtros")
     col_f1, col_f2, col_f3 = st.columns(3)
     apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman")
@@ -612,7 +541,6 @@ with tab_ausentes:
                 if ausentes_hoje.empty:
                     st.success("Todo o efetivo está a bordo para os filtros atuais.")
                 else:
-                    # Garante que só usa colunas que existem (evita erro de KeyError)
                     colunas_desejadas = [c for c in ["Posto", "Nome", "Motivo", "Tipo", "EqMan", "Fim"]
                                          if c in ausentes_hoje.columns]
                     show_df = ausentes_hoje[colunas_desejadas].copy()
@@ -622,9 +550,11 @@ with tab_ausentes:
                         show_df = show_df.drop(columns=["Fim"])
 
                     if "EqMan" in show_df.columns:
-                        st.dataframe(show_df.drop(columns=["EqMan"]), use_container_width=True, hide_index=True)
+                        tabela_aus = show_df.drop(columns=["EqMan"])
                     else:
-                        st.dataframe(show_df, use_container_width=True, hide_index=True)
+                        tabela_aus = show_df
+
+                    st.dataframe(tabela_aus, use_container_width=True, hide_index=True)
 
                     # Alertas EqMan
                     if "EqMan" in ausentes_hoje.columns:
@@ -658,17 +588,16 @@ with tab_ausentes:
             except Exception as e:
                 st.error(f"Ocorreu um erro ao montar a lista de ausentes: {e}")
 
-
 # ------------------------------------------------------------
-# TAB 3 – LINHA DO TEMPO (GANTT) – COR POR TIPO (Curso/Férias/Outros)
+# PÁGINA: LINHA DO TEMPO (GANTT)
 # ------------------------------------------------------------
-with tab_gantt:
+elif pagina == "Linha do Tempo (Gantt)":
     st.subheader("Planejamento Anual de Ausências")
 
     if df_eventos.empty:
         st.info("Planilha parece não ter datas preenchidas.")
     else:
-        df_gantt = df_eventos.copy()  # visão global, sem filtros
+        df_gantt = df_eventos.copy()
 
         if df_gantt.empty:
             st.info("Nenhum evento encontrado.")
@@ -678,7 +607,7 @@ with tab_gantt:
             ano_min = min_data.year if pd.notnull(min_data) else 2025
             ano_max = max_data.year if pd.notnull(max_data) else 2026
 
-            # ✅ Aqui a cor é por TIPO, então no gráfico aparece "Curso" e não "Curso (não especificado)"
+            # Cor por Tipo (Férias, Curso, Outros) – não aparece "Curso (não especificado)"
             fig = px.timeline(
                 df_gantt,
                 x_start="Inicio",
@@ -707,11 +636,10 @@ with tab_gantt:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-
 # ------------------------------------------------------------
-# TAB 4 – ESTATÍSTICAS & ANÁLISES (SEM FILTROS)
+# PÁGINA: ESTATÍSTICAS & ANÁLISES
 # ------------------------------------------------------------
-with tab_stats:
+elif pagina == "Estatísticas & Análises":
     st.subheader("Visão Analítica de Ausências (visão global)")
 
     if df_eventos.empty:
@@ -739,7 +667,7 @@ with tab_stats:
 
             st.markdown("---")
 
-            # ✅ Para o gráfico de pizza, qualquer motivo que comece com "CURSO" vira "CURSO"
+            # Para o gráfico de pizza, qualquer motivo que comece com "CURSO" vira "CURSO"
             df_evt_plot = df_evt.copy()
             df_evt_plot["Motivo"] = df_evt_plot["Motivo"].apply(
                 lambda m: "CURSO" if isinstance(m, str) and m.upper().startswith("CURSO") else m
@@ -810,11 +738,10 @@ with tab_stats:
             else:
                 st.info("Sem dados diários para análise mensal.")
 
-
 # ------------------------------------------------------------
-# TAB 5 – FÉRIAS
+# PÁGINA: FÉRIAS
 # ------------------------------------------------------------
-with tab_ferias:
+elif pagina == "Férias":
     st.subheader("Férias cadastradas")
 
     if df_eventos.empty:
@@ -825,7 +752,6 @@ with tab_ferias:
         if df_ferias.empty:
             st.info("Nenhuma férias cadastrada.")
         else:
-            # 1) Tabela com todas as férias
             tabela_ferias = df_ferias[["Posto", "Nome", "Escala", "Inicio", "Fim", "Duracao_dias"]].copy()
             tabela_ferias["Início"] = tabela_ferias["Inicio"].dt.strftime("%d/%m/%Y")
             tabela_ferias["Término"] = tabela_ferias["Fim"].dt.strftime("%d/%m/%Y")
@@ -850,7 +776,7 @@ with tab_ferias:
 
             col_fx1, col_fx2 = st.columns(2)
 
-            # 1 - Férias por escala
+            # Férias por escala
             df_escala = (
                 df_ferias.groupby("Escala")["Nome"]
                 .nunique()
@@ -870,7 +796,7 @@ with tab_ferias:
             )
             col_fx1.plotly_chart(fig_escala, use_container_width=True)
 
-            # 2 - Férias por mês
+            # Férias por mês
             if not df_dias.empty:
                 df_dias_ferias = df_dias[df_dias["Tipo"] == "Férias"].copy()
                 if not df_dias_ferias.empty:
@@ -899,7 +825,7 @@ with tab_ferias:
             else:
                 col_fx2.info("Sem expansão diária para análise mensal.")
 
-            # --- Gráfico de pizza com % de férias já gozadas (valor em V2) ---
+            # Gráfico de pizza com % de férias já gozadas (V2)
             st.markdown("---")
             st.subheader("Percentual de férias já gozadas")
 
@@ -936,11 +862,10 @@ with tab_ferias:
             else:
                 st.info("Não foi possível ler o valor de V2. Verifique se a célula contém o percentual de férias.")
 
-
 # ------------------------------------------------------------
-# TAB 6 – CURSOS
+# PÁGINA: CURSOS
 # ------------------------------------------------------------
-with tab_cursos:
+elif pagina == "Cursos":
     st.subheader("Análises de Cursos (visão global)")
 
     if df_eventos.empty:
@@ -951,7 +876,6 @@ with tab_cursos:
         if df_cursos.empty:
             st.info("Nenhum curso cadastrado.")
         else:
-            # Realizados x em andamento/futuros
             realizados = df_cursos[df_cursos["Fim"] < hoje].copy()
             inscritos  = df_cursos[df_cursos["Fim"] >= hoje].copy()
 
@@ -1056,11 +980,10 @@ with tab_cursos:
                 else:
                     col_g2.info("Sem expansão diária para análise mensal de cursos.")
 
-
 # ------------------------------------------------------------
-# TAB 7 – LOG / DEBUG
+# PÁGINA: LOG / DEBUG
 # ------------------------------------------------------------
-with tab_log:
+elif pagina == "Log / Debug":
     st.subheader("Log / Debug")
 
     st.markdown("### df_raw (dados brutos do Google Sheets)")
@@ -1072,17 +995,17 @@ with tab_log:
     st.dataframe(df_raw.head(15), use_container_width=True)
 
     st.markdown("---")
-    st.markdown("### Mapeamento de Ausências (Início/FIm/Motivo/Curso)")
+    st.markdown("### Mapeamento de Ausências (Férias, Outras Ausências, Cursos)")
 
-    if AUSENCIAS_TRIPLETS:
-        debug_rows = []
-        for idx, (c_ini, c_fim, c_mot, tipo_base) in enumerate(AUSENCIAS_TRIPLETS, start=1):
-            debug_rows.append(
-                {"Bloco": idx, "Col_Inicio": c_ini, "Col_Fim": c_fim, "Col_Motivo/Curso": c_mot, "Tipo_base": tipo_base}
-            )
+    debug_rows = []
+    for idx, (c_ini, c_fim, c_mot, tipo_base) in enumerate(AUSENCIAS_TRIPLETS, start=1):
+        debug_rows.append(
+            {"Bloco": idx, "Col_Inicio": c_ini, "Col_Fim": c_fim, "Col_Tipo/Motivo": c_mot, "Tipo_base": tipo_base}
+        )
+    if debug_rows:
         st.dataframe(pd.DataFrame(debug_rows), use_container_width=True)
     else:
-        st.info("Nenhum trio Início/FIm/Motivo/Curso encontrado.")
+        st.info("Nenhum bloco de ausência mapeado.")
 
     st.markdown("---")
     st.markdown("### df_eventos (eventos gerados)")
@@ -1096,7 +1019,6 @@ with tab_log:
         st.write("Tipos registrados:", df_eventos["Tipo"].unique())
     else:
         st.info("df_eventos está vazio. Verifique se as colunas de datas estão corretamente preenchidas na planilha.")
-
 
 # ============================================================
 # 12. RODAPÉ
