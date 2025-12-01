@@ -64,7 +64,7 @@ COL = {
     "NUMERO": 0,    # A
     "POSTO": 1,     # B
     "NOME": 2,      # C
-    "SERVICO": 3,   # D
+    "SERVICO": 3,   # D - escala
     "EQMAN": 4,     # E
     "GVI": 5,       # F
     "INSP": 6,      # G
@@ -94,24 +94,29 @@ def parse_bool(value) -> bool:
     return s in ("true", "1", "sim", "yes", "y", "x")
 
 
-def to_date(value):
+def parse_sheet_date(value):
     """
-    Converte valor vindo do Sheets em datetime:
-    - Trata string no formato brasileiro (dayfirst=True)
-    - Trata números seriais do Sheets (≈ dias desde 1899-12-30)
+    Converte valor do Google Sheets em datetime, com filtros para
+    evitar datas malucas (anos muito antigos ou muito futuros).
     """
     if pd.isna(value) or value == "":
         return pd.NaT
 
+    # Se vier como número (serial do Sheets)
     if isinstance(value, (int, float)):
-        # faixa típica de datas (ano ~1950–2100)
-        if 30000 <= value <= 60000:
-            base = datetime(1899, 12, 30)
-            return base + timedelta(days=int(value))
-        else:
-            return pd.to_datetime(value, errors="coerce", dayfirst=True)
+        # Sheets usa base 1899-12-30
+        ts = datetime(1899, 12, 30) + timedelta(days=int(value))
+    else:
+        ts = pd.to_datetime(str(value), dayfirst=True, errors="coerce")
 
-    return pd.to_datetime(str(value), errors="coerce", dayfirst=True)
+    if pd.isna(ts):
+        return pd.NaT
+
+    # Considerar apenas anos "realistas" para a aba Afastamento 2026
+    if ts.year < 2024 or ts.year > 2027:
+        return pd.NaT
+
+    return ts.normalize()
 
 
 # ============================================================
@@ -154,6 +159,7 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
     for _, row in df_raw.iterrows():
         posto = row.iloc[COL["POSTO"]]
         nome = row.iloc[COL["NOME"]]
+        escala = row.iloc[COL["SERVICO"]] if len(row) > COL["SERVICO"] else ""
         eqman_raw = row.iloc[COL["EQMAN"]] if len(row) > COL["EQMAN"] else None
         gvi_raw = row.iloc[COL["GVI"]] if len(row) > COL["GVI"] else None
         insp_raw = row.iloc[COL["INSP"]] if len(row) > COL["INSP"] else None
@@ -161,6 +167,7 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
         militar_info = {
             "Posto": posto,
             "Nome": nome,
+            "Escala": escala,
             "EqMan": (
                 eqman_raw if pd.notnull(eqman_raw) and str(eqman_raw) != "-" else "Não"
             ),
@@ -172,8 +179,8 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
         for inicio_idx, fim_idx in FERIAS_PARES:
             if len(row) <= fim_idx:
                 continue
-            ini = to_date(row.iloc[inicio_idx])
-            fim = to_date(row.iloc[fim_idx])
+            ini = parse_sheet_date(row.iloc[inicio_idx])
+            fim = parse_sheet_date(row.iloc[fim_idx])
 
             if pd.notnull(ini) and pd.notnull(fim):
                 if fim < ini:
@@ -191,8 +198,8 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
         for ini_idx, fim_idx, mot_idx in AUSENCIAS_TRIOS:
             if len(row) <= mot_idx:
                 continue
-            ini = to_date(row.iloc[ini_idx])
-            fim = to_date(row.iloc[fim_idx])
+            ini = parse_sheet_date(row.iloc[ini_idx])
+            fim = parse_sheet_date(row.iloc[fim_idx])
             motivo_texto = str(row.iloc[mot_idx])
 
             if pd.notnull(ini) and pd.notnull(fim):
@@ -215,7 +222,8 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
 
     if not df_eventos.empty:
         df_eventos["Duracao_dias"] = (df_eventos["Fim"] - df_eventos["Inicio"]).dt.days + 1
-        df_eventos = df_eventos[df_eventos["Duracao_dias"] > 0]
+        # Só eventos com duração razoável (até 60 dias, para evitar lixo)
+        df_eventos = df_eventos[df_eventos["Duracao_dias"].between(1, 60)]
 
     return df_eventos
 
@@ -241,6 +249,7 @@ def expandir_eventos_por_dia(df_eventos: pd.DataFrame) -> pd.DataFrame:
                 "Data": data,
                 "Posto": ev["Posto"],
                 "Nome": ev["Nome"],
+                "Escala": ev["Escala"],
                 "EqMan": ev["EqMan"],
                 "GVI": ev["GVI"],
                 "IN": ev["IN"],
@@ -263,10 +272,6 @@ st.sidebar.header("🕹️ Centro de Controle")
 
 data_ref = st.sidebar.date_input("Data de Referência", datetime.today())
 hoje = pd.to_datetime(data_ref)
-
-# SEM filtro de posto: considera todos
-todos_postos = df_raw.iloc[:, COL["POSTO"]].dropna().unique()
-filtro_posto = sorted(todos_postos)  # lista completa sempre
 
 filtro_eqman = st.sidebar.checkbox("Apenas EqMan")
 filtro_in = st.sidebar.checkbox("Apenas Inspetores Navais (IN)")
@@ -328,20 +333,21 @@ col4.metric("Prontidão", f"{percentual:.1f}%")
 
 
 # ============================================================
-# 9. TABS PRINCIPAIS
+# 9. TABS PRINCIPAIS (incluindo aba só de Férias)
 # ============================================================
 
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "📋 Situação Diária",
     "📅 Linha do Tempo (Gantt)",
-    "📊 Estatísticas & Análises"
+    "📊 Estatísticas & Análises",
+    "🏖️ Férias"
 ])
 
 # ------------------------------------------------------------
 # TAB 1 – SITUAÇÃO DIÁRIA
 # ------------------------------------------------------------
 with tab1:
-    st.subheader(f"Status em {hoje.strftime('%d/%m/%Y')}")
+    st.subheader(f"Ausentes em {hoje.strftime('%d/%m/%Y')}")  # <<< ALTERADO
 
     if total_ausentes > 0:
         show_df = ausentes_hoje[["Posto", "Nome", "Motivo", "Fim"]].copy()
@@ -364,7 +370,7 @@ with tab1:
             )
 
     else:
-        st.success("Todo o efetivo selecionado está a bordo.")
+        st.success("Todo o efetivo está a bordo para os filtros atuais.")
 
 
 # ------------------------------------------------------------
@@ -388,16 +394,31 @@ with tab2:
         if df_gantt.empty:
             st.info("Nenhum evento encontrado para os filtros atuais.")
         else:
+            # Range anual aproximado com base nos dados
+            min_data = df_gantt["Inicio"].min()
+            max_data = df_gantt["Fim"].max()
+            ano_min = min_data.year if pd.notnull(min_data) else 2025
+            ano_max = max_data.year if pd.notnull(max_data) else 2026
+
             fig = px.timeline(
                 df_gantt,
                 x_start="Inicio",
                 x_end="Fim",
                 y="Nome",
                 color="Motivo",
-                hover_data=["Posto", "EqMan", "GVI", "IN", "Tipo"],
+                hover_data=["Posto", "Escala", "EqMan", "GVI", "IN", "Tipo"],
                 title="Cronograma de Ausências"
             )
             fig.update_yaxes(autorange="reversed")
+
+            # Delimita o eixo X para o intervalo de anos da planilha
+            fig.update_xaxes(
+                range=[
+                    datetime(ano_min, 1, 1),
+                    datetime(ano_max, 12, 31)
+                ]
+            )
+
             fig.add_vline(
                 x=hoje,
                 line_width=2,
@@ -459,21 +480,22 @@ with tab3:
 
             col_b1, col_b2 = st.columns(2)
 
+            # Gráfico de motivos – pizza
             df_motivos_dias = (
                 df_evt.groupby("Motivo")["Duracao_dias"]
                 .sum()
                 .reset_index()
                 .sort_values("Duracao_dias", ascending=False)
             )
-            fig_motivos = px.bar(
+            fig_motivos = px.pie(
                 df_motivos_dias,
-                x="Motivo",
-                y="Duracao_dias",
-                title="Dias de Ausência por Motivo",
-                labels={"Duracao_dias": "Dias de ausência"}
+                names="Motivo",
+                values="Duracao_dias",
+                title="Proporção de Dias de Ausência por Motivo"
             )
             col_b1.plotly_chart(fig_motivos, use_container_width=True)
 
+            # Ausência por posto – barra
             df_posto_dias = (
                 df_evt.groupby("Posto")["Duracao_dias"]
                 .sum()
@@ -545,3 +567,72 @@ with tab3:
                     st.plotly_chart(fig_mensal, use_container_width=True)
                 else:
                     st.info("Sem dados diários para análise mensal com os filtros atuais.")
+
+
+# ------------------------------------------------------------
+# TAB 4 – SOMENTE FÉRIAS
+# ------------------------------------------------------------
+with tab4:
+    st.subheader("Análises Específicas de Férias")
+
+    if df_eventos.empty:
+        st.write("Sem dados de férias registrados.")
+    else:
+        df_ferias = df_eventos[df_eventos["Tipo"] == "Férias"].copy()
+
+        if df_ferias.empty:
+            st.info("Nenhuma férias cadastrada na planilha.")
+        else:
+            # KPIs férias
+            col_f1, col_f2 = st.columns(2)
+            total_militares_com_ferias = df_ferias["Nome"].nunique()
+            dias_totais_ferias = df_ferias["Duracao_dias"].sum()
+
+            col_f1.metric("Militares com férias cadastradas", total_militares_com_ferias)
+            col_f2.metric("Dias totais de férias", int(dias_totais_ferias))
+
+            st.markdown("---")
+
+            col_fx1, col_fx2 = st.columns(2)
+
+            # 1 - Quantidade de militares de férias por escala
+            df_escala = (
+                df_ferias.groupby("Escala")["Nome"]
+                .nunique()
+                .reset_index(name="Militares")
+                .sort_values("Militares", ascending=False)
+            )
+            fig_escala = px.bar(
+                df_escala,
+                x="Escala",
+                y="Militares",
+                title="Quantidade de militares com férias por escala",
+                labels={"Militares": "Militares em férias (no ano)"}
+            )
+            col_fx1.plotly_chart(fig_escala, use_container_width=True)
+
+            # 2 - Quantidade de militares de férias por mês
+            if not df_dias.empty:
+                df_dias_ferias = df_dias[df_dias["Tipo"] == "Férias"].copy()
+                if not df_dias_ferias.empty:
+                    df_dias_ferias["Mes"] = df_dias_ferias["Data"].dt.to_period("M").dt.to_timestamp()
+                    # Um militar conta 1 vez por mês, mesmo que fique o mês inteiro
+                    df_mes_ferias = (
+                        df_dias_ferias[["Mes", "Nome"]]
+                        .drop_duplicates()
+                        .groupby("Mes")["Nome"]
+                        .nunique()
+                        .reset_index(name="Militares")
+                    )
+                    fig_mes_ferias = px.bar(
+                        df_mes_ferias,
+                        x="Mes",
+                        y="Militares",
+                        title="Quantidade de militares com férias previstas por mês",
+                        labels={"Mes": "Mês", "Militares": "Militares com férias no mês"}
+                    )
+                    col_fx2.plotly_chart(fig_mes_ferias, use_container_width=True)
+                else:
+                    col_fx2.info("Sem dados diários suficientes para calcular férias por mês.")
+            else:
+                col_fx2.info("Sem expansão diária para análise mensal.")
