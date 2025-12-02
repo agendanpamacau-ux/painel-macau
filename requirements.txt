@@ -3,3 +3,5 @@ pandas
 plotly
 st-gsheets-connection
 openpyxl
+google-api-python-client
+google-auth
