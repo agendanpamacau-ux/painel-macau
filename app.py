@@ -165,10 +165,13 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Cabeçalho: logo + título
+# Cabeçalho: logo + título lado a lado
 col_logo, col_title = st.columns([1, 5])
 with col_logo:
-    st.image("logo_npamacau.png", width=80)
+    try:
+        st.image("logo_npamacau.png", width=80)
+    except:
+        st.write("⚓") # Fallback se a imagem não existir
 with col_title:
     st.markdown(
         """
