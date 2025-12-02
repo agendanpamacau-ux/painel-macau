@@ -6,11 +6,12 @@ from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+import base64
 
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.3.1 (Header Fix - Ship Name)"
+SCRIPT_VERSION = "v1.4.0 (Final Polish - Feedback Fixes)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly"
@@ -24,19 +25,24 @@ st.set_page_config(
     page_icon="logo_npamacau.png"
 )
 
-# Tenta usar st.logo (Streamlit 1.35+) para colocar o brasão na barra superior
-try:
-    st.logo("logo_npamacau.png", icon_image="logo_npamacau.png")
-except AttributeError:
-    pass # Versão antiga do Streamlit, ignora ou usa fallback CSS se necessário
+# FUNÇÃO PARA CARREGAR IMAGEM EM BASE64 (Para injetar no CSS)
+def get_img_as_base64(file):
+    try:
+        with open(file, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    except:
+        return ""
+
+logo_b64 = get_img_as_base64("logo_npamacau.png")
 
 # --- CSS global / TEMA AMEZIA ---
 st.markdown(
-    """
+    f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700&family=Poppins:wght@400;500;600;700&display=swap');
 
-    :root {
+    :root {{
         /* Amezia Colors */
         --amezia-blue: #4099ff;
         --amezia-pink: #ff5370;
@@ -48,28 +54,44 @@ st.markdown(
         --amezia-light-card: #ffffff;
         --text-dark: #aab8c5;
         --text-light: #3e4b5b;
-    }
+    }}
 
-    * {
+    * {{
         font-family: 'Nunito Sans', sans-serif;
-    }
+    }}
 
-    h1, h2, h3, h4, h5, h6 {
+    h1, h2, h3, h4, h5, h6 {{
         font-family: 'Poppins', sans-serif !important;
         font-weight: 600 !important;
-    }
+    }}
 
     /* HEADER STYLE (Blue Top Bar mimic) */
-    header[data-testid="stHeader"] {
+    header[data-testid="stHeader"] {{
         background-image: linear-gradient(to right, #4099ff, #73b4ff);
         color: white !important;
-    }
+        height: 3.5rem !important; /* Fixar altura para alinhar logo */
+    }}
     
-    /* INJECT SHIP NAME INTO HEADER */
-    header[data-testid="stHeader"]::after {
+    /* INJECT SHIP NAME & LOGO INTO HEADER */
+    header[data-testid="stHeader"]::before {{
+        content: "";
+        background-image: url("data:image/png;base64,{logo_b64}");
+        background-size: contain;
+        background-repeat: no-repeat;
+        position: absolute;
+        left: 60px; /* Ao lado do menu hamburguer */
+        top: 50%;
+        transform: translateY(-50%);
+        width: 40px;
+        height: 40px;
+        z-index: 999;
+        pointer-events: none;
+    }}
+
+    header[data-testid="stHeader"]::after {{
         content: "Navio-Patrulha Macau";
         position: absolute;
-        left: 100px; /* Espaço para o menu hamburguer e logo */
+        left: 110px; /* Logo width + spacing */
         top: 50%;
         transform: translateY(-50%);
         color: white;
@@ -78,114 +100,135 @@ st.markdown(
         font-family: 'Poppins', sans-serif;
         z-index: 999;
         pointer-events: none;
-    }
+    }}
     
-    header[data-testid="stHeader"] button {
+    header[data-testid="stHeader"] button {{
         color: white !important;
-    }
+    }}
     
-    /* Remover padding extra do topo já que movemos o logo */
-    .block-container {
-        padding-top: 2rem;
-    }
+    /* Aumentar espaçamento do topo para não colar na barra azul */
+    .block-container {{
+        padding-top: 4rem !important;
+    }}
 
     /* Cards de métricas (Amezia Style) */
-    div[data-testid="metric-container"] {
+    div[data-testid="metric-container"] {{
         border-radius: 5px;
         padding: 1.5rem;
         transition: all 0.3s ease-in-out;
         position: relative;
         overflow: hidden;
-    }
+    }}
 
-    @media (prefers-color-scheme: dark) {
-        div[data-testid="metric-container"] {
+    @media (prefers-color-scheme: dark) {{
+        div[data-testid="metric-container"] {{
             background: var(--amezia-dark-card);
             box-shadow: 0 4px 24px 0 rgb(34 41 47 / 10%);
             color: var(--text-dark);
-        }
-        .stApp {
+        }}
+        .stApp {{
             background-color: var(--amezia-dark-bg);
-        }
-    }
+        }}
+        /* Melhorar contraste de texto geral no dark mode */
+        .stMarkdown, .stText, p, li {{
+            color: #d1d5db !important; /* Cinza claro */
+        }}
+        h1, h2, h3, h4, h5, h6 {{
+            color: #f3f4f6 !important; /* Quase branco */
+        }}
+    }}
 
-    @media (prefers-color-scheme: light) {
-        div[data-testid="metric-container"] {
+    @media (prefers-color-scheme: light) {{
+        div[data-testid="metric-container"] {{
             background: var(--amezia-light-card);
             box-shadow: 0 1px 20px 0 rgba(69,90,100,0.08);
             color: var(--text-light);
-        }
-        .stApp {
+        }}
+        .stApp {{
             background-color: var(--amezia-light-bg);
-        }
-    }
+        }}
+    }}
 
-    div[data-testid="metric-container"]:hover {
+    div[data-testid="metric-container"]:hover {{
         transform: translateY(-5px);
         box-shadow: 0 10px 30px -5px rgba(64, 153, 255, 0.3);
-    }
+    }}
     
-    div[data-testid="metric-container"] > label {
+    div[data-testid="metric-container"] > label {{
         font-size: 0.85rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         opacity: 0.7;
-    }
+    }}
 
     /* Sidebar */
-    section[data-testid="stSidebar"] {
+    section[data-testid="stSidebar"] {{
         background-color: #202940; 
-    }
+    }}
     
-    section[data-testid="stSidebar"] * {
+    /* Sidebar Text Color - Ensure readability */
+    section[data-testid="stSidebar"] .stMarkdown, 
+    section[data-testid="stSidebar"] p, 
+    section[data-testid="stSidebar"] span,
+    section[data-testid="stSidebar"] label {{
         color: #aab8c5 !important;
-    }
+    }}
 
-    /* NAV LATERAL (Amezia Style - Refined) */
-    section[data-testid="stSidebar"] div[role="radiogroup"] {
+    /* NAV LATERAL (Amezia Style - Text Color Only) */
+    section[data-testid="stSidebar"] div[role="radiogroup"] {{
         display: flex;
         flex-direction: column;
         gap: 5px;
         margin-top: 10px;
-    }
+    }}
 
-    section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {{
         display: none !important;
-    }
+    }}
 
-    section[data-testid="stSidebar"] div[role="radiogroup"] label {
+    section[data-testid="stSidebar"] div[role="radiogroup"] label {{
         padding: 10px 15px;
-        border-radius: 0px 4px 4px 0px; /* Borda arredondada só na direita */
+        border-radius: 0px;
         cursor: pointer;
         font-weight: 500;
         transition: all 0.2s ease;
-        border-left: 3px solid transparent; /* Barrinha invisível por padrão */
+        border-left: 3px solid transparent;
         margin-left: 0;
-    }
+        background: transparent !important; /* Remove background rectangle */
+    }}
 
-    /* Hover: Barrinha vertical e mudança de cor */
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
-        background: rgba(255, 255, 255, 0.05);
-        color: #fff !important;
-        border-left: 3px solid var(--amezia-blue); /* Barrinha azul no hover */
-        padding-left: 18px; /* Ligeiro deslocamento */
-    }
+    /* Hover: Barrinha vertical e mudança de cor do texto */
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {{
+        background: transparent !important;
+        border-left: 3px solid var(--amezia-blue);
+        padding-left: 18px;
+    }}
+    
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover span,
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover p {{
+        color: var(--amezia-blue) !important; /* Muda cor do texto no hover */
+    }}
 
     /* Selecionado */
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
-        background: linear-gradient(to right, rgba(64, 153, 255, 0.2), rgba(64, 153, 255, 0.05));
-        color: #fff !important;
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {{
+        background: transparent !important;
         border-left: 3px solid var(--amezia-blue);
         box-shadow: none;
-    }
+    }}
+    
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] span,
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {{
+        color: var(--amezia-blue) !important; /* Muda cor do texto no selecionado */
+        font-weight: 700;
+    }}
 
     /* Dataframes */
-    .stDataFrame {
+    .stDataFrame {{
         border-radius: 5px;
-    }
+    }}
 
     /* Agenda Card */
-    .agenda-card {
+    .agenda-card {{
         padding: 15px;
         border-radius: 5px;
         margin-bottom: 15px;
@@ -194,36 +237,36 @@ st.markdown(
         align-items: center;
         border-left: 4px solid var(--amezia-blue);
         transition: transform 0.2s;
-    }
+    }}
 
-    @media (prefers-color-scheme: dark) {
-        .agenda-card {
+    @media (prefers-color-scheme: dark) {{
+        .agenda-card {{
             background-color: var(--amezia-dark-card);
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        }
-        .agenda-date {
+        }}
+        .agenda-date {{
             background-color: rgba(0,0,0,0.2);
             color: #fff;
-        }
-    }
+        }}
+    }}
 
-    @media (prefers-color-scheme: light) {
-        .agenda-card {
+    @media (prefers-color-scheme: light) {{
+        .agenda-card {{
             background-color: #fff;
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
-        .agenda-date {
+        }}
+        .agenda-date {{
             background-color: #f4f7f6;
             color: #333;
-        }
-    }
+        }}
+    }}
     
-    .agenda-date {
+    .agenda-date {{
         padding: 5px 10px;
         border-radius: 4px;
         font-weight: bold;
         font-family: monospace;
-    }
+    }}
 
     </style>
     """,
@@ -760,6 +803,15 @@ else:
                 if df_gantt.empty:
                     st.info("Nenhum evento encontrado para os filtros atuais.")
                 else:
+                    # FIX: ORDENAÇÃO DO GANTT PELA ORDEM DA PLANILHA
+                    # Cria uma categoria com a ordem exata de df_raw
+                    ordem_nomes = df_raw["Nome"].unique().tolist()
+                    # Inverte a ordem para que o primeiro da planilha apareça no topo do gráfico (Plotly plota de baixo pra cima por padrão em Y categórico, mas autorange="reversed" resolve)
+                    # Se usarmos autorange="reversed", o primeiro da lista fica no topo.
+                    
+                    df_gantt["Nome"] = pd.Categorical(df_gantt["Nome"], categories=ordem_nomes, ordered=True)
+                    df_gantt = df_gantt.sort_values("Nome")
+                    
                     min_data = df_gantt["Inicio"].min()
                     max_data = df_gantt["Fim"].max()
                     ano_min = min_data.year if pd.notnull(min_data) else 2025
@@ -770,7 +822,9 @@ else:
                         hover_data=["Posto", "Escala", "EqMan", "GVI", "IN", "MotivoAgrupado"],
                         color_discrete_sequence=AMEZIA_COLORS
                     )
-                    fig.update_yaxes(autorange="reversed")
+                    
+                    # Garantir que a ordem do eixo Y respeite a categoria definida
+                    fig.update_yaxes(autorange="reversed", categoryorder="array", categoryarray=ordem_nomes)
                     fig.update_xaxes(range=[datetime(ano_min, 1, 1), datetime(ano_max, 12, 31)])
                     fig.add_vline(x=hoje, line_width=2, line_dash="dash", line_color="#ff5370")
                     
