@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v0.5.0 (Com Agenda)"
+SCRIPT_VERSION = "v0.6.0 (Agendas Oficiais)"
 
 # Use tema escuro moderno no Plotly
 pio.templates.default = "plotly_dark"
@@ -92,22 +92,13 @@ st.markdown(
         color: #d1d5db !important;
     }
 
-    /* Inputs da sidebar */
-    section[data-testid="stSidebar"] .stDateInput > label {
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #9ca3af !important;
-    }
-
-    /* NAV LATERAL (radio estilizado como menu vertical) */
+    /* NAV LATERAL */
     div.nav-container > div[role="radiogroup"] {
         display: flex;
         flex-direction: column;
         gap: 0.1rem;
     }
 
-    /* Esconde o "círculo" do radio */
     div.nav-container div[role="radio"] > div:first-child {
         display: none !important;
         visibility: hidden !important;
@@ -119,7 +110,6 @@ st.markdown(
         display: none !important;
     }
 
-    /* Estilo base da aba (texto) */
     div.nav-container div[role="radio"] {
         padding: 0.30rem 0.60rem;
         border-radius: 0.5rem;
@@ -132,7 +122,6 @@ st.markdown(
         font-size: 0.92rem;
     }
 
-    /* Hover */
     div.nav-container div[role="radio"]:hover {
         background: rgba(15,23,42,0.9);
     }
@@ -140,7 +129,6 @@ st.markdown(
         color: #e5e7eb;
     }
 
-    /* Aba selecionada: barra à esquerda + sublinhado */
     div.nav-container div[role="radio"][aria-checked="true"] {
         background: linear-gradient(90deg, rgba(56,189,248,0.18), transparent);
         border-left: 3px solid #38bdf8;
@@ -152,15 +140,9 @@ st.markdown(
         text-underline-offset: 0.28rem;
     }
 
-    /* Botões / checkboxes / etc em dark mode */
+    /* Botões / checkboxes */
     .stCheckbox > label, .stRadio > label, .stSelectbox > label {
         color: #e5e7eb !important;
-    }
-
-    /* Gráficos ocupando bem o espaço */
-    .js-plotly-plot {
-        border-radius: 0.75rem;
-        box-shadow: 0 14px 45px rgba(0,0,0,0.65);
     }
     
     /* CARD AGENDA GOOGLE */
@@ -174,6 +156,11 @@ st.markdown(
         justify-content: space-between;
         align-items: center;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        transition: transform 0.2s;
+    }
+    .agenda-card:hover {
+        transform: translateX(5px);
+        background-color: #334155;
     }
     .agenda-date {
         background-color: #0f172a;
@@ -207,10 +194,21 @@ with col_title:
     )
 
 # ============================================================
-# 2. HELPERS E CONSTANTES
+# 2. CONFIGURAÇÕES FIXAS (AGENDAS E COLUNAS)
 # ============================================================
 
 HEADER_ROW = 2  # linha 3 na planilha
+
+# --- LISTA OFICIAL DE AGENDAS DO NAVIO ---
+# O sistema usará estes IDs automaticamente
+AGENDAS_OFICIAIS = {
+    "📅 Agenda Permanente": "agenda.npamacau@gmail.com",
+    "⚓ Agenda Eventual": "32e9bbd3bca994bdab0b3cd648f2cb4bc13b0cf312a6a2c5a763527a5c610917@group.calendar.google.com",
+    "🎂 Aniversários OM": "9f856c62f2420cd3ce5173197855b6726dd0a73d159ba801afd4eddfcac651db@group.calendar.google.com",
+    "🎉 Aniversários Tripulação": "8641c7fc86973e09bbb682f8841908cc9240b25b1990f179137dfa7d2b23b2da@group.calendar.google.com",
+    "📋 Comissão": "ff1a7d8acb9ea68eed3ec9b0e279f2a91fb962e4faa9f7a3e7187fade00eb0d6@group.calendar.google.com",
+    "🛠️ NSD": "d7d9199712991f81e35116b9ec1ed492ac672b72b7103a3a89fb3f66ae635fb7@group.calendar.google.com"
+}
 
 def parse_bool(value) -> bool:
     """Converte checkbox/texto da planilha em booleano robusto."""
@@ -233,21 +231,7 @@ def load_data():
     df = df.reset_index(drop=True)
     return df
 
-# --- CONEXÃO COM GOOGLE CALENDAR ---
-@st.cache_data(ttl=3600)
-def get_calendar_list():
-    try:
-        creds_dict = dict(st.secrets["connections"]["gsheets"])
-        creds = service_account.Credentials.from_service_account_info(
-            creds_dict, scopes=['https://www.googleapis.com/auth/calendar.readonly']
-        )
-        service = build('calendar', 'v3', credentials=creds)
-        calendar_list = service.calendarList().list().execute()
-        items = calendar_list.get('items', [])
-        return {item['summary']: item['id'] for item in items}
-    except Exception:
-        return {}
-
+# --- Conexão Google Calendar (Carregar Eventos) ---
 @st.cache_data(ttl=300)
 def load_calendar_events(calendar_id):
     try:
@@ -278,37 +262,31 @@ def load_calendar_events(calendar_id):
         return pd.DataFrame(data)
     except: return pd.DataFrame()
 
-# Inicialização dos dados
+# Inicialização
 try:
     df_raw = load_data()
-    dict_agendas = get_calendar_list()
 except Exception as e:
     st.error(f"Erro de conexão. Verifique o arquivo secrets.toml. Detalhe: {e}")
     st.stop()
 
 
 # ============================================================
-# 4. DESCOBRIR BLOCOS DE DATAS
+# 4. PROCESSAMENTO DE DADOS (PLANILHA)
 # ============================================================
 
 def descobrir_blocos_datas(df: pd.DataFrame):
     cols = list(df.columns)
     blocos = []
-
     for i, nome_col in enumerate(cols):
         n = str(nome_col)
-        if not (n.startswith("Início") or n.startswith("Inicio")):
-            continue
-
+        if not (n.startswith("Início") or n.startswith("Inicio")): continue
         j = None
         for idx2 in range(i + 1, len(cols)):
             n2 = str(cols[idx2])
             if n2.startswith("Fim") or n2.startswith("FIm"):
                 j = idx2
                 break
-        if j is None:
-            continue
-
+        if j is None: continue
         k = None
         tipo_base = "Férias"
         max_busca = min(j + 4, len(cols))
@@ -322,56 +300,35 @@ def descobrir_blocos_datas(df: pd.DataFrame):
                 k = idx3
                 tipo_base = "Curso"
                 break
-
-        col_ini = cols[i]
-        col_fim = cols[j]
-        col_mot = cols[k] if k is not None else None
-        blocos.append((col_ini, col_fim, col_mot, tipo_base))
-
+        blocos.append((cols[i], cols[j], cols[k] if k else None, tipo_base))
     return blocos
 
 BLOCOS_DATAS = descobrir_blocos_datas(df_raw)
 
-
-# ============================================================
-# 5. TRANSFORMAÇÃO EM EVENTOS (WIDE → LONG)
-# ============================================================
-
 @st.cache_data(ttl=600)
 def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
     eventos = []
-
     for _, row in df_raw.iterrows():
-        posto  = row.get("Posto", "")
-        nome   = row.get("Nome", "")
+        posto = row.get("Posto", "")
+        nome = row.get("Nome", "")
         escala = row.get("Serviço", "")
-        eqman  = row.get("EqMan", "")
-        gvi    = row.get("Gvi/GP", "")
-        insp   = row.get("IN", "")
-
+        eqman = str(row.get("EqMan", "")) if pd.notna(row.get("EqMan")) and str(row.get("EqMan")) != "-" else "Não"
+        
         militar_info = {
-            "Posto": posto,
-            "Nome": nome,
-            "Escala": escala,
-            "EqMan": eqman if pd.notna(eqman) and str(eqman) != "-" else "Não",
-            "GVI": parse_bool(gvi),
-            "IN": parse_bool(insp),
+            "Posto": posto, "Nome": nome, "Escala": escala, "EqMan": eqman,
+            "GVI": parse_bool(row.get("Gvi/GP", "")), "IN": parse_bool(row.get("IN", ""))
         }
 
         for col_ini, col_fim, col_mot, tipo_base in blocos:
-            ini_raw = row.get(col_ini, pd.NaT)
-            fim_raw = row.get(col_fim, pd.NaT)
-
-            ini = pd.to_datetime(ini_raw, dayfirst=True, errors="coerce")
-            fim = pd.to_datetime(fim_raw, dayfirst=True, errors="coerce")
+            ini = pd.to_datetime(row.get(col_ini, pd.NaT), dayfirst=True, errors="coerce")
+            fim = pd.to_datetime(row.get(col_fim, pd.NaT), dayfirst=True, errors="coerce")
 
             if pd.isna(ini) or pd.isna(fim): continue
-
-            # Correção ano
+            if fim < ini: ini, fim = fim, ini
+            
+            # Correção ano 2 dígitos
             if ini.year < 2000: ini = ini.replace(year=ini.year + 100)
             if fim.year < 2000: fim = fim.replace(year=fim.year + 100)
-
-            if fim < ini: ini, fim = fim, ini
 
             dur = (fim - ini).days + 1
             if dur < 1 or dur > 365*2: continue
@@ -380,98 +337,48 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
                 motivo_real = "Férias"
                 tipo_final = "Férias"
             else:
-                motivo_texto = ""
-                if col_mot is not None:
-                    motivo_texto = str(row.get(col_mot, "")).strip()
-
+                motivo_texto = str(row.get(col_mot, "")).strip() if col_mot else ""
                 if tipo_base == "Curso":
-                    if motivo_texto and "nan" not in motivo_texto.lower():
-                        motivo_real = motivo_texto
-                    else:
-                        motivo_real = "CURSO (não especificado)"
+                    motivo_real = motivo_texto if motivo_texto and "nan" not in motivo_texto.lower() else "CURSO"
                     tipo_final = "Curso"
                 else:
-                    if motivo_texto and "nan" not in motivo_texto.lower():
-                        motivo_real = motivo_texto
-                    else:
-                        motivo_real = "OUTROS"
+                    motivo_real = motivo_texto if motivo_texto and "nan" not in motivo_texto.lower() else "OUTROS"
                     tipo_final = "Outros"
 
-            if tipo_final == "Férias":
-                motivo_agr = "Férias"
-            elif tipo_final == "Curso":
-                motivo_agr = "Curso"
-            else:
-                motivo_agr = motivo_real
-
             eventos.append({
-                **militar_info,
-                "Inicio": ini,
-                "Fim": fim,
-                "Duracao_dias": dur,
-                "Motivo": motivo_real,
-                "MotivoAgrupado": motivo_agr,
+                **militar_info, "Inicio": ini, "Fim": fim, "Duracao_dias": dur,
+                "Motivo": motivo_real, "MotivoAgrupado": motivo_real if tipo_final != "Outros" else "Outros",
                 "Tipo": tipo_final
             })
-
-    df_eventos = pd.DataFrame(eventos)
-    return df_eventos
+    return pd.DataFrame(eventos)
 
 df_eventos = construir_eventos(df_raw, BLOCOS_DATAS)
-
-
-# ============================================================
-# 6. EXPANSÃO POR DIA
-# ============================================================
 
 @st.cache_data(ttl=600)
 def expandir_eventos_por_dia(df_eventos: pd.DataFrame) -> pd.DataFrame:
     if df_eventos.empty: return pd.DataFrame()
     linhas = []
     for _, ev in df_eventos.iterrows():
-        ini = ev["Inicio"]
-        fim = ev["Fim"]
-        if pd.isna(ini) or pd.isna(fim): continue
-        for data in pd.date_range(ini, fim):
-            linhas.append({
-                "Data": data, "Posto": ev["Posto"], "Nome": ev["Nome"],
-                "Escala": ev["Escala"], "EqMan": ev["EqMan"], "GVI": ev["GVI"],
-                "IN": ev["IN"], "Motivo": ev["Motivo"], "MotivoAgrupado": ev["MotivoAgrupado"],
-                "Tipo": ev["Tipo"]
-            })
+        for data in pd.date_range(ev["Inicio"], ev["Fim"]):
+            linhas.append({**ev, "Data": data})
     return pd.DataFrame(linhas)
 
 df_dias = expandir_eventos_por_dia(df_eventos)
 
-
-# ============================================================
-# 7. FUNÇÕES DE FILTRO
-# ============================================================
-
-def filtrar_tripulacao(df, eq, inn, gv):
+# Filtros Globais
+def filtrar_dados(df, eq, inn, gv):
     res = df.copy()
-    if eq and "EqMan" in res.columns: res = res[(res["EqMan"].notna()) & (res["EqMan"].astype(str) != "-")]
-    if inn and "IN" in res.columns: res = res[res["IN"].apply(parse_bool)]
-    if gv and "Gvi/GP" in res.columns: res = res[res["Gvi/GP"].apply(parse_bool)]
+    if eq:
+        if "EqMan" in res.columns: res = res[(res["EqMan"].notna()) & (res["EqMan"] != "Não")]
+    if inn:
+        if "IN" in res.columns: res = res[res["IN"] == True]
+    if gv:
+        if "GVI" in res.columns: res = res[res["GVI"] == True]
+        elif "Gvi/GP" in res.columns: res = res[res["Gvi/GP"].apply(parse_bool)]
     return res
 
-def filtrar_eventos(df, eq, inn, gv):
-    res = df.copy()
-    if eq: res = res[res["EqMan"] != "Não"]
-    if inn: res = res[res["IN"] == True]
-    if gv: res = res[res["GVI"] == True]
-    return res
-
-def filtrar_dias(df, eq, inn, gv):
-    res = df.copy()
-    if eq: res = res[res["EqMan"] != "Não"]
-    if inn: res = res[res["IN"] == True]
-    if gv: res = res[res["GVI"] == True]
-    return res
-
-
 # ============================================================
-# 8. PARÂMETROS E NAVEGAÇÃO
+# 5. PARÂMETROS E NAVEGAÇÃO
 # ============================================================
 
 st.sidebar.header("Parâmetros")
@@ -481,13 +388,13 @@ hoje = pd.to_datetime(data_ref)
 st.sidebar.markdown("#### Navegação")
 with st.sidebar.container():
     st.markdown('<div class="nav-container">', unsafe_allow_html=True)
-    # AQUI ESTÁ A NOVA OPÇÃO "Agenda"
     pagina = st.radio(
         label="Seções",
         options=[
+            "Situação Diária",
+            "Agenda do Navio",
             "Presentes",
             "Ausentes",
-            "Agenda", 
             "Linha do Tempo",
             "Estatísticas & Análises",
             "Férias",
@@ -502,7 +409,7 @@ with st.sidebar.container():
 
 
 # ============================================================
-# 9. MÉTRICAS GLOBAIS
+# 6. MÉTRICAS GLOBAIS
 # ============================================================
 
 if not df_eventos.empty:
@@ -523,7 +430,7 @@ col4.metric("Prontidão (global)", f"{percentual_global:.1f}%")
 
 
 # ============================================================
-# 10. FUNÇÕES GRÁFICAS
+# 7. FUNÇÕES GRÁFICAS
 # ============================================================
 
 def grafico_pizza_motivos(df_motivos_dias, titulo):
@@ -534,57 +441,134 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 
 
 # ============================================================
-# 11. PÁGINAS DO SISTEMA
+# 8. PÁGINAS DO SISTEMA
 # ============================================================
 
-# --- PRESENTES ---
-if pagina == "Presentes":
-    st.subheader(f"Presentes a bordo em {hoje.strftime('%d/%m/%Y')}")
+# --- SITUAÇÃO DIÁRIA ---
+if pagina == "Situação Diária":
+    st.subheader(f"Visão Geral em {hoje.strftime('%d/%m/%Y')}")
     
-    with st.container():
-        st.markdown("##### Filtros")
-        c1, c2, c3 = st.columns(3)
-        apenas_eqman = c1.checkbox("Apenas EqMan", key="pres_eq")
-        apenas_in = c2.checkbox("Apenas Inspetores", key="pres_in")
-        apenas_gvi = c3.checkbox("Apenas GVI/GP", key="pres_gv")
+    # Filtros rápidos na página principal
+    c_f1, c_f2, c_f3 = st.columns(3)
+    f_eq = c_f1.checkbox("Apenas EqMan")
+    f_in = c_f2.checkbox("Apenas Inspetores")
+    f_gv = c_f3.checkbox("Apenas GVI")
 
-    df_trip = filtrar_tripulacao(df_raw, apenas_eqman, apenas_in, apenas_gvi)
-    aus_hj = pd.DataFrame()
+    df_trip = filtrar_dados(df_raw, f_eq, f_in, f_gv)
+    
+    aus = pd.DataFrame()
     if not df_eventos.empty:
-        aus_hj = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
-        aus_hj = filtrar_eventos(aus_hj, apenas_eqman, apenas_in, apenas_gvi)
+        aus = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
+        aus = filtrar_dados(aus, f_eq, f_in, f_gv)
     
-    nomes_aus = set(aus_hj["Nome"].unique()) if not aus_hj.empty else set()
-    df_pres = df_trip[~df_trip["Nome"].isin(nomes_aus)].copy()
+    nomes_aus = set(aus["Nome"].unique()) if not aus.empty else set()
+    pres = df_trip[~df_trip["Nome"].isin(nomes_aus)]
 
-    st.markdown(f"Total presente (filtrado): **{len(df_pres)}**")
-    if df_pres.empty:
-        st.info("Ninguém presente.")
+    # KPIs
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Efetivo", len(df_trip))
+    k2.metric("A Bordo", len(pres))
+    k3.metric("Ausentes", len(nomes_aus), delta_color="inverse")
+    pront = (len(pres)/len(df_trip)*100) if len(df_trip)>0 else 0
+    k4.metric("Prontidão", f"{pront:.1f}%")
+    
+    st.markdown("---")
+    
+    col_aus, col_pres = st.columns(2)
+    
+    with col_aus:
+        st.markdown("### 🔴 Ausentes")
+        if aus.empty:
+            st.success("Ninguém ausente.")
+        else:
+            show = aus[["Posto", "Nome", "Motivo", "Fim"]].copy()
+            show["Retorno"] = show["Fim"].dt.strftime("%d/%m")
+            st.dataframe(show.drop(columns=["Fim"]), use_container_width=True, hide_index=True)
+            
+            # Alertas
+            eq_out = aus[aus["EqMan"] != "Não"]
+            if not eq_out.empty:
+                st.error(f"⚠️ **EqMan:** {', '.join(eq_out['Nome'].unique())}")
+
+    with col_pres:
+        st.markdown("### 🟢 Presentes")
+        if pres.empty:
+            st.info("Ninguém presente.")
+        else:
+            cols = ["Posto", "Nome", "Serviço", "EqMan"]
+            st.dataframe(pres[cols], use_container_width=True, hide_index=True)
+
+# --- AGENDA DO NAVIO (NOVA VERSÃO: IDs FIXOS) ---
+elif pagina == "Agenda do Navio":
+    st.subheader("📅 Agenda do Navio (Google Calendar)")
+    
+    col_sel, col_btn = st.columns([3, 1])
+    
+    with col_sel:
+        # Seletor de agendas fixas
+        nome_agenda = st.selectbox("Selecione a Agenda:", list(AGENDAS_OFICIAIS.keys()))
+        selected_id = AGENDAS_OFICIAIS[nome_agenda]
+            
+    with col_btn:
+        st.write("") 
+        st.write("")
+        if st.button("🔄 Atualizar"):
+            load_calendar_events.clear()
+            st.rerun()
+            
+    if selected_id:
+        df_cal = load_calendar_events(selected_id)
+        
+        if df_cal.empty:
+            st.info(f"Nenhum evento futuro encontrado na agenda '{nome_agenda}'.")
+            st.markdown(f"<small>ID verificado: `{selected_id[:15]}...`</small>", unsafe_allow_html=True)
+        else:
+            st.markdown("---")
+            for _, row in df_cal.iterrows():
+                st.markdown(
+                    f"""
+                    <div class="agenda-card">
+                        <div style="font-weight: 600; color: #f8fafc; font-size: 1.1rem;">
+                            {row['Evento']}
+                        </div>
+                        <div class="agenda-date">
+                            {row['Data']}
+                        </div>
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+
+# --- PRESENTES (Detalhado) ---
+elif pagina == "Presentes":
+    st.subheader("Lista Detalhada de Presentes")
+    
+    c_f1, c_f2, c_f3 = st.columns(3)
+    f_eq = c_f1.checkbox("EqMan", key="p_eq")
+    f_in = c_f2.checkbox("Inspetores", key="p_in")
+    f_gv = c_f3.checkbox("GVI", key="p_gv")
+    
+    df_trip = filtrar_dados(df_raw, f_eq, f_in, f_gv)
+    aus = pd.DataFrame()
+    if not df_eventos.empty:
+        aus = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
+    names_aus = set(aus["Nome"].unique()) if not aus.empty else set()
+    pres = df_trip[~df_trip["Nome"].isin(names_aus)]
+    
+    st.metric("Total Presente", len(pres))
+    if not pres.empty:
+        st.dataframe(pres[["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"]], use_container_width=True)
     else:
-        tabela = df_pres[["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"]].copy()
-        tabela["GVI/GP"] = tabela["Gvi/GP"].apply(lambda v: "Sim" if parse_bool(v) else "Não")
-        tabela["IN"] = tabela["IN"].apply(lambda v: "Sim" if parse_bool(v) else "Não")
-        st.dataframe(tabela.drop(columns=["Gvi/GP"]), use_container_width=True, hide_index=True)
+        st.info("Ninguém.")
 
-    # Prontidão Filtrada
-    if len(df_trip) > 0:
-        pront_pct = len(df_pres) / len(df_trip) * 100
-        df_pr = pd.DataFrame({"Indicador": ["Prontidão"], "Percentual": [pront_pct]})
-        fig = px.bar(df_pr, x="Percentual", y="Indicador", orientation="h", range_x=[0, 100], text="Percentual")
-        fig.update_traces(texttemplate="%{x:.1f}%", textposition="inside")
-        fig.update_layout(height=160, margin=dict(l=60,r=20,t=30,b=20), paper_bgcolor="rgba(15,23,42,0.9)", plot_bgcolor="rgba(15,23,42,0.9)", font=dict(color="#e5e7eb"))
-        st.plotly_chart(fig, use_container_width=True)
-
-# --- AUSENTES ---
+# --- AUSENTES (Detalhado) ---
 elif pagina == "Ausentes":
-    st.subheader(f"Ausentes em {hoje.strftime('%d/%m/%Y')}")
+    st.subheader("Lista Detalhada de Ausentes")
     
-    with st.container():
-        st.markdown("##### Filtros")
-        c1, c2, c3 = st.columns(3)
-        apenas_eqman = c1.checkbox("Apenas EqMan", key="aus_eq")
-        apenas_in = c2.checkbox("Apenas Inspetores", key="aus_in")
-        apenas_gvi = c3.checkbox("Apenas GVI/GP", key="aus_gv")
+    c1, c2, c3 = st.columns(3)
+    apenas_eqman = c1.checkbox("Apenas EqMan", key="aus_eq")
+    apenas_in = c2.checkbox("Apenas Inspetores", key="aus_in")
+    apenas_gvi = c3.checkbox("Apenas GVI/GP", key="aus_gv")
 
     if df_eventos.empty:
         st.info("Sem eventos.")
@@ -608,49 +592,6 @@ elif pagina == "Ausentes":
             gv_fora = aus[aus["GVI"]==True]
             if not gv_fora.empty:
                 st.warning(f"🚨 **GVI/GP:** {'; '.join(sorted({f'{r.Posto} {r.Nome}' for _,r in gv_fora.iterrows()}))}")
-
-# --- AGENDA DO NAVIO (NOVA ABA) ---
-elif pagina == "Agenda":
-    st.subheader("📅 Agenda do Navio (Google Calendar)")
-    
-    col_sel, col_btn = st.columns([3, 1])
-    
-    with col_sel:
-        if not dict_agendas:
-            st.warning("Nenhuma agenda detectada. Verifique se compartilhou com o e-mail do robô.")
-            selected_id = None
-        else:
-            nome_agenda = st.selectbox("Selecione a Agenda:", list(dict_agendas.keys()))
-            selected_id = dict_agendas[nome_agenda]
-            
-    with col_btn:
-        st.write("") 
-        st.write("")
-        if st.button("🔄 Atualizar"):
-            load_calendar_events.clear()
-            st.rerun()
-            
-    if selected_id:
-        df_cal = load_calendar_events(selected_id)
-        
-        if df_cal.empty:
-            st.info("Nenhum evento futuro encontrado nesta agenda.")
-        else:
-            st.markdown("---")
-            for _, row in df_cal.iterrows():
-                st.markdown(
-                    f"""
-                    <div class="agenda-card">
-                        <div style="font-weight: 600; color: #f8fafc; font-size: 1.1rem;">
-                            {row['Evento']}
-                        </div>
-                        <div class="agenda-date">
-                            {row['Data']}
-                        </div>
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
-                )
 
 # --- LINHA DO TEMPO ---
 elif pagina == "Linha do Tempo":
