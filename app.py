@@ -13,15 +13,14 @@ st.set_page_config(
     page_icon="logo_npamacau.png"
 )
 
-# 🔺 Sempre que você pedir alteração no app, eu vou subir essa versão
-APP_VERSION = "v1.2.0"
+# Versão do aplicativo (ajuste aqui quando fizer mudanças)
+APP_VERSION = "v1.1.0"
 
 # --- CSS global / tema ---
 st.markdown(
     """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap');
 
     * {
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -37,9 +36,8 @@ st.markdown(
         letter-spacing: 0.03em;
     }
 
-    /* Título com fonte diferente (Cinzel) */
     h1 {
-        font-family: 'Cinzel', serif !important;
+        font-family: 'Raleway', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         font-weight: 700 !important;
     }
 
@@ -58,25 +56,24 @@ st.markdown(
         letter-spacing: 0.08em;
     }
 
-    /* Tabs - apenas uma linha embaixo quando selecionada (sem retângulo) */
+    /* Tabs - estilo mais simples (sem efeito de "vidro" ou linha brilhante) */
     button[data-baseweb="tab"] {
         font-weight: 600;
-        border-radius: 0 !important;
+        border-radius: 0.8rem !important;
         padding: 0.35rem 0.9rem !important;
         margin-right: 0.3rem;
-        border: none;
+        border: 1px solid transparent;
         background: transparent;
         color: #9ca3af;
     }
     button[data-baseweb="tab"]:hover {
-        background: transparent;
-        border-bottom: 1px solid #1f2937;
+        background: #020617;
+        border-color: #1f2937;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        background: transparent;
+        background: #111827;
         color: #e5e7eb;
-        border: none;
-        border-bottom: 2px solid #f97316; /* linha laranja/avermelhada */
+        border-color: #38bdf8;
         box-shadow: none;
     }
 
@@ -84,12 +81,6 @@ st.markdown(
         background: #020617;
         border-radius: 0.75rem;
         padding: 0.5rem;
-    }
-
-    /* Centralizar e aumentar imagem da sidebar */
-    section[data-testid="stSidebar"] img {
-        display: block;
-        margin: 0.5rem auto 0.5rem auto;
     }
     </style>
     """,
@@ -415,8 +406,8 @@ def filtrar_dias(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_g
 # 8. DATA DE REFERÊNCIA (GLOBAL) + LOGO NA LATERAL
 # ============================================================
 
-# Brasão na lateral, um pouco maior e centralizado (CSS já centraliza)
-st.sidebar.image("logo_npamacau.png", width=130)
+# Brasão na lateral, acima de "Parâmetros"
+st.sidebar.image("logo_npamacau.png", width=90)
 st.sidebar.markdown(
     "<div style='text-align:center; font-weight:600; margin-top:0.3rem; margin-bottom:0.8rem;'>Parâmetros</div>",
     unsafe_allow_html=True
@@ -489,36 +480,21 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 
 @st.cache_data(ttl=600)
 def load_percent_ferias_v2():
-    """Lê o valor da célula V2 da planilha Afastamento 2026 para usar na aba Férias."""
+    """Lê o valor da célula V2 da mesma planilha (Afastamento 2026) para usar na aba Férias."""
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        # Lê a planilha inteira sem header para conseguir acessar V2 (linha 2, coluna V)
+        # Lê apenas a coluna V e as 2 primeiras linhas, sem header
         df_v = conn.read(
             worksheet="Afastamento 2026",
+            usecols="V",
+            nrows=2,
             header=None,
             ttl="10m"
         )
-        # Coluna V é a 22ª coluna -> índice 21
-        valor = df_v.iloc[1, 21]
-
+        valor = df_v.iloc[1, 0]  # linha 2 (V2)
         if pd.isna(valor):
             return None
-
-        # Trata casos tipo "40%", "40,5%", "0,4", etc.
-        s = str(valor).strip()
-        if s.endswith("%"):
-            s = s[:-1].strip()
-        s = s.replace(".", "").replace(",", ".") if s.count(",") == 1 and s.count(".") == 1 else s.replace(",", ".")
-        numero = float(s)
-
-        # Se vier como 40 ao invés de 0.4, normaliza
-        if numero > 1:
-            numero = numero / 100.0
-
-        # Limita entre 0 e 1
-        numero = max(0.0, min(1.0, numero))
-        return numero
-
+        return float(valor)
     except Exception:
         return None
 
@@ -546,7 +522,7 @@ with tab_presentes:
     # Placeholder para a tabela ficar ACIMA dos filtros
     placeholder_tabela = st.empty()
 
-    # Filtros abaixo da tabela
+    # Filtros abaixo da tabela (conforme pedido)
     st.markdown("#### Filtros")
     col_f1, col_f2, col_f3 = st.columns(3)
     apenas_eqman = col_f1.checkbox("Apenas EqMan", key="pres_eqman")
@@ -575,11 +551,6 @@ with tab_presentes:
         else:
             tabela = df_presentes[["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"]].copy()
             tabela = tabela.rename(columns={"Gvi/GP": "GVI/GP"})
-
-            # ✅ GVI/GP e IN como SIM / NÃO (e não 0 / False)
-            tabela["GVI/GP"] = tabela["GVI/GP"].apply(lambda v: "SIM" if parse_bool(v) else "NÃO")
-            tabela["IN"]     = tabela["IN"].apply(lambda v: "SIM" if parse_bool(v) else "NÃO")
-
             st.dataframe(tabela, use_container_width=True, hide_index=True)
 
 
@@ -592,7 +563,7 @@ with tab_ausentes:
     # Placeholder para a tabela ficar ACIMA dos filtros
     placeholder_tabela_aus = st.empty()
 
-    # Filtros abaixo da tabela
+    # Filtros abaixo da tabela (conforme pedido)
     st.markdown("#### Filtros")
     col_f1, col_f2, col_f3 = st.columns(3)
     apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman")
@@ -603,65 +574,45 @@ with tab_ausentes:
         if df_eventos.empty:
             st.info("Sem eventos de ausência registrados.")
         else:
-            try:
-                ausentes_hoje = df_eventos[
-                    (df_eventos["Inicio"] <= hoje) &
-                    (df_eventos["Fim"] >= hoje)
-                ]
-                ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
+            ausentes_hoje = df_eventos[
+                (df_eventos["Inicio"] <= hoje) &
+                (df_eventos["Fim"] >= hoje)
+            ]
+            ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
 
-                if ausentes_hoje.empty:
-                    st.success("Todo o efetivo está a bordo para os filtros atuais.")
-                else:
-                    # Garante que só usa colunas que existem (evita erro de KeyError)
-                    colunas_desejadas = [c for c in ["Posto", "Nome", "Motivo", "Tipo", "EqMan", "Fim"]
-                                         if c in ausentes_hoje.columns]
-                    show_df = ausentes_hoje[colunas_desejadas].copy()
+            if ausentes_hoje.empty:
+                st.success("Todo o efetivo está a bordo para os filtros atuais.")
+            else:
+                show_df = ausentes_hoje[["Posto", "Nome", "Motivo", "Tipo", "EqMan", "Fim"]].copy()
+                show_df["Retorno"] = show_df["Fim"].dt.strftime("%d/%m/%Y")
+                show_df = show_df.drop(columns=["Fim"])
+                st.dataframe(show_df.drop(columns=["EqMan"]), use_container_width=True, hide_index=True)
 
-                    if "Fim" in show_df.columns:
-                        show_df["Retorno"] = show_df["Fim"].dt.strftime("%d/%m/%Y")
-                        show_df = show_df.drop(columns=["Fim"])
+                # Alertas EqMan
+                eqman_fora = ausentes_hoje[ausentes_hoje["EqMan"] != "Não"]
+                if not eqman_fora.empty:
+                    lista_eqman = sorted(
+                        {f"{row['Posto']} {row['Nome']} ({row['EqMan']})" for _, row in eqman_fora.iterrows()}
+                    )
+                    st.error(
+                        "⚠️ Atenção! EqMan com desfalque: " +
+                        "; ".join(lista_eqman)
+                    )
 
-                    if "EqMan" in show_df.columns:
-                        st.dataframe(show_df.drop(columns=["EqMan"]), use_container_width=True, hide_index=True)
-                    else:
-                        st.dataframe(show_df, use_container_width=True, hide_index=True)
-
-                    # Alertas EqMan
-                    if "EqMan" in ausentes_hoje.columns:
-                        eqman_fora = ausentes_hoje[ausentes_hoje["EqMan"] != "Não"]
-                    else:
-                        eqman_fora = pd.DataFrame()
-
-                    if not eqman_fora.empty:
-                        lista_eqman = sorted(
-                            {f"{row['Posto']} {row['Nome']} ({row['EqMan']})" for _, row in eqman_fora.iterrows()}
-                        )
-                        st.error(
-                            "⚠️ Atenção! EqMan com desfalque: " +
-                            "; ".join(lista_eqman)
-                        )
-
-                    # Alertas GVI/GP
-                    if "GVI" in ausentes_hoje.columns:
-                        gvi_fora = ausentes_hoje[ausentes_hoje["GVI"] == True]
-                    else:
-                        gvi_fora = pd.DataFrame()
-
-                    if not gvi_fora.empty:
-                        lista_gvi = sorted(
-                            {f"{row['Posto']} {row['Nome']}" for _, row in gvi_fora.iterrows()}
-                        )
-                        st.warning(
-                            "🚨 GVI/GP com desfalque: " +
-                            "; ".join(lista_gvi)
-                        )
-            except Exception as e:
-                st.error(f"Ocorreu um erro ao montar a lista de ausentes: {e}")
+                # Alertas GVI/GP
+                gvi_fora = ausentes_hoje[ausentes_hoje["GVI"] == True]
+                if not gvi_fora.empty:
+                    lista_gvi = sorted(
+                        {f"{row['Posto']} {row['Nome']}" for _, row in gvi_fora.iterrows()}
+                    )
+                    st.warning(
+                        "🚨 GVI/GP com desfalque: " +
+                        "; ".join(lista_gvi)
+                    )
 
 
 # ------------------------------------------------------------
-# TAB 3 – LINHA DO TEMPO (GANTT) – COR POR TIPO (Curso/Férias/Outros)
+# TAB 3 – LINHA DO TEMPO (GANTT) (SEM FILTROS)
 # ------------------------------------------------------------
 with tab_gantt:
     st.subheader("Planejamento Anual de Ausências")
@@ -679,14 +630,13 @@ with tab_gantt:
             ano_min = min_data.year if pd.notnull(min_data) else 2025
             ano_max = max_data.year if pd.notnull(max_data) else 2026
 
-            # ✅ Aqui a cor é por TIPO, então no gráfico aparece "Curso" e não "Curso (não especificado)"
             fig = px.timeline(
                 df_gantt,
                 x_start="Inicio",
                 x_end="Fim",
                 y="Nome",
-                color="Tipo",
-                hover_data=["Posto", "Escala", "EqMan", "GVI", "IN", "Motivo"],
+                color="Motivo",
+                hover_data=["Posto", "Escala", "EqMan", "GVI", "IN", "Tipo"],
                 title="Cronograma de Ausências"
             )
             fig.update_yaxes(autorange="reversed")
@@ -740,14 +690,9 @@ with tab_stats:
 
             st.markdown("---")
 
-            # ✅ Para o gráfico de pizza, qualquer motivo que comece com "CURSO" vira "CURSO"
-            df_evt_plot = df_evt.copy()
-            df_evt_plot["Motivo"] = df_evt_plot["Motivo"].apply(
-                lambda m: "CURSO" if isinstance(m, str) and m.upper().startswith("CURSO") else m
-            )
-
+            # Gráfico de motivos – donut moderno
             df_motivos_dias = (
-                df_evt_plot.groupby("Motivo")["Duracao_dias"]
+                df_evt.groupby("Motivo")["Duracao_dias"]
                 .sum()
                 .reset_index()
                 .sort_values("Duracao_dias", ascending=False)
@@ -906,9 +851,16 @@ with tab_ferias:
 
             perc_ferias = load_percent_ferias_v2()
             if perc_ferias is not None:
+                # Se o valor vier como 40 em vez de 0.4, normaliza
+                valor = float(perc_ferias)
+                if valor > 1:
+                    valor = valor / 100.0
+
+                valor = max(0.0, min(1.0, valor))  # limita entre 0 e 1
+
                 df_pct = pd.DataFrame({
                     "Status": ["Gozadas", "Restantes"],
-                    "Valor": [perc_ferias, 1 - perc_ferias]
+                    "Valor": [valor, 1 - valor]
                 })
 
                 fig_pct = px.pie(
