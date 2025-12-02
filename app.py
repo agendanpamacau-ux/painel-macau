@@ -21,6 +21,7 @@ st.markdown(
     """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap');
 
     * {
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -36,9 +37,9 @@ st.markdown(
         letter-spacing: 0.03em;
     }
 
-    /* Título com fonte Raleway em negrito */
+    /* Título com fonte diferente (Cinzel) */
     h1 {
-        font-family: 'Raleway', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-family: 'Cinzel', serif !important;
         font-weight: 700 !important;
     }
 
@@ -57,7 +58,7 @@ st.markdown(
         letter-spacing: 0.08em;
     }
 
-    /* Tabs – só linha inferior na aba selecionada */
+    /* Tabs - apenas uma linha embaixo quando selecionada (sem retângulo) */
     button[data-baseweb="tab"] {
         font-weight: 600;
         border-radius: 0 !important;
@@ -75,7 +76,7 @@ st.markdown(
         background: transparent;
         color: #e5e7eb;
         border: none;
-        border-bottom: 2px solid #f97316;
+        border-bottom: 2px solid #f97316; /* linha laranja/avermelhada */
         box-shadow: none;
     }
 
@@ -85,6 +86,7 @@ st.markdown(
         padding: 0.5rem;
     }
 
+    /* Centralizar e aumentar imagem da sidebar */
     section[data-testid="stSidebar"] img {
         display: block;
         margin: 0.5rem auto 0.5rem auto;
@@ -93,7 +95,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
 
 # Cabeçalho: apenas título (sem brasão ao lado)
 st.markdown(
