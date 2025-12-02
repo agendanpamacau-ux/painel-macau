@@ -107,12 +107,6 @@ def parse_bool(value) -> bool:
     s = str(value).strip().lower()
     return s in ("true", "1", "sim", "yes", "y", "x")
 
-# Férias: colunas sem acento (como o Pandas costuma ler)
-FERIAS_COLS = [
-    ("Inicio",   "Fim"),    # Período 1
-    ("Inicio.1", "Fim.1"),  # Período 2
-    ("Inicio.2", "Fim.2"),  # Período 3
-]
 
 # ============================================================
 # 3. CARGA DE DADOS
@@ -143,8 +137,37 @@ except Exception as e:
 
 
 # ============================================================
-# 4. DESCOBRIR DINAMICAMENTE AS AUSÊNCIAS (INÍCIO/FIM/MOTIVO/CURSO)
+# 4. DESCOBRIR DINAMICAMENTE FÉRIAS E AUSÊNCIAS
 # ============================================================
+
+def descobrir_ferias_pairs(df: pd.DataFrame):
+    """
+    Férias = colunas de 'Inicio' (sem acento) pareadas com 'Fim' (sem acento).
+    Ex.: 'Inicio', 'Fim', 'Inicio.1', 'Fim.1', ...
+    Isso NÃO depende de colunas em branco no meio.
+    """
+    pairs = []
+
+    for col in df.columns:
+        if not col.startswith("Inicio"):
+            continue
+
+        # sufixo: "" ou ".1", ".2", ...
+        if col == "Inicio":
+            sufixo = ""
+        else:
+            sufixo = col[len("Inicio"):]  # ".1", ".2", ...
+
+        col_ini = col
+        col_fim = f"Fim{sufixo}"
+
+        if col_fim in df.columns:
+            ordem = df.columns.get_loc(col_ini)
+            pairs.append((ordem, col_ini, col_fim))
+
+    pairs.sort(key=lambda x: x[0])
+    return [(c_ini, c_fim) for _, c_ini, c_fim in pairs]
+
 
 def descobrir_ausencias_triplets(df: pd.DataFrame):
     """
@@ -206,6 +229,8 @@ AUSENCIAS_TRIPLETS = descobrir_ausencias_triplets(df_raw)
 def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
     eventos = []
 
+    ferias_pairs = descobrir_ferias_pairs(df_raw)
+
     for _, row in df_raw.iterrows():
         posto  = row.get("Posto", "")
         nome   = row.get("Nome", "")
@@ -223,11 +248,8 @@ def construir_eventos(df_raw: pd.DataFrame) -> pd.DataFrame:
             "IN": parse_bool(insp),
         }
 
-        # --------- BLOCO DE FÉRIAS ----------
-        for col_ini, col_fim in FERIAS_COLS:
-            if col_ini not in df_raw.columns or col_fim not in df_raw.columns:
-                continue
-
+        # --------- BLOCO DE FÉRIAS (AGORA DINÂMICO) ----------
+        for col_ini, col_fim in ferias_pairs:
             ini = pd.to_datetime(row.get(col_ini, pd.NaT), dayfirst=True, errors="coerce")
             fim = pd.to_datetime(row.get(col_fim, pd.NaT), dayfirst=True, errors="coerce")
 
@@ -925,6 +947,15 @@ with tab_log:
     st.dataframe(df_raw.head(15), use_container_width=True)
 
     st.markdown("---")
+    st.markdown("### 🔹 Blocos de Férias detectados (Inicio/Fim)")
+    ferias_pairs_debug = descobrir_ferias_pairs(df_raw)
+    if ferias_pairs_debug:
+        debug_f = [{"Col_Inicio": ci, "Col_Fim": cf} for ci, cf in ferias_pairs_debug]
+        st.dataframe(pd.DataFrame(debug_f), use_container_width=True)
+    else:
+        st.info("Nenhum par de férias (Inicio/Fim) detectado.")
+
+    st.markdown("---")
     st.markdown("### 🔹 Mapeamento de Ausências (Início/FIm/Motivo/Curso)")
 
     if AUSENCIAS_TRIPLETS:
@@ -938,7 +969,7 @@ with tab_log:
         st.info("Nenhum trio Início/FIm/Motivo/Curso encontrado.")
 
     st.markdown("---")
-    st.markdown("### 🔹 df_eventos (eventos gerados)")
+    st.markmarkdown("### 🔹 df_eventos (eventos gerados)")
 
     st.write(f"Total de eventos em df_eventos: **{len(df_eventos)}**")
 
