@@ -59,48 +59,39 @@ st.markdown(
         padding: 0.5rem;
     }
 
-    /* NAV LATERAL (radio) */
+    /* NAV LATERAL (radio estilizado) */
     div.nav-container > div[role="radiogroup"] {
         display: flex;
         flex-direction: column;
         gap: 0.35rem;
     }
 
-    /* escondendo a "bolinha" do radio */
-    div.nav-container input[type="radio"] {
-        opacity: 0;
-        width: 0;
-        height: 0;
-        margin: 0;
-        padding: 0;
+    /* esconde o "círculo" do radio (primeiro filho) */
+    div.nav-container div[role="radio"] > div:first-child {
+        display: none !important;
     }
 
-    /* cada opção de radio vira um "pill" minimalista */
-    div.nav-container div[role="radio"] {
-        border-radius: 999px;
-        padding: 0.35rem 0.8rem;
-        border: 1px solid transparent;
+    /* estilo base do texto da aba (segundo filho) */
+    div.nav-container div[role="radio"] > div:nth-child(2) {
         color: #9ca3af;
         font-weight: 500;
         font-size: 0.9rem;
         cursor: pointer;
+        padding: 0.1rem 0;
     }
 
-    div.nav-container div[role="radio"]:hover {
-        background-color: #020617;
-        border-color: #1f2937;
+    /* hover: só muda cor levemente */
+    div.nav-container div[role="radio"]:hover > div:nth-child(2) {
         color: #e5e7eb;
     }
 
-    /* estado selecionado: pill destacado, sem ícone extra */
-    div.nav-container div[role="radio"][aria-checked="true"] {
-        background: linear-gradient(90deg, #0f172a, #020617);
-        border-radius: 999px;
-        border: 1px solid #38bdf8;
+    /* aba selecionada: sublinhado minimalista */
+    div.nav-container div[role="radio"][aria-checked="true"] > div:nth-child(2) {
         color: #e5e7eb;
-        box-shadow: 0 0 0 1px rgba(56,189,248,0.5);
+        text-decoration: underline;
+        text-decoration-thickness: 2px;
+        text-underline-offset: 0.25rem;
     }
-
     </style>
     """,
     unsafe_allow_html=True
@@ -274,7 +265,7 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
 
             # Decide motivo e tipo
             if tipo_base == "Férias":
-                motivo_real = "FÉRIAS"
+                motivo_real = "Férias"
                 tipo_final = "Férias"
             else:
                 motivo_texto = ""
@@ -282,27 +273,36 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
                     motivo_texto = str(row.get(col_mot, "")).strip()
 
                 if tipo_base == "Curso":
-                    # nome do curso
+                    # nome do curso (mantemos para aba Cursos)
                     if motivo_texto and "nan" not in motivo_texto.lower():
                         motivo_real = motivo_texto
                     else:
                         motivo_real = "CURSO (não especificado)"
                     tipo_final = "Curso"
                 else:
-                    # Outros motivos
+                    # Outros motivos (Disp Médica, Luto, etc)
                     if motivo_texto and "nan" not in motivo_texto.lower():
                         motivo_real = motivo_texto
                     else:
                         motivo_real = "OUTROS"
                     tipo_final = "Outros"
 
+            # Motivo agrupado (para gráficos / linha do tempo / ausentes)
+            if tipo_final == "Férias":
+                motivo_agr = "Férias"
+            elif tipo_final == "Curso":
+                motivo_agr = "Curso"
+            else:
+                motivo_agr = motivo_real
+
             eventos.append({
                 **militar_info,
                 "Inicio": ini,
                 "Fim": fim,
                 "Duracao_dias": dur,
-                "Motivo": motivo_real,
-                "Tipo": tipo_final
+                "Motivo": motivo_real,          # nome completo (inclui nome do curso)
+                "MotivoAgrupado": motivo_agr,   # Férias / Curso / Disp Médica / etc
+                "Tipo": tipo_final              # Férias / Curso / Outros
             })
 
     df_eventos = pd.DataFrame(eventos)
@@ -337,6 +337,7 @@ def expandir_eventos_por_dia(df_eventos: pd.DataFrame) -> pd.DataFrame:
                 "GVI": ev["GVI"],
                 "IN": ev["IN"],
                 "Motivo": ev["Motivo"],
+                "MotivoAgrupado": ev["MotivoAgrupado"],
                 "Tipo": ev["Tipo"]
             })
 
@@ -441,7 +442,7 @@ col4.metric("Prontidão", f"{percentual_global:.1f}%")
 def grafico_pizza_motivos(df_motivos_dias, titulo):
     fig = px.pie(
         df_motivos_dias,
-        names="Motivo",
+        names="MotivoAgrupado",
         values="Duracao_dias",
         hole=0.45,
     )
@@ -477,7 +478,6 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 if pagina == "Presentes":
     st.subheader(f"Presentes a bordo em {hoje.strftime('%d/%m/%Y')}")
 
-    # Containers para inverter a ordem visual (tabela em cima, filtros embaixo)
     content_container = st.container()
     filters_container = st.container()
 
@@ -542,10 +542,19 @@ elif pagina == "Ausentes":
             if ausentes_hoje.empty:
                 st.success("Todo o efetivo está a bordo para os filtros atuais.")
             else:
-                show_df = ausentes_hoje[["Posto", "Nome", "Motivo", "Tipo", "EqMan", "Fim"]].copy()
+                # Motivo exibido: "Férias" / "Curso" / Motivo normal (Disp Médica, Luto, etc)
+                temp = ausentes_hoje.copy()
+                temp["MotivoExib"] = temp.apply(
+                    lambda r: "Férias" if r["Tipo"] == "Férias"
+                    else ("Curso" if r["Tipo"] == "Curso" else str(r["Motivo"])),
+                    axis=1
+                )
+                show_df = temp[["Posto", "Nome", "MotivoExib", "Fim"]].copy()
                 show_df["Retorno"] = show_df["Fim"].dt.strftime("%d/%m/%Y")
                 show_df = show_df.drop(columns=["Fim"])
-                st.dataframe(show_df.drop(columns=["EqMan"]), use_container_width=True, hide_index=True)
+                show_df = show_df.rename(columns={"MotivoExib": "Motivo"})
+
+                st.dataframe(show_df, use_container_width=True, hide_index=True)
 
                 # Alertas EqMan
                 eqman_fora = ausentes_hoje[ausentes_hoje["EqMan"] != "Não"]
@@ -605,8 +614,8 @@ elif pagina == "Linha do Tempo":
                     x_start="Inicio",
                     x_end="Fim",
                     y="Nome",
-                    color="Motivo",
-                    hover_data=["Posto", "Escala", "EqMan", "GVI", "IN", "Tipo"],
+                    color="MotivoAgrupado",   # legenda: Férias / Curso / Disp Médica / etc
+                    hover_data=["Posto", "Escala", "EqMan", "GVI", "IN", "MotivoAgrupado"],
                     title="Cronograma de Ausências"
                 )
                 fig.update_yaxes(autorange="reversed")
@@ -659,10 +668,10 @@ elif pagina == "Estatísticas & Análises":
                 total_dias_ausencia = df_evt["Duracao_dias"].sum()
                 media_dias_por_militar = df_evt.groupby("Nome")["Duracao_dias"].sum().mean()
 
-                df_ferias = df_evt[df_evt["Tipo"] == "Férias"].copy()
+                df_ferias_evt = df_evt[df_evt["Tipo"] == "Férias"].copy()
                 media_dias_ferias = (
-                    df_ferias.groupby("Nome")["Duracao_dias"].sum().mean()
-                    if not df_ferias.empty else 0
+                    df_ferias_evt.groupby("Nome")["Duracao_dias"].sum().mean()
+                    if not df_ferias_evt.empty else 0
                 )
 
                 col_a1.metric("Dias de ausência (total)", int(total_dias_ausencia))
@@ -671,9 +680,9 @@ elif pagina == "Estatísticas & Análises":
 
                 st.markdown("---")
 
-                # Gráfico de motivos – donut moderno
+                # Gráfico de motivos – donut moderno (usando MotivoAgrupado)
                 df_motivos_dias = (
-                    df_evt.groupby("Motivo")["Duracao_dias"]
+                    df_evt.groupby("MotivoAgrupado")["Duracao_dias"]
                     .sum()
                     .reset_index()
                     .sort_values("Duracao_dias", ascending=False)
@@ -842,6 +851,48 @@ elif pagina == "Férias":
                         col_fx2.info("Sem dados diários suficientes para calcular férias por mês com os filtros atuais.")
                 else:
                     col_fx2.info("Sem expansão diária para análise mensal.")
+
+                st.markdown("---")
+                st.subheader("% de férias gozadas (tripulação)")
+
+                if "%DG" in df_raw.columns:
+                    media_percentual = df_raw["%DG"].mean(skipna=True)
+                    if pd.notna(media_percentual):
+                        # Se vier em formato 0–1, converte para %
+                        if media_percentual <= 1:
+                            perc_gozado = media_percentual * 100
+                        else:
+                            perc_gozado = media_percentual
+                        perc_nao = max(0.0, 100.0 - perc_gozado)
+
+                        df_pizza_ferias = pd.DataFrame({
+                            "Categoria": ["Gozado", "Não gozado"],
+                            "Valor": [perc_gozado, perc_nao]
+                        })
+
+                        fig_pizza_ferias = px.pie(
+                            df_pizza_ferias,
+                            names="Categoria",
+                            values="Valor",
+                            hole=0.5
+                        )
+                        fig_pizza_ferias.update_traces(
+                            textposition="inside",
+                            textinfo="percent+label",
+                            hovertemplate="<b>%{label}</b><br>%{value:.1f}%<extra></extra>"
+                        )
+                        fig_pizza_ferias.update_layout(
+                            title="Distribuição de férias gozadas x não gozadas (média da tripulação)",
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            plot_bgcolor="rgba(0,0,0,0)",
+                            margin=dict(t=60, b=20, l=0, r=0),
+                            font=dict(color="#e5e7eb")
+                        )
+                        st.plotly_chart(fig_pizza_ferias, use_container_width=True)
+                    else:
+                        st.info("Não foi possível calcular a média da coluna %DG.")
+                else:
+                    st.info("Coluna %DG não encontrada na planilha para cálculo do percentual de férias gozadas.")
 
 
 # --------------------------------------------------------
@@ -1018,6 +1069,7 @@ elif pagina == "Log / Debug":
         st.write("Anos em Inicio:", df_eventos["Inicio"].dt.year.unique())
         st.write("Anos em Fim:", df_eventos["Fim"].dt.year.unique())
         st.write("Tipos registrados:", df_eventos["Tipo"].unique())
+        st.write("Motivos agrupados:", df_eventos["MotivoAgrupado"].unique())
     else:
         st.info("df_eventos está vazio. Verifique se as colunas de datas estão corretamente preenchidas na planilha.")
 
