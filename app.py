@@ -5,6 +5,11 @@ from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
 # ============================================================
+# VERSÃO DO SCRIPT
+# ============================================================
+SCRIPT_VERSION = "v0.4.0"
+
+# ============================================================
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ============================================================
 st.set_page_config(
@@ -13,81 +18,89 @@ st.set_page_config(
     page_icon="logo_npamacau.png"
 )
 
-# --- CSS global / tema ---
+# --- CSS global / tema minimalista claro ---
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
     * {
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
 
     .stApp {
-        background: radial-gradient(circle at top left, #020617 0, #020617 40%, #000 100%);
-        color: #e5e7eb;
+        background: #f3f4f6;
+        color: #111827;
     }
 
     h1, h2, h3, h4 {
-        color: #e5e7eb !important;
-        letter-spacing: 0.03em;
+        color: #111827 !important;
+        letter-spacing: 0.02em;
     }
 
     h1 {
-        font-family: 'Raleway', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-        font-weight: 700 !important;
+        font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-weight: 600 !important;
     }
 
+    /* Cards de métricas */
     div[data-testid="metric-container"] {
-        background: rgba(15, 23, 42, 0.9);
+        background: #ffffff;
         border-radius: 0.9rem;
         padding: 1rem;
-        border: 1px solid #1f2937;
-        box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
     }
 
     div[data-testid="metric-container"] > label {
-        color: #9ca3af !important;
+        color: #6b7280 !important;
         font-size: 0.80rem;
         text-transform: uppercase;
         letter-spacing: 0.08em;
     }
 
     .stDataFrame {
-        background: #020617;
+        background: #ffffff;
         border-radius: 0.75rem;
         padding: 0.5rem;
     }
 
-    /* NAV LATERAL (radio estilizado) */
+    /* NAV LATERAL (radio estilizado como texto) */
     div.nav-container > div[role="radiogroup"] {
         display: flex;
         flex-direction: column;
-        gap: 0.35rem;
+        gap: 0.3rem;
     }
 
-    /* esconde o "círculo" do radio (primeiro filho) */
+    /* Esconde o "círculo" do radio (vários alvos possíveis) */
     div.nav-container div[role="radio"] > div:first-child {
+        display: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    div.nav-container div[role="radio"] svg {
         display: none !important;
     }
 
-    /* estilo base do texto da aba (segundo filho) */
+    /* Estilo base do texto da aba (segundo filho) */
     div.nav-container div[role="radio"] > div:nth-child(2) {
-        color: #9ca3af;
+        color: #6b7280;
         font-weight: 500;
-        font-size: 0.9rem;
+        font-size: 0.92rem;
         cursor: pointer;
         padding: 0.1rem 0;
     }
 
-    /* hover: só muda cor levemente */
+    /* Hover da aba */
     div.nav-container div[role="radio"]:hover > div:nth-child(2) {
-        color: #e5e7eb;
+        color: #111827;
     }
 
-    /* aba selecionada: sublinhado minimalista */
+    /* Aba selecionada: sublinhado minimalista */
     div.nav-container div[role="radio"][aria-checked="true"] > div:nth-child(2) {
-        color: #e5e7eb;
+        color: #111827;
         text-decoration: underline;
         text-decoration-thickness: 2px;
         text-underline-offset: 0.25rem;
@@ -100,7 +113,7 @@ st.markdown(
 # Cabeçalho: logo + título lado a lado
 col_logo, col_title = st.columns([1, 5])
 with col_logo:
-    st.image("logo_npamacau.png", width=80)
+    st.image("logo_npamacau.png", width=70)
 with col_title:
     st.markdown(
         """
@@ -260,7 +273,6 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
 
             dur = (fim - ini).days + 1
             if dur < 1 or dur > 365*2:
-                # evita intervalos absurdos por erro de dado
                 continue
 
             # Decide motivo e tipo
@@ -273,14 +285,12 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
                     motivo_texto = str(row.get(col_mot, "")).strip()
 
                 if tipo_base == "Curso":
-                    # nome do curso (mantemos para aba Cursos)
                     if motivo_texto and "nan" not in motivo_texto.lower():
                         motivo_real = motivo_texto
                     else:
                         motivo_real = "CURSO (não especificado)"
                     tipo_final = "Curso"
                 else:
-                    # Outros motivos (Disp Médica, Luto, etc)
                     if motivo_texto and "nan" not in motivo_texto.lower():
                         motivo_real = motivo_texto
                     else:
@@ -300,7 +310,7 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
                 "Inicio": ini,
                 "Fim": fim,
                 "Duracao_dias": dur,
-                "Motivo": motivo_real,          # nome completo (inclui nome do curso)
+                "Motivo": motivo_real,          # nome completo (curso etc)
                 "MotivoAgrupado": motivo_agr,   # Férias / Curso / Disp Médica / etc
                 "Tipo": tipo_final              # Férias / Curso / Outros
             })
@@ -430,9 +440,9 @@ percentual_global = (total_presentes_global / total_efetivo_global * 100) if tot
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Efetivo Total", total_efetivo_global)
-col2.metric("A Bordo", total_presentes_global)
-col3.metric("Ausentes", total_ausentes_global, delta_color="inverse")
-col4.metric("Prontidão", f"{percentual_global:.1f}%")
+col2.metric("A Bordo (global)", total_presentes_global)
+col3.metric("Ausentes (global)", total_ausentes_global, delta_color="inverse")
+col4.metric("Prontidão (global)", f"{percentual_global:.1f}%")
 
 
 # ============================================================
@@ -458,11 +468,11 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
         margin=dict(t=60, b=20, l=0, r=0),
         uniformtext_minsize=12,
         uniformtext_mode='hide',
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
         font=dict(
-            family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-            color="#e5e7eb"
+            family="'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            color="#111827"
         )
     )
     return fig
@@ -481,6 +491,12 @@ if pagina == "Presentes":
     content_container = st.container()
     filters_container = st.container()
 
+    with content_container:
+        # Vamos calcular primeiro, para depois mostrar filtros abaixo da tabela
+        # (como você pediu, mas mantendo a lógica clara)
+        col_info = st.empty()
+
+        # Filtros (render depois da tabela, mas precisamos deles antes)
     with filters_container:
         st.markdown("##### Filtros")
         col_f1, col_f2, col_f3 = st.columns(3)
@@ -488,6 +504,7 @@ if pagina == "Presentes":
         apenas_in    = col_f2.checkbox("Apenas Inspetores Navais (IN)", key="pres_in")
         apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="pres_gvi")
 
+    # Agora sim, conteúdo com base nos filtros
     with content_container:
         df_trip = filtrar_tripulacao(df_raw, apenas_eqman, apenas_in, apenas_gvi)
 
@@ -509,8 +526,46 @@ if pagina == "Presentes":
             st.info("Nenhum militar presente para os filtros atuais.")
         else:
             tabela = df_presentes[["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"]].copy()
-            tabela = tabela.rename(columns={"Gvi/GP": "GVI/GP"})
+            # Converter GVI/GP e IN para SIM / Não
+            tabela["GVI/GP"] = tabela["Gvi/GP"].apply(lambda v: "Sim" if parse_bool(v) else "Não")
+            tabela["IN"] = tabela["IN"].apply(lambda v: "Sim" if parse_bool(v) else "Não")
+            tabela = tabela.drop(columns=["Gvi/GP"])
             st.dataframe(tabela, use_container_width=True, hide_index=True)
+
+        # Gráfico de barra para Prontidão (aba Presentes, visão filtrada)
+        st.markdown("##### Prontidão (visão filtrada)")
+        total_filtrado = len(df_trip)
+        if total_filtrado > 0:
+            presentes_filtrado = len(df_presentes)
+            pront_pct = presentes_filtrado / total_filtrado * 100
+            df_pr = pd.DataFrame({
+                "Indicador": ["Prontidão"],
+                "Percentual": [pront_pct]
+            })
+            fig_pr = px.bar(
+                df_pr,
+                x="Percentual",
+                y="Indicador",
+                orientation="h",
+                range_x=[0, 100],
+                text="Percentual",
+            )
+            fig_pr.update_traces(
+                texttemplate="%{x:.1f}%",
+                textposition="inside"
+            )
+            fig_pr.update_layout(
+                height=140,
+                margin=dict(l=60, r=20, t=30, b=20),
+                paper_bgcolor="#ffffff",
+                plot_bgcolor="#ffffff",
+                xaxis=dict(title="%"),
+                yaxis=dict(title=""),
+                font=dict(color="#111827")
+            )
+            st.plotly_chart(fig_pr, use_container_width=True)
+        else:
+            st.info("Não há efetivo na visão atual para calcular a prontidão.")
 
 
 # --------------------------------------------------------
@@ -632,8 +687,9 @@ elif pagina == "Linha do Tempo":
                     line_color="red"
                 )
                 fig.update_layout(
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(15,23,42,0.8)",
+                    paper_bgcolor="#ffffff",
+                    plot_bgcolor="#ffffff",
+                    font=dict(color="#111827")
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -709,8 +765,9 @@ elif pagina == "Estatísticas & Análises":
                     labels={"Duracao_dias": "Dias de ausência"}
                 )
                 fig_top10.update_layout(
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(15,23,42,0.8)",
+                    paper_bgcolor="#ffffff",
+                    plot_bgcolor="#ffffff",
+                    font=dict(color="#111827")
                 )
                 st.plotly_chart(fig_top10, use_container_width=True)
 
@@ -742,8 +799,9 @@ elif pagina == "Estatísticas & Análises":
                             labels={"Mes": "Mês", "Media_ausentes_dia": "Média de ausentes/dia"}
                         )
                         fig_mensal.update_layout(
-                            paper_bgcolor="rgba(0,0,0,0)",
-                            plot_bgcolor="rgba(15,23,42,0.8)",
+                            paper_bgcolor="#ffffff",
+                            plot_bgcolor="#ffffff",
+                            font=dict(color="#111827")
                         )
                         st.plotly_chart(fig_mensal, use_container_width=True)
                     else:
@@ -816,8 +874,9 @@ elif pagina == "Férias":
                     labels={"Militares": "Militares em férias (no ano)"}
                 )
                 fig_escala.update_layout(
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(15,23,42,0.8)",
+                    paper_bgcolor="#ffffff",
+                    plot_bgcolor="#ffffff",
+                    font=dict(color="#111827")
                 )
                 col_fx1.plotly_chart(fig_escala, use_container_width=True)
 
@@ -843,8 +902,9 @@ elif pagina == "Férias":
                             labels={"Mes": "Mês", "Militares": "Militares com férias no mês"}
                         )
                         fig_mes_ferias.update_layout(
-                            paper_bgcolor="rgba(0,0,0,0)",
-                            plot_bgcolor="rgba(15,23,42,0.8)",
+                            paper_bgcolor="#ffffff",
+                            plot_bgcolor="#ffffff",
+                            font=dict(color="#111827")
                         )
                         col_fx2.plotly_chart(fig_mes_ferias, use_container_width=True)
                     else:
@@ -858,7 +918,6 @@ elif pagina == "Férias":
                 if "%DG" in df_raw.columns:
                     media_percentual = df_raw["%DG"].mean(skipna=True)
                     if pd.notna(media_percentual):
-                        # Se vier em formato 0–1, converte para %
                         if media_percentual <= 1:
                             perc_gozado = media_percentual * 100
                         else:
@@ -883,10 +942,10 @@ elif pagina == "Férias":
                         )
                         fig_pizza_ferias.update_layout(
                             title="Distribuição de férias gozadas x não gozadas (média da tripulação)",
-                            paper_bgcolor="rgba(0,0,0,0)",
-                            plot_bgcolor="rgba(0,0,0,0)",
+                            paper_bgcolor="#ffffff",
+                            plot_bgcolor="#ffffff",
                             margin=dict(t=60, b=20, l=0, r=0),
-                            font=dict(color="#e5e7eb")
+                            font=dict(color="#111827")
                         )
                         st.plotly_chart(fig_pizza_ferias, use_container_width=True)
                     else:
@@ -921,7 +980,6 @@ elif pagina == "Cursos":
             if df_cursos.empty:
                 st.info("Nenhum curso cadastrado na visão atual.")
             else:
-                # Realizados x em andamento/futuros
                 realizados = df_cursos[df_cursos["Fim"] < hoje].copy()
                 inscritos  = df_cursos[df_cursos["Fim"] >= hoje].copy()
 
@@ -990,8 +1048,9 @@ elif pagina == "Cursos":
                         labels={"Motivo": "Curso", "Militares": "Militares"}
                     )
                     fig_cursos_freq.update_layout(
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        plot_bgcolor="rgba(15,23,42,0.8)",
+                        paper_bgcolor="#ffffff",
+                        plot_bgcolor="#ffffff",
+                        font=dict(color="#111827")
                     )
                     col_g1.plotly_chart(fig_cursos_freq, use_container_width=True)
 
@@ -1018,8 +1077,9 @@ elif pagina == "Cursos":
                                 labels={"Mes": "Mês", "Militares": "Militares em curso"}
                             )
                             fig_curso_mes.update_layout(
-                                paper_bgcolor="rgba(0,0,0,0)",
-                                plot_bgcolor="rgba(15,23,42,0.8)",
+                                paper_bgcolor="#ffffff",
+                                plot_bgcolor="#ffffff",
+                                font=dict(color="#111827")
                             )
                             col_g2.plotly_chart(fig_curso_mes, use_container_width=True)
                         else:
@@ -1077,10 +1137,12 @@ elif pagina == "Log / Debug":
 # ============================================================
 # 12. RODAPÉ
 # ============================================================
-st.markdown("<hr style='border-color:#1f2937; margin-top:2rem;'/>", unsafe_allow_html=True)
+st.markdown("<hr style='border-color:#e5e7eb; margin-top:2rem;'/>", unsafe_allow_html=True)
 st.markdown(
-    "<div style='text-align:center; color:#9ca3af; padding:0.5rem 0;'>"
-    "Created by <strong>Klismann Freitas</strong>"
-    "</div>",
+    f"""
+    <div style='text-align:center; color:#6b7280; padding:0.5rem 0; font-size:0.85rem;'>
+        Created by <strong>Klismann Freitas</strong> • Versão do painel: <strong>{SCRIPT_VERSION}</strong>
+    </div>
+    """,
     unsafe_allow_html=True
 )
