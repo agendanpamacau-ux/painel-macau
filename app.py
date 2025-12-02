@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v0.6.2 (Agendas Oficiais + Painel Macau)"
+SCRIPT_VERSION = "v0.6.1 (Agendas Oficiais + Painel Macau)"
 
 # Use tema escuro moderno no Plotly
 pio.templates.default = "plotly_dark"
@@ -92,53 +92,48 @@ st.markdown(
         color: #d1d5db !important;
     }
 
-    /* NAV LATERAL (radio estilizado como menu vertical) */
-    .nav-container [role="radiogroup"] {
+    /* NAV LATERAL (menu vertical sem bolinhas) */
+    section[data-testid="stSidebar"] .nav-container div[role="radiogroup"] {
         display: flex;
         flex-direction: column;
         gap: 0.1rem;
     }
 
-    /* Esconde o "círculo" do radio em qualquer radio dentro da nav-container */
-    .nav-container [role="radio"] > div:first-child {
+    /* Esconde o "círculo" do radio dentro do label */
+    section[data-testid="stSidebar"] .nav-container div[role="radiogroup"] > label > div:first-child {
         display: none !important;
         visibility: hidden !important;
         width: 0 !important;
         margin: 0 !important;
         padding: 0 !important;
     }
-    .nav-container [role="radio"] svg {
-        display: none !important;
-    }
 
-    /* Estilo base da aba (texto) */
-    .nav-container [role="radio"] {
+    /* Estilo base do item de menu (label) */
+    section[data-testid="stSidebar"] .nav-container div[role="radiogroup"] label {
         padding: 0.30rem 0.60rem;
         border-radius: 0.5rem;
         cursor: pointer;
-    }
-
-    .nav-container [role="radio"] > div:nth-child(2) {
-        color: #9ca3af;
+        color: #9ca3af !important;
         font-weight: 500;
         font-size: 0.92rem;
+        transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
     }
 
     /* Hover */
-    .nav-container [role="radio"]:hover {
+    section[data-testid="stSidebar"] .nav-container div[role="radiogroup"] label:hover {
         background: rgba(15,23,42,0.9);
-    }
-    .nav-container [role="radio"]:hover > div:nth-child(2) {
-        color: #e5e7eb;
+        color: #e5e7eb !important;
+        transform: translateX(1px);
     }
 
-    /* Aba selecionada: barra à esquerda + sublinhado */
-    .nav-container [role="radio"][aria-checked="true"] {
+    /* Item selecionado: barra à esquerda + sublinhado no texto */
+    section[data-testid="stSidebar"] .nav-container div[role="radiogroup"] label[data-checked="true"] {
         background: linear-gradient(90deg, rgba(56,189,248,0.18), transparent);
         border-left: 3px solid #38bdf8;
+        color: #f9fafb !important;
     }
-    .nav-container [role="radio"][aria-checked="true"] > div:nth-child(2) {
-        color: #f9fafb;
+
+    section[data-testid="stSidebar"] .nav-container div[role="radiogroup"] label[data-checked="true"] span {
         text-decoration: underline;
         text-decoration-thickness: 2px;
         text-underline-offset: 0.28rem;
@@ -196,13 +191,7 @@ with col_logo:
 with col_title:
     st.markdown(
         """
-        <h1 style="
-            margin-top:0.15rem;
-            margin-bottom:0.2rem;
-            font-family: 'Raleway', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-weight:700;
-            letter-spacing:0.05em;
-        ">
+        <h1 style="margin-top:0.15rem; margin-bottom:0.2rem;">
             Navio-Patrulha Macau
         </h1>
         """,
@@ -260,6 +249,7 @@ def load_calendar_events(calendar_id: str) -> pd.DataFrame:
     Usa o mesmo service account do secrets (conexão gsheets).
     """
     try:
+        # Aproveita o JSON do service account já usado no gsheets
         creds_dict = dict(st.secrets["connections"]["gsheets"])
         creds = service_account.Credentials.from_service_account_info(
             creds_dict,
@@ -385,10 +375,11 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
             if pd.isna(ini) or pd.isna(fim):
                 continue
 
+            # Garante que fim >= início
             if fim < ini:
                 ini, fim = fim, ini
 
-            # Correção para anos com 2 dígitos
+            # Correção para anos com 2 dígitos (Gemini fix)
             if ini.year < 2000:
                 ini = ini.replace(year=ini.year + 100)
             if fim.year < 2000:
@@ -420,7 +411,7 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
                         motivo_real = "OUTROS"
                     tipo_final = "Outros"
 
-            # Campo agregado pro gráfico/legenda (Curso genérico, etc)
+            # Campo agregado pro gráfico/legenda
             if tipo_final == "Férias":
                 motivo_agr = "Férias"
             elif tipo_final == "Curso":
@@ -516,14 +507,14 @@ def filtrar_dias(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_g
 
 
 # ============================================================
-# 8. ESTADO GLOBAL DA DATA + NAVEGAÇÃO
+# 8. PARÂMETROS (SIDEBAR) + NAVEGAÇÃO
 # ============================================================
 
-# Guarda a última data de referência usada (global) em session_state
-if "data_ref" not in st.session_state:
-    st.session_state["data_ref"] = datetime.today().date()
+st.sidebar.header("Parâmetros")
+data_ref = st.sidebar.date_input("Data de Referência", datetime.today())
+hoje = pd.to_datetime(data_ref)
 
-st.sidebar.markdown("### Navegação")
+st.sidebar.markdown("#### Navegação")
 with st.sidebar.container():
     st.markdown('<div class="nav-container">', unsafe_allow_html=True)
     pagina = st.radio(
@@ -546,16 +537,13 @@ with st.sidebar.container():
 
 
 # ============================================================
-# 9. MÉTRICAS GLOBAIS (USANDO A ÚLTIMA DATA SELECIONADA)
+# 9. MÉTRICAS GLOBAIS
 # ============================================================
-
-data_ref_global = st.session_state.get("data_ref", datetime.today().date())
-hoje_global = pd.to_datetime(data_ref_global)
 
 if not df_eventos.empty:
     ausentes_hoje_global = df_eventos[
-        (df_eventos["Inicio"] <= hoje_global) &
-        (df_eventos["Fim"] >= hoje_global)
+        (df_eventos["Inicio"] <= hoje) &
+        (df_eventos["Fim"] >= hoje)
     ]
 else:
     ausentes_hoje_global = pd.DataFrame()
@@ -613,15 +601,6 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 # PRESENTES
 # --------------------------------------------------------
 if pagina == "Presentes":
-    # Data de referência local da aba + sincroniza no session_state
-    data_ref_local = st.date_input(
-        "Data de Referência",
-        st.session_state["data_ref"],
-        key="data_ref_presentes"
-    )
-    st.session_state["data_ref"] = data_ref_local
-    hoje = pd.to_datetime(data_ref_local)
-
     st.subheader(f"Presentes a bordo em {hoje.strftime('%d/%m/%Y')}")
 
     content_container = st.container()
@@ -696,17 +675,58 @@ if pagina == "Presentes":
 
 
 # --------------------------------------------------------
+# AGENDA DO NAVIO (NOVA ABA)
+# --------------------------------------------------------
+elif pagina == "Agenda do Navio":
+    st.subheader("📅 Agenda do Navio (Google Calendar)")
+
+    col_sel, col_btn = st.columns([3, 1])
+
+    with col_sel:
+        nome_agenda = st.selectbox(
+            "Selecione a Agenda:",
+            list(AGENDAS_OFICIAIS.keys())
+        )
+        selected_id = AGENDAS_OFICIAIS[nome_agenda]
+
+    with col_btn:
+        st.write("")
+        st.write("")
+        if st.button("🔄 Atualizar eventos"):
+            load_calendar_events.clear()
+            st.rerun()
+
+    if selected_id:
+        df_cal = load_calendar_events(selected_id)
+
+        if df_cal.empty:
+            st.info(f"Nenhum evento futuro encontrado na agenda **{nome_agenda}**.")
+            st.markdown(
+                f"<small>ID verificado: `<code>{selected_id[:20]}...</code>`</small>",
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown("---")
+            for _, row in df_cal.iterrows():
+                st.markdown(
+                    f"""
+                    <div class="agenda-card">
+                        <div style="font-weight: 600; color: #f8fafc; font-size: 1.05rem;">
+                            {row['Evento']}
+                        </div>
+                        <div class="agenda-date">
+                            {row['Data']}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+
+# --------------------------------------------------------
 # AUSENTES
 # --------------------------------------------------------
 elif pagina == "Ausentes":
-    data_ref_local = st.date_input(
-        "Data de Referência",
-        st.session_state["data_ref"],
-        key="data_ref_ausentes"
-    )
-    st.session_state["data_ref"] = data_ref_local
-    hoje = pd.to_datetime(data_ref_local)
-
     st.subheader(f"Ausentes em {hoje.strftime('%d/%m/%Y')}")
 
     content_container = st.container()
@@ -767,61 +787,9 @@ elif pagina == "Ausentes":
 
 
 # --------------------------------------------------------
-# AGENDA DO NAVIO
-# --------------------------------------------------------
-elif pagina == "Agenda do Navio":
-    st.subheader("📅 Agenda do Navio (Google Calendar)")
-
-    col_sel, col_btn = st.columns([3, 1])
-
-    with col_sel:
-        nome_agenda = st.selectbox(
-            "Selecione a Agenda:",
-            list(AGENDAS_OFICIAIS.keys())
-        )
-        selected_id = AGENDAS_OFICIAIS[nome_agenda]
-
-    with col_btn:
-        st.write("")
-        st.write("")
-        if st.button("🔄 Atualizar eventos"):
-            load_calendar_events.clear()
-            st.rerun()
-
-    if selected_id:
-        df_cal = load_calendar_events(selected_id)
-
-        if df_cal.empty:
-            st.info(f"Nenhum evento futuro encontrado na agenda **{nome_agenda}**.")
-            st.markdown(
-                f"<small>ID verificado: `<code>{selected_id[:20]}...</code>`</small>",
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown("---")
-            for _, row in df_cal.iterrows():
-                st.markdown(
-                    f"""
-                    <div class="agenda-card">
-                        <div style="font-weight: 600; color: #f8fafc; font-size: 1.05rem;">
-                            {row['Evento']}
-                        </div>
-                        <div class="agenda-date">
-                            {row['Data']}
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-
-# --------------------------------------------------------
 # LINHA DO TEMPO
 # --------------------------------------------------------
 elif pagina == "Linha do Tempo":
-    data_ref_local = st.session_state.get("data_ref", datetime.today().date())
-    hoje = pd.to_datetime(data_ref_local)
-
     st.subheader("Planejamento Anual de Ausências")
 
     content_container = st.container()
@@ -1138,9 +1106,6 @@ elif pagina == "Férias":
 # CURSOS
 # --------------------------------------------------------
 elif pagina == "Cursos":
-    data_ref_local = st.session_state.get("data_ref", datetime.today().date())
-    hoje = pd.to_datetime(data_ref_local)
-
     st.subheader("Análises de Cursos")
 
     content_container = st.container()
