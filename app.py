@@ -10,10 +10,10 @@ from googleapiclient.discovery import build
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v0.6.2 (Agendas Oficiais + Painel Macau - CSS Fix)"
+SCRIPT_VERSION = "v1.0.0 (Redesign Moderno - Light/Dark)"
 
-# Use tema escuro moderno no Plotly
-pio.templates.default = "plotly_dark"
+# Configuração do Plotly para ser neutro/transparente
+pio.templates.default = "plotly"
 
 # ============================================================
 # 1. CONFIGURAÇÃO DA PÁGINA
@@ -24,157 +24,180 @@ st.set_page_config(
     page_icon="logo_npamacau.png"
 )
 
-# --- CSS global / tema dark profissional ---
+# --- CSS global / tema moderno adaptativo ---
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&family=Inter:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+    :root {
+        --primary-color: #3b82f6;
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --card-bg-light: rgba(255, 255, 255, 0.85);
+        --card-bg-dark: rgba(30, 41, 59, 0.7);
+        --card-border-light: rgba(226, 232, 240, 0.8);
+        --card-border-dark: rgba(51, 65, 85, 0.6);
+        --shadow-light: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        --shadow-dark: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    }
 
     * {
-        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-family: 'Inter', sans-serif;
     }
 
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Outfit', sans-serif !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.02em;
+    }
+
+    /* Ajustes gerais do App */
     .stApp {
-        background: radial-gradient(circle at top left, #020617 0, #020617 40%, #020617 60%, #000 100%);
-        color: #e5e7eb;
+        /* O background é gerenciado pelo tema do Streamlit, mas podemos adicionar um gradiente sutil se desejado */
     }
 
-    h1, h2, h3, h4 {
-        color: #f9fafb !important;
-        letter-spacing: 0.03em;
-    }
-
-    h1 {
-        font-family: 'Raleway', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-        font-weight: 700 !important;
-    }
-
-    /* Cards de métricas */
+    /* Cards de métricas (Glassmorphism Adaptativo) */
     div[data-testid="metric-container"] {
-        background: rgba(15,23,42,0.95);
-        border-radius: 0.9rem;
-        padding: 1rem;
-        border: 1px solid #1f2937;
-        box-shadow: 0 14px 40px rgba(0,0,0,0.55);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 1rem;
+        padding: 1.2rem;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    /* Dark Mode overrides para cards */
+    @media (prefers-color-scheme: dark) {
+        div[data-testid="metric-container"] {
+            background: var(--card-bg-dark);
+            border: 1px solid var(--card-border-dark);
+            box-shadow: var(--shadow-dark);
+        }
+    }
+
+    /* Light Mode overrides para cards (assumindo default do browser ou tema claro) */
+    @media (prefers-color-scheme: light) {
+        div[data-testid="metric-container"] {
+            background: var(--card-bg-light);
+            border: 1px solid var(--card-border-light);
+            box-shadow: var(--shadow-light);
+        }
+    }
+    
+    /* Forçar estilos baseados na classe do Streamlit se disponível, ou fallback */
+    /* Streamlit injeta classes, mas o media query é mais robusto para 'auto' */
+
+    div[data-testid="metric-container"]:hover {
+        transform: translateY(-2px);
     }
 
     div[data-testid="metric-container"] > label {
-        color: #9ca3af !important;
-        font-size: 0.80rem;
+        font-size: 0.85rem;
+        font-weight: 500;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.05em;
+        opacity: 0.8;
     }
 
     /* Dataframes */
     .stDataFrame {
-        background: #020617;
         border-radius: 0.75rem;
-        padding: 0.25rem;
-        border: 1px solid #1f2937;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        overflow: hidden;
     }
 
     /* Sidebar */
     section[data-testid="stSidebar"] {
-        background: #020617;
-        border-right: 1px solid #111827;
+        border-right: 1px solid rgba(148, 163, 184, 0.1);
     }
 
-    section[data-testid="stSidebar"] h1, 
-    section[data-testid="stSidebar"] h2, 
-    section[data-testid="stSidebar"] h3, 
-    section[data-testid="stSidebar"] h4 {
-        color: #e5e7eb !important;
-    }
-
-    /* Labels da sidebar */
-    section[data-testid="stSidebar"] label {
-        color: #d1d5db !important;
-    }
-
-    /* NAV LATERAL (menu vertical sem bolinhas) */
+    /* NAV LATERAL (Radio Buttons Customizados) */
     section[data-testid="stSidebar"] div[role="radiogroup"] {
         display: flex;
         flex-direction: column;
-        gap: 0.1rem;
+        gap: 0.25rem;
+        margin-top: 1rem;
     }
 
-    /* Esconde o "círculo" do radio dentro do label */
     section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {
         display: none !important;
-        visibility: hidden !important;
-        width: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
     }
 
-    /* Estilo base do item de menu (label) */
     section[data-testid="stSidebar"] div[role="radiogroup"] label {
-        padding: 0.30rem 0.60rem;
+        padding: 0.5rem 0.75rem;
         border-radius: 0.5rem;
         cursor: pointer;
-        color: #9ca3af !important;
         font-weight: 500;
-        font-size: 0.92rem;
-        transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
     }
 
     /* Hover */
     section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
-        background: rgba(15,23,42,0.9);
-        color: #e5e7eb !important;
-        transform: translateX(1px);
+        background: rgba(148, 163, 184, 0.1);
     }
 
-    /* Item selecionado: barra à esquerda + sublinhado no texto */
+    /* Selecionado */
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
-        background: linear-gradient(90deg, rgba(56,189,248,0.18), transparent);
-        border-left: 3px solid #38bdf8;
-        color: #f9fafb !important;
+        background: rgba(59, 130, 246, 0.1); /* Blue tint */
+        border-left: 3px solid var(--primary-color);
+        color: var(--primary-color) !important;
     }
-
+    
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] span {
-        text-decoration: underline;
-        text-decoration-thickness: 2px;
-        text-underline-offset: 0.28rem;
+        font-weight: 600;
     }
 
-    /* Botões / checkboxes / etc em dark mode */
-    .stCheckbox > label, .stRadio > label {
-        color: #e5e7eb !important;
-    }
-
-    /* Gráficos ocupando bem o espaço */
+    /* Gráficos Plotly */
     .js-plotly-plot {
         border-radius: 0.75rem;
-        box-shadow: 0 14px 45px rgba(0,0,0,0.65);
     }
 
-    /* CARD AGENDA GOOGLE (apenas para aba Agenda) */
+    /* CARD AGENDA GOOGLE */
     .agenda-card {
-        background-color: #1e293b;
-        border-left: 4px solid #38bdf8;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 10px;
+        padding: 1rem;
+        border-radius: 0.75rem;
+        margin-bottom: 0.75rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        border-left: 4px solid var(--primary-color);
         transition: transform 0.2s;
     }
-    .agenda-card:hover {
-        transform: translateX(5px);
-        background-color: #334155;
+    
+    @media (prefers-color-scheme: dark) {
+        .agenda-card {
+            background-color: rgba(30, 41, 59, 0.6);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .agenda-date {
+            background-color: rgba(15, 23, 42, 0.8);
+            color: #cbd5e1;
+        }
     }
+    
+    @media (prefers-color-scheme: light) {
+        .agenda-card {
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        .agenda-date {
+            background-color: #f1f5f9;
+            color: #475569;
+        }
+    }
+
+    .agenda-card:hover {
+        transform: translateX(4px);
+    }
+    
     .agenda-date {
-        background-color: #0f172a;
-        padding: 5px 12px;
-        border-radius: 6px;
-        color: #cbd5e1;
-        font-size: 0.9rem;
-        font-family: monospace;
-        white-space: nowrap;
+        padding: 0.35rem 0.75rem;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+        font-family: 'Outfit', monospace;
+        font-weight: 600;
     }
     </style>
     """,
@@ -182,16 +205,16 @@ st.markdown(
 )
 
 # Cabeçalho: logo + título
-col_logo, col_title = st.columns([1, 5])
+col_logo, col_title = st.columns([1, 6])
 with col_logo:
     try:
-        st.image("logo_npamacau.png", width=80)
+        st.image("logo_npamacau.png", width=70)
     except Exception:
         st.write("⚓")
 with col_title:
     st.markdown(
         """
-        <h1 style="margin-top:0.15rem; margin-bottom:0.2rem;">
+        <h1 style="margin-top: 0.5rem; font-size: 2.2rem;">
             Navio-Patrulha Macau
         </h1>
         """,
@@ -226,7 +249,7 @@ def parse_bool(value) -> bool:
 # 3. CARGA DE DADOS (SHEETS + CALENDAR)
 # ============================================================
 
-@st.cache_data(ttl=600, show_spinner="Carregando dados da planilha...")
+@st.cache_data(ttl=600, show_spinner="Carregando dados...")
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -244,12 +267,7 @@ def load_data():
 
 @st.cache_data(ttl=300)
 def load_calendar_events(calendar_id: str) -> pd.DataFrame:
-    """
-    Lê próximos eventos de uma agenda Google Calendar.
-    Usa o mesmo service account do secrets (conexão gsheets).
-    """
     try:
-        # Aproveita o JSON do service account já usado no gsheets
         creds_dict = dict(st.secrets["connections"]["gsheets"])
         creds = service_account.Credentials.from_service_account_info(
             creds_dict,
@@ -291,7 +309,7 @@ except Exception as e:
 
 
 # ============================================================
-# 4. DESCOBRIR BLOCOS DE DATAS (Início/Inicio → Fim/FIm → [Motivo/Curso])
+# 4. DESCOBRIR BLOCOS DE DATAS
 # ============================================================
 
 def descobrir_blocos_datas(df: pd.DataFrame):
@@ -374,11 +392,9 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
             if pd.isna(ini) or pd.isna(fim):
                 continue
 
-            # Garante que fim >= início
             if fim < ini:
                 ini, fim = fim, ini
 
-            # Correção para anos com 2 dígitos (Gemini fix)
             if ini.year < 2000:
                 ini = ini.replace(year=ini.year + 100)
             if fim.year < 2000:
@@ -388,7 +404,6 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
             if dur < 1 or dur > 365 * 2:
                 continue
 
-            # Férias, Cursos ou Outros
             if tipo_base == "Férias":
                 motivo_real = "Férias"
                 tipo_final = "Férias"
@@ -410,7 +425,6 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
                         motivo_real = "OUTROS"
                     tipo_final = "Outros"
 
-            # Campo agregado pro gráfico/legenda
             if tipo_final == "Férias":
                 motivo_agr = "Férias"
             elif tipo_final == "Curso":
@@ -435,7 +449,7 @@ df_eventos = construir_eventos(df_raw, BLOCOS_DATAS)
 
 
 # ============================================================
-# 6. EXPANSÃO POR DIA (PARA ANÁLISE MENSAL/DIÁRIA)
+# 6. EXPANSÃO POR DIA
 # ============================================================
 
 @st.cache_data(ttl=600)
@@ -515,7 +529,6 @@ hoje = pd.to_datetime(data_ref)
 
 st.sidebar.markdown("#### Navegação")
 with st.sidebar.container():
-    # st.markdown('<div class="nav-container">', unsafe_allow_html=True) # REMOVIDO
     pagina = st.radio(
         label="Seções",
         options=[
@@ -532,7 +545,6 @@ with st.sidebar.container():
         label_visibility="collapsed",
         key="pagina_radio"
     )
-    # st.markdown('</div>', unsafe_allow_html=True) # REMOVIDO
 
 
 # ============================================================
@@ -560,8 +572,24 @@ col4.metric("Prontidão (global)", f"{percentual_global:.1f}%")
 
 
 # ============================================================
-# 10. GRÁFICO DE PIZZA MODERNO
+# 10. GRÁFICO DE PIZZA MODERNO (Função Helper)
 # ============================================================
+
+def update_fig_layout(fig, title=None):
+    """Aplica o tema transparente e fontes modernas aos gráficos."""
+    fig.update_layout(
+        title=title,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(
+            family="'Inter', sans-serif",
+            # A cor da fonte será automática pelo Plotly ou adaptada se necessário,
+            # mas para garantir contraste em ambos os modos, deixamos o padrão ou usamos uma cor neutra se o fundo for fixo.
+            # Como o fundo é transparente, o texto padrão do Plotly costuma adaptar-se ao tema do Streamlit.
+        ),
+        margin=dict(t=60, b=20, l=20, r=20),
+    )
+    return fig
 
 def grafico_pizza_motivos(df_motivos_dias, titulo):
     fig = px.pie(
@@ -575,20 +603,7 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
         textinfo="percent+label",
         hovertemplate="<b>%{label}</b><br>%{value} dias (%{percent})<extra></extra>"
     )
-    fig.update_layout(
-        title=titulo,
-        showlegend=True,
-        legend_title_text="Motivo",
-        margin=dict(t=60, b=20, l=0, r=0),
-        uniformtext_minsize=12,
-        uniformtext_mode='hide',
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(15,23,42,0.9)",
-        font=dict(
-            family="'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-            color="#e5e7eb"
-        )
-    )
+    update_fig_layout(fig, titulo)
     return fig
 
 
@@ -657,24 +672,18 @@ if pagina == "Presentes":
             )
             fig_pr.update_traces(
                 texttemplate="%{x:.1f}%",
-                textposition="inside"
+                textposition="inside",
+                marker_color="#10b981" # Emerald green
             )
-            fig_pr.update_layout(
-                height=160,
-                margin=dict(l=60, r=20, t=30, b=20),
-                paper_bgcolor="rgba(15,23,42,0.9)",
-                plot_bgcolor="rgba(15,23,42,0.9)",
-                xaxis=dict(title="%"),
-                yaxis=dict(title=""),
-                font=dict(color="#e5e7eb")
-            )
+            update_fig_layout(fig_pr)
+            fig_pr.update_layout(height=160, xaxis=dict(title="%"), yaxis=dict(title=""))
             st.plotly_chart(fig_pr, use_container_width=True)
         else:
             st.info("Não há efetivo na visão atual para calcular a prontidão.")
 
 
 # --------------------------------------------------------
-# AGENDA DO NAVIO (NOVA ABA)
+# AGENDA DO NAVIO
 # --------------------------------------------------------
 elif pagina == "Agenda do Navio":
     st.subheader("📅 Agenda do Navio (Google Calendar)")
@@ -710,7 +719,7 @@ elif pagina == "Agenda do Navio":
                 st.markdown(
                     f"""
                     <div class="agenda-card">
-                        <div style="font-weight: 600; color: #f8fafc; font-size: 1.05rem;">
+                        <div style="font-weight: 600; font-size: 1.05rem;">
                             {row['Evento']}
                         </div>
                         <div class="agenda-date">
@@ -837,11 +846,7 @@ elif pagina == "Linha do Tempo":
                     line_dash="dash",
                     line_color="#f97316"
                 )
-                fig.update_layout(
-                    paper_bgcolor="rgba(15,23,42,0.9)",
-                    plot_bgcolor="rgba(15,23,42,0.9)",
-                    font=dict(color="#e5e7eb")
-                )
+                update_fig_layout(fig)
                 st.plotly_chart(fig, use_container_width=True)
 
 
@@ -914,11 +919,7 @@ elif pagina == "Estatísticas & Análises":
                     title="Top 10 – Dias de ausência por militar",
                     labels={"Duracao_dias": "Dias de ausência"}
                 )
-                fig_top10.update_layout(
-                    paper_bgcolor="rgba(15,23,42,0.9)",
-                    plot_bgcolor="rgba(15,23,42,0.9)",
-                    font=dict(color="#e5e7eb")
-                )
+                update_fig_layout(fig_top10)
                 st.plotly_chart(fig_top10, use_container_width=True)
 
                 if not df_dias.empty:
@@ -948,11 +949,7 @@ elif pagina == "Estatísticas & Análises":
                             title="Média de Ausentes por Dia – por Mês",
                             labels={"Mes": "Mês", "Media_ausentes_dia": "Média de ausentes/dia"}
                         )
-                        fig_mensal.update_layout(
-                            paper_bgcolor="rgba(15,23,42,0.9)",
-                            plot_bgcolor="rgba(15,23,42,0.9)",
-                            font=dict(color="#e5e7eb")
-                        )
+                        update_fig_layout(fig_mensal)
                         st.plotly_chart(fig_mensal, use_container_width=True)
                     else:
                         st.info("Sem dados diários para análise mensal com os filtros atuais.")
@@ -1021,11 +1018,7 @@ elif pagina == "Férias":
                     title="Quantidade de militares com férias por escala",
                     labels={"Militares": "Militares em férias (no ano)"}
                 )
-                fig_escala.update_layout(
-                    paper_bgcolor="rgba(15,23,42,0.9)",
-                    plot_bgcolor="rgba(15,23,42,0.9)",
-                    font=dict(color="#e5e7eb")
-                )
+                update_fig_layout(fig_escala)
                 col_fx1.plotly_chart(fig_escala, use_container_width=True)
 
                 if not df_dias.empty:
@@ -1048,11 +1041,7 @@ elif pagina == "Férias":
                             title="Quantidade de militares com férias previstas por mês",
                             labels={"Mes": "Mês", "Militares": "Militares com férias no mês"}
                         )
-                        fig_mes_ferias.update_layout(
-                            paper_bgcolor="rgba(15,23,42,0.9)",
-                            plot_bgcolor="rgba(15,23,42,0.9)",
-                            font=dict(color="#e5e7eb")
-                        )
+                        update_fig_layout(fig_mes_ferias)
                         col_fx2.plotly_chart(fig_mes_ferias, use_container_width=True)
                     else:
                         col_fx2.info("Sem dados diários suficientes para calcular férias por mês com os filtros atuais.")
@@ -1087,13 +1076,7 @@ elif pagina == "Férias":
                             textinfo="percent+label",
                             hovertemplate="<b>%{label}</b><br>%{value:.1f}%<extra></extra>"
                         )
-                        fig_pizza_ferias.update_layout(
-                            title="Distribuição de férias gozadas x não gozadas (média da tripulação)",
-                            paper_bgcolor="rgba(15,23,42,0.9)",
-                            plot_bgcolor="rgba(15,23,42,0.9)",
-                            margin=dict(t=60, b=20, l=0, r=0),
-                            font=dict(color="#e5e7eb")
-                        )
+                        update_fig_layout(fig_pizza_ferias, "Distribuição de férias gozadas x não gozadas")
                         st.plotly_chart(fig_pizza_ferias, use_container_width=True)
                     else:
                         st.info("Não foi possível calcular a média da coluna %DG.")
@@ -1191,11 +1174,7 @@ elif pagina == "Cursos":
                         title="Cursos mais frequentes (militares que já realizaram)",
                         labels={"Motivo": "Curso", "Militares": "Militares"}
                     )
-                    fig_cursos_freq.update_layout(
-                        paper_bgcolor="rgba(15,23,42,0.9)",
-                        plot_bgcolor="rgba(15,23,42,0.9)",
-                        font=dict(color="#e5e7eb")
-                    )
+                    update_fig_layout(fig_cursos_freq)
                     col_g1.plotly_chart(fig_cursos_freq, use_container_width=True)
 
                     if not df_dias.empty:
@@ -1219,11 +1198,7 @@ elif pagina == "Cursos":
                                 title="Militares em curso por mês",
                                 labels={"Mes": "Mês", "Militares": "Militares em curso"}
                             )
-                            fig_curso_mes.update_layout(
-                                paper_bgcolor="rgba(15,23,42,0.9)",
-                                plot_bgcolor="rgba(15,23,42,0.9)",
-                                font=dict(color="#e5e7eb")
-                            )
+                            update_fig_layout(fig_curso_mes)
                             col_g2.plotly_chart(fig_curso_mes, use_container_width=True)
                         else:
                             col_g2.info("Sem dados diários suficientes para análise mensal de cursos com os filtros atuais.")
@@ -1280,10 +1255,10 @@ elif pagina == "Log / Debug":
 # ============================================================
 # 12. RODAPÉ
 # ============================================================
-st.markdown("<hr style='border-color:#111827; margin-top:2rem;'/>", unsafe_allow_html=True)
+st.markdown("<hr style='border-color: rgba(148, 163, 184, 0.2); margin-top:2rem;'/>", unsafe_allow_html=True)
 st.markdown(
     f"""
-    <div style='text-align:center; color:#9ca3af; padding:0.5rem 0; font-size:0.85rem;'>
+    <div style='text-align:center; color:#94a3b8; padding:0.5rem 0; font-size:0.85rem;'>
         Created by <strong>Klismann Freitas</strong> • Versão do painel: <strong>{SCRIPT_VERSION}</strong>
     </div>
     """,
