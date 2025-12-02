@@ -13,7 +13,7 @@ st.set_page_config(
     page_icon="logo_npamacau.png"
 )
 
-APP_VERSION = "v1.10.0 - Mapeamento Estrito"
+APP_VERSION = "v1.11.0 - Mapeamento Compacto"
 
 # --- CSS global / tema ---
 st.markdown(
@@ -97,123 +97,130 @@ st.markdown(
 )
 
 # ============================================================
-# 2. HELPERS E CONSTANTES
+# 2. HELPERS E MAPEAMENTO DE COLUNAS
 # ============================================================
 
-HEADER_ROW = 2  # Linha 3 da planilha (índice 2)
+HEADER_ROW = 2  # Linha 3 da planilha
+
+def col_generator():
+    """
+    Gera a sequência EXATA de colunas que contêm dados, pulando as vazias.
+    Baseado na estrutura fornecida:
+    A-G (Dados Pessoais) -> H (Pula)
+    I-W (Férias) -> X (Pula)
+    Y-AB (P4) -> AC (Pula)
+    AD-AG (P5) -> AH (Pula)
+    AI-AL (P6) -> AM (Pula)
+    AN-AQ (P7) -> AR (Pula)
+    AS-AV (P8) -> AW (Pula) ... Grande Salto ...
+    DH-GW (P9) -> IC (Pula)
+    ID-IG (P10)
+    """
+    # Helper para converter range de letras em lista
+    def char_range(c1, c2):
+        """Gera range de colunas simples (ex: A-Z). Não lida com AA, AB complexos aqui por simplicidade, 
+           vamos listar blocos explicitamente se forem complexos."""
+        for c in range(ord(c1), ord(c2) + 1):
+            yield chr(c)
+
+    # Lista ordenada das colunas VÁLIDAS (que o Pandas vai ler)
+    valid_cols = []
+    
+    # Bloco A até G
+    valid_cols.extend(list(char_range('A', 'G')))
+    
+    # Bloco I até W
+    valid_cols.extend(list(char_range('I', 'W')))
+    
+    # Bloco Y até AB
+    valid_cols.extend(['Y', 'Z', 'AA', 'AB'])
+    
+    # Bloco AD até AG
+    valid_cols.extend(['AD', 'AE', 'AF', 'AG'])
+    
+    # Bloco AI até AL
+    valid_cols.extend(['AI', 'AJ', 'AK', 'AL'])
+    
+    # Bloco AN até AQ
+    valid_cols.extend(['AN', 'AO', 'AP', 'AQ'])
+    
+    # Bloco AS até AV
+    valid_cols.extend(['AS', 'AT', 'AU', 'AV'])
+    
+    # Bloco P9: DH até GW (DH, EL, FR, GW) - LISTA EXPLÍCITA POIS SÃO COLUNAS ESPARSAS
+    # Nota: Entre AW e DH existe um abismo. O Pandas vai colar DH logo após AV.
+    # O user listou: DH (Início), EL (Fim), FR (Diff), GW (Curso)
+    valid_cols.extend(['DH', 'EL', 'FR', 'GW'])
+    
+    # Bloco P10: ID até IG (ID, IE, IF, IG)
+    valid_cols.extend(['ID', 'IE', 'IF', 'IG'])
+    
+    return valid_cols
+
+# Criamos um mapa: Letra Excel -> Índice Inteiro no DataFrame Compactado
+# Ex: 'A' -> 0, 'I' -> 7 (pois H pulou), 'DH' -> 39 (após todos os pulos)
+VALID_COLUMNS_ORDER = col_generator()
+COL_MAP = {letter: idx for idx, letter in enumerate(VALID_COLUMNS_ORDER)}
+
+def get_col_name_compact(df: pd.DataFrame, letter: str):
+    """
+    Retorna o nome da coluna no DataFrame baseado no Mapa Compacto.
+    """
+    if letter not in COL_MAP:
+        return None
+    
+    idx_real = COL_MAP[letter]
+    
+    # Proteção: se o índice calculado for maior que as colunas que vieram
+    if idx_real < len(df.columns):
+        return df.columns[idx_real]
+    return None
 
 def parse_bool(value) -> bool:
-    """Converte checkbox/texto da planilha em booleano robusto."""
-    if pd.isna(value):
-        return False
+    if pd.isna(value): return False
     s = str(value).strip().lower()
     return s in ("true", "1", "sim", "yes", "y", "x")
-
-def col_letter_to_index(col_letter: str) -> int:
-    """
-    Converte letra de coluna (A, B, ..., Z, AA...) para índice 0-based.
-    Ex: A -> 0, I -> 8, AA -> 26
-    """
-    col_letter = col_letter.upper()
-    result = 0
-    for ch in col_letter:
-        if not ch.isalpha():
-            break
-        result = result * 26 + (ord(ch) - ord('A') + 1)
-    return result - 1  # 0-based
-
-def get_col_name_strict(df: pd.DataFrame, letter: str):
-    """
-    Pega o nome da coluna baseando-se EXATAMENTE na posição da letra.
-    Assume que o Pandas carregou as colunas vazias como 'Unnamed'.
-    """
-    idx = col_letter_to_index(letter)
-    if idx < len(df.columns):
-        return df.columns[idx]
-    return None
 
 # ============================================================
 # 3. CARGA DE DADOS
 # ============================================================
 
-@st.cache_data(ttl=600, show_spinner="Carregando dados da planilha...")
+@st.cache_data(ttl=600, show_spinner="Carregando dados...")
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
-
-    # Carrega a planilha. O Pandas geralmente mantém colunas vazias como "Unnamed: X"
-    df = conn.read(
-        worksheet="Afastamento 2026",
-        header=HEADER_ROW,
-        ttl="10m"
-    )
-
-    # Identificar a coluna "Nome" (Coluna C -> índice 2)
-    # Se o cabeçalho estiver vazio na coluna C, pegamos pelo índice
-    c_nome_idx = col_letter_to_index("C")
+    df = conn.read(worksheet="Afastamento 2026", header=HEADER_ROW, ttl="10m")
     
-    if "Nome" in df.columns:
-        df = df.dropna(subset=["Nome"])
-    elif len(df.columns) > c_nome_idx:
-        # Pega o nome da coluna no índice 2, seja ele qual for
-        nome_col = df.columns[c_nome_idx]
-        df = df.dropna(subset=[nome_col])
-
+    # Tenta achar a coluna Nome (C)
+    c_nome = get_col_name_compact(df, "C")
+    if c_nome:
+        df = df.dropna(subset=[c_nome])
+    
     df = df.reset_index(drop=True)
     return df
 
 try:
     df_raw = load_data()
 except Exception as e:
-    st.error(f"Erro de conexão. Verifique o arquivo secrets.toml. Detalhe: {e}")
+    st.error(f"Erro ao ler planilha. Detalhe: {e}")
     st.stop()
 
 # ============================================================
-# 3.1 MAPEAMENTO: COLUNAS FIXAS (A-G)
+# 3.1 CONFIGURAÇÃO DOS BLOCOS DE AUSÊNCIA
 # ============================================================
 
-# Mapeamos diretamente pelo índice da letra para garantir
-C_POSTO  = get_col_name_strict(df_raw, "B")
-C_NOME   = get_col_name_strict(df_raw, "C")
-C_SV     = get_col_name_strict(df_raw, "D")
-C_EQMAN  = get_col_name_strict(df_raw, "E")
-C_GVI    = get_col_name_strict(df_raw, "F")
-C_IN     = get_col_name_strict(df_raw, "G")
+# Férias (Inicio, Fim)
+FERIAS_CONFIG = [("I", "J"), ("L", "M"), ("O", "P")]
 
-# ============================================================
-# 3.2 MAPEAMENTO: FÉRIAS (I-J, L-M, O-P)
-# ============================================================
-
-FERIAS_COLS = []
-# Pares (Início, Fim)
-for ini_l, fim_l in [("I", "J"), ("L", "M"), ("O", "P")]:
-    c_ini = get_col_name_strict(df_raw, ini_l)
-    c_fim = get_col_name_strict(df_raw, fim_l)
-    if c_ini and c_fim:
-        FERIAS_COLS.append((c_ini, c_fim))
-
-# ============================================================
-# 3.3 MAPEAMENTO: OUTROS E CURSOS (Periodos 4 a 10)
-# ============================================================
-
+# Outros / Cursos (Inicio, Fim, Motivo, Categoria)
 AUSENCIAS_CONFIG = [
-    # (Inicio, Fim, Motivo, CategoriaBase)
     ("Y",  "Z",  "AB", "Outros"), # P4
     ("AD", "AE", "AG", "Outros"), # P5
     ("AI", "AJ", "AL", "Outros"), # P6
     ("AN", "AO", "AQ", "Curso"),  # P7
     ("AS", "AT", "AV", "Curso"),  # P8
-    ("DH", "EL", "GW", "Curso"),  # P9
+    ("DH", "EL", "GW", "Curso"),  # P9 (Gap Grande)
     ("ID", "IE", "IG", "Curso"),  # P10
 ]
-
-AUSENCIAS_TRIPLETS = []
-for ini_l, fim_l, mot_l, cat_base in AUSENCIAS_CONFIG:
-    c_ini = get_col_name_strict(df_raw, ini_l)
-    c_fim = get_col_name_strict(df_raw, fim_l)
-    c_mot = get_col_name_strict(df_raw, mot_l)
-    
-    if c_ini and c_fim and c_mot:
-        AUSENCIAS_TRIPLETS.append((c_ini, c_fim, c_mot, cat_base))
 
 # ============================================================
 # 4. TRANSFORMAÇÃO EM EVENTOS
@@ -223,45 +230,49 @@ for ini_l, fim_l, mot_l, cat_base in AUSENCIAS_CONFIG:
 def construir_eventos(df: pd.DataFrame) -> pd.DataFrame:
     eventos = []
 
-    for _, row in df.iterrows():
-        # Extração segura dos dados básicos
-        posto  = row[C_POSTO] if C_POSTO else ""
-        nome   = row[C_NOME]  if C_NOME  else ""
-        escala = row[C_SV]    if C_SV    else ""
-        eq_val = row[C_EQMAN] if C_EQMAN else ""
-        gvi_val= row[C_GVI]   if C_GVI   else ""
-        in_val = row[C_IN]    if C_IN    else ""
+    # Identificar colunas fixas usando o mapa compacto
+    c_posto = get_col_name_compact(df, "B")
+    c_nome  = get_col_name_compact(df, "C")
+    c_sv    = get_col_name_compact(df, "D")
+    c_eq    = get_col_name_compact(df, "E")
+    c_gvi   = get_col_name_compact(df, "F")
+    c_in    = get_col_name_compact(df, "G")
 
+    for _, row in df.iterrows():
+        posto  = row.get(c_posto, "")
+        nome   = row.get(c_nome, "")
+        
         militar_info = {
             "Posto": str(posto),
             "Nome": str(nome),
-            "Escala": str(escala),
-            "EqMan": str(eq_val) if pd.notna(eq_val) and str(eq_val).strip() not in ("-", "") else "Não",
-            "GVI": parse_bool(gvi_val),
-            "IN": parse_bool(in_val),
+            "Escala": str(row.get(c_sv, "")),
+            "EqMan": str(row.get(c_eq, "")) if pd.notna(row.get(c_eq)) and str(row.get(c_eq)) not in ("-", "") else "Não",
+            "GVI": parse_bool(row.get(c_gvi)),
+            "IN": parse_bool(row.get(c_in)),
         }
 
-        # Função interna para adicionar evento
-        def add_evt(val_ini, val_fim, val_motivo, tipo_evento):
+        # Função Helper
+        def add_evt(letra_ini, letra_fim, letra_mot, tipo_base):
+            c_i = get_col_name_compact(df, letra_ini)
+            c_f = get_col_name_compact(df, letra_fim)
+            c_m = get_col_name_compact(df, letra_mot) if letra_mot else None
+            
+            val_ini = row.get(c_i) if c_i else None
+            val_fim = row.get(c_f) if c_f else None
+            val_mot = row.get(c_m) if c_m else None
+
             ini = pd.to_datetime(val_ini, dayfirst=True, errors="coerce")
             fim = pd.to_datetime(val_fim, dayfirst=True, errors="coerce")
-            
-            # Validação de data válida
+
             if pd.notna(ini) and pd.notna(fim):
-                # Corrige data invertida
-                if fim < ini:
-                    ini, fim = fim, ini
-                
+                if fim < ini: ini, fim = fim, ini
                 dur = (fim - ini).days + 1
                 
-                # Filtro de sanidade (datas muito antigas ou duração absurda)
-                if ini.year < 2020 or dur > 365:
-                    return
+                if ini.year < 2020 or dur > 365: return 
 
-                # Tratamento do Motivo
-                motivo_txt = str(val_motivo).strip()
+                motivo_txt = str(val_mot).strip()
                 if not motivo_txt or motivo_txt.lower() == "nan":
-                    motivo_real = "CURSO" if tipo_evento == "Curso" else "AUSÊNCIA"
+                    motivo_real = "CURSO" if tipo_base == "Curso" else "AUSÊNCIA"
                 else:
                     motivo_real = motivo_txt
 
@@ -271,16 +282,16 @@ def construir_eventos(df: pd.DataFrame) -> pd.DataFrame:
                     "Fim": fim,
                     "Duracao_dias": dur,
                     "Motivo": motivo_real,
-                    "Tipo": tipo_evento
+                    "Tipo": "Férias" if tipo_base == "Férias" else tipo_base
                 })
 
         # Processar Férias
-        for c_ini, c_fim in FERIAS_COLS:
-            add_evt(row.get(c_ini), row.get(c_fim), "FÉRIAS", "Férias")
-
+        for l_i, l_f in FERIAS_CONFIG:
+            add_evt(l_i, l_f, None, "Férias")
+            
         # Processar Outros/Cursos
-        for c_ini, c_fim, c_mot, cat in AUSENCIAS_TRIPLETS:
-            add_evt(row.get(c_ini), row.get(c_fim), row.get(c_mot), cat)
+        for l_i, l_f, l_m, tipo in AUSENCIAS_CONFIG:
+            add_evt(l_i, l_f, l_m, tipo)
 
     return pd.DataFrame(eventos)
 
@@ -307,16 +318,6 @@ def expandir_eventos_por_dia(df_evt: pd.DataFrame) -> pd.DataFrame:
 
 df_dias = expandir_eventos_por_dia(df_eventos)
 
-def filtrar_tripulacao(df, eq, nav, gvi):
-    res = df.copy()
-    if eq and C_EQMAN:
-        res = res[(res[C_EQMAN].notna()) & (res[C_EQMAN].astype(str) != "-") & (res[C_EQMAN].astype(str) != "Não")]
-    if nav and C_IN:
-        res = res[res[C_IN].apply(parse_bool)]
-    if gvi and C_GVI:
-        res = res[res[C_GVI].apply(parse_bool)]
-    return res
-
 def filtrar_eventos(df, eq, nav, gvi):
     res = df.copy()
     if eq: res = res[res["EqMan"] != "Não"]
@@ -324,16 +325,29 @@ def filtrar_eventos(df, eq, nav, gvi):
     if gvi: res = res[res["GVI"] == True]
     return res
 
+def filtrar_tripulacao(df, eq, nav, gvi):
+    res = df.copy()
+    c_eq = get_col_name_compact(df, "E")
+    c_in = get_col_name_compact(df, "G")
+    c_gv = get_col_name_compact(df, "F")
+    
+    if eq and c_eq: res = res[(res[c_eq].notna()) & (res[c_eq].astype(str) != "-") & (res[c_eq].astype(str) != "Não")]
+    if nav and c_in: res = res[res[c_in].apply(parse_bool)]
+    if gvi and c_gv: res = res[res[c_gv].apply(parse_bool)]
+    return res
+
 # ============================================================
-# 6. LÓGICA DE V2 (% DE FÉRIAS)
+# 6. LEITURA V2 (% Férias)
 # ============================================================
 @st.cache_data(ttl=600)
 def load_percent_ferias_v2():
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df_v = conn.read(worksheet="Afastamento 2026", header=None, ttl="10m")
-        # Coluna V é índice 21 estrito
-        val = df_v.iloc[1, 21] 
+        # Coluna V é índice 21 no Excel.
+        # Mas aqui, como H foi pulada no header=None?
+        # header=None geralmente lê tudo. Vamos tentar índice fixo 21.
+        val = df_v.iloc[1, 21]
         if pd.isna(val): return None
         s = str(val).replace(",", ".").replace("%", "").strip()
         num = float(s)
@@ -348,17 +362,11 @@ def load_percent_ferias_v2():
 st.sidebar.image("logo_npamacau.png", width=140)
 st.sidebar.markdown("<div class='sidebar-title'>Parâmetros</div>", unsafe_allow_html=True)
 
-# SELETOR DE DATA - PADRÃO NO DIA DE HOJE
-# ---------------------------------------------------------------------
-# IMPORTANTE: Se você estiver testando a planilha de 2026 hoje (em 2025),
-# você PRECISA mudar esta data no App para 2026 para ver os dados.
-# ---------------------------------------------------------------------
 data_ref = st.sidebar.date_input("Data de Referência", datetime.today())
 hoje = pd.to_datetime(data_ref)
 
-# Aviso Visual caso a data seja 2025 e a planilha 2026
 if hoje.year < 2026 and "Afastamento 2026" in str(df_raw.columns):
-    st.sidebar.warning("Atenção: Data de referência é 2025, mas a planilha é 2026. Mude a data para ver os futuros ausentes.")
+    st.sidebar.warning("Atenção: Data atual (2025) < Data Planilha (2026).")
 
 st.sidebar.markdown("<div class='sidebar-section'>Navegação</div>", unsafe_allow_html=True)
 pagina = st.sidebar.radio("", [
@@ -369,8 +377,6 @@ pagina = st.sidebar.radio("", [
 # ============================================================
 # 8. DASHBOARD
 # ============================================================
-
-# Cálculo Global
 if not df_eventos.empty:
     ausentes_globais = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
 else:
@@ -392,8 +398,7 @@ c4.metric("Prontidão", f"{prontidao:.1f}%")
 # ------------------------------------------------------------
 if pagina == "Presentes":
     st.subheader(f"Presentes a bordo em {hoje.strftime('%d/%m/%Y')}")
-    
-    tabela_container = st.container()
+    t_cont = st.container()
     st.markdown("#### Filtros")
     cf1, cf2, cf3 = st.columns(3)
     f_eq = cf1.checkbox("Apenas EqMan", key="p_eq")
@@ -402,35 +407,42 @@ if pagina == "Presentes":
 
     df_filt = filtrar_tripulacao(df_raw, f_eq, f_in, f_gv)
     
-    # Quem está ausente hoje (filtrado)
-    ausentes_nomes = set()
+    nomes_aus = set()
     if not df_eventos.empty:
-        aus_hoje = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
-        aus_hoje = filtrar_eventos(aus_hoje, f_eq, f_in, f_gv)
-        ausentes_nomes = set(aus_hoje["Nome"].unique())
+        aus_h = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
+        aus_h = filtrar_eventos(aus_h, f_eq, f_in, f_gv)
+        nomes_aus = set(aus_h["Nome"].unique())
 
-    # Presentes = Tripulação Filtrada - Ausentes
-    if C_NOME:
-        df_presentes = df_filt[~df_filt[C_NOME].isin(ausentes_nomes)].copy()
+    c_nome = get_col_name_compact(df_raw, "C")
+    if c_nome:
+        df_pres = df_filt[~df_filt[c_nome].isin(nomes_aus)].copy()
     else:
-        df_presentes = df_filt.copy()
+        df_pres = df_filt.copy()
 
-    with tabela_container:
-        if df_presentes.empty:
-            st.info("Ninguém presente com estes filtros.")
+    with t_cont:
+        if df_pres.empty:
+            st.info("Ninguém presente para estes filtros.")
         else:
-            cols_show = [c for c in [C_POSTO, C_NOME, C_SV, C_EQMAN, C_GVI, C_IN] if c]
-            df_show = df_presentes[cols_show].copy()
-            # Renomear para ficar bonito
-            rename_map = {
-                C_POSTO: "Posto", C_NOME: "Nome", C_SV: "Escala",
-                C_EQMAN: "EqMan", C_GVI: "GVI", C_IN: "IN"
-            }
-            df_show = df_show.rename(columns=rename_map)
+            # Selecionar colunas
+            col_letras = ["B", "C", "D", "E", "F", "G"]
+            cols_final = []
+            for l in col_letras:
+                n = get_col_name_compact(df_raw, l)
+                if n: cols_final.append(n)
             
-            # Formatando Bool
+            df_show = df_pres[cols_final].copy()
+            # Renomear com base no que achou
+            renames = {}
+            if get_col_name_compact(df_raw, "B"): renames[get_col_name_compact(df_raw, "B")] = "Posto"
+            if get_col_name_compact(df_raw, "C"): renames[get_col_name_compact(df_raw, "C")] = "Nome"
+            if get_col_name_compact(df_raw, "D"): renames[get_col_name_compact(df_raw, "D")] = "Escala"
+            if get_col_name_compact(df_raw, "E"): renames[get_col_name_compact(df_raw, "E")] = "EqMan"
+            if get_col_name_compact(df_raw, "F"): renames[get_col_name_compact(df_raw, "F")] = "GVI"
+            if get_col_name_compact(df_raw, "G"): renames[get_col_name_compact(df_raw, "G")] = "IN"
+            
+            df_show = df_show.rename(columns=renames)
             if "GVI" in df_show.columns: df_show["GVI"] = df_show["GVI"].apply(lambda x: "SIM" if parse_bool(x) else "NÃO")
-            if "IN" in df_show.columns:  df_show["IN"]  = df_show["IN"].apply(lambda x: "SIM" if parse_bool(x) else "NÃO")
+            if "IN" in df_show.columns: df_show["IN"] = df_show["IN"].apply(lambda x: "SIM" if parse_bool(x) else "NÃO")
             
             st.dataframe(df_show, use_container_width=True, hide_index=True)
 
@@ -439,143 +451,123 @@ if pagina == "Presentes":
 # ------------------------------------------------------------
 elif pagina == "Ausentes":
     st.subheader(f"Ausentes em {hoje.strftime('%d/%m/%Y')}")
-    
-    tabela_container = st.container()
+    t_cont = st.container()
     st.markdown("#### Filtros")
     cf1, cf2, cf3 = st.columns(3)
     f_eq = cf1.checkbox("Apenas EqMan", key="a_eq")
     f_in = cf2.checkbox("Apenas IN", key="a_in")
     f_gv = cf3.checkbox("Apenas GVI", key="a_gv")
 
-    with tabela_container:
+    with t_cont:
         if df_eventos.empty:
-            st.info("Nenhum evento registrado na planilha.")
+            st.info("Sem eventos.")
         else:
-            aus_hoje = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
-            aus_hoje = filtrar_eventos(aus_hoje, f_eq, f_in, f_gv)
-
-            if aus_hoje.empty:
+            aus_h = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
+            aus_h = filtrar_eventos(aus_h, f_eq, f_in, f_gv)
+            
+            if aus_h.empty:
                 st.success("Todos a bordo.")
             else:
-                show_aus = aus_hoje[["Posto", "Nome", "Motivo", "Tipo", "Fim"]].copy()
-                show_aus["Retorno"] = show_aus["Fim"].dt.strftime("%d/%m/%Y")
-                show_aus = show_aus.drop(columns=["Fim"])
-                st.dataframe(show_aus, use_container_width=True, hide_index=True)
-
+                show = aus_h[["Posto", "Nome", "Motivo", "Tipo", "Fim"]].copy()
+                show["Retorno"] = show["Fim"].dt.strftime("%d/%m/%Y")
+                show = show.drop(columns=["Fim"])
+                st.dataframe(show, use_container_width=True, hide_index=True)
+                
                 # Alertas
-                if "EqMan" in aus_hoje.columns:
-                    eq_fora = aus_hoje[aus_hoje["EqMan"] != "Não"]
-                    if not eq_fora.empty:
-                        nomes = sorted({f"{r['Posto']} {r['Nome']} ({r['EqMan']})" for _,r in eq_fora.iterrows()})
+                if "EqMan" in aus_h.columns:
+                    eqs = aus_h[aus_h["EqMan"]!="Não"]
+                    if not eqs.empty:
+                        nomes = sorted({f"{r['Posto']} {r['Nome']} ({r['EqMan']})" for _,r in eqs.iterrows()})
                         st.error(f"⚠️ EqMan Desfalcada: {'; '.join(nomes)}")
 
 # ------------------------------------------------------------
 # PÁGINA: GANTT
 # ------------------------------------------------------------
 elif pagina == "Linha do Tempo (Gantt)":
-    st.subheader("Cronograma Anual")
-    if df_eventos.empty:
-        st.info("Sem dados.")
-    else:
-        fig = px.timeline(
-            df_eventos, x_start="Inicio", x_end="Fim", y="Nome", color="Tipo",
-            hover_data=["Motivo", "Posto"], title="Ausências"
-        )
+    st.subheader("Cronograma")
+    if not df_eventos.empty:
+        fig = px.timeline(df_eventos, x_start="Inicio", x_end="Fim", y="Nome", color="Tipo", hover_data=["Motivo"], title="Ausências")
         fig.update_yaxes(autorange="reversed")
         fig.add_vline(x=hoje, line_dash="dash", line_color="red")
         fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.8)")
         st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Sem dados.")
 
 # ------------------------------------------------------------
-# PÁGINA: ESTATÍSTICAS
+# PÁGINA: ESTATISTICAS
 # ------------------------------------------------------------
 elif pagina == "Estatísticas & Análises":
-    st.subheader("Estatísticas")
-    if df_eventos.empty:
-        st.info("Sem dados.")
+    st.subheader("Análises")
+    if not df_eventos.empty:
+        df_c = df_eventos.copy()
+        df_c["Motivo"] = df_c["Motivo"].apply(lambda x: "CURSO" if str(x).upper().startswith("CURSO") else x)
+        df_p = df_c.groupby("Motivo")["Duracao_dias"].sum().reset_index()
+        fig = px.pie(df_p, names="Motivo", values="Duracao_dias", hole=0.4, title="Dias de Ausência por Motivo")
+        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        # Pizza Motivos
-        df_evt_clean = df_eventos.copy()
-        df_evt_clean["Motivo"] = df_evt_clean["Motivo"].apply(lambda x: "CURSO" if str(x).upper().startswith("CURSO") else x)
-        
-        df_pie = df_evt_clean.groupby("Motivo")["Duracao_dias"].sum().reset_index()
-        fig_pie = px.pie(df_pie, names="Motivo", values="Duracao_dias", hole=0.4, title="Dias de Ausência por Motivo")
-        fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-        # Gráfico Mensal
-        if not df_dias.empty:
-            df_dias["Mes"] = df_dias["Data"].dt.to_period("M").dt.to_timestamp()
-            df_line = df_dias.groupby("Mes")["Nome"].nunique().reset_index(name="Ausentes")
-            fig_line = px.line(df_line, x="Mes", y="Ausentes", markers=True, title="Média de Ausentes por Mês")
-            fig_line.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.8)")
-            st.plotly_chart(fig_line, use_container_width=True)
+        st.info("Sem dados.")
 
 # ------------------------------------------------------------
 # PÁGINA: FÉRIAS
 # ------------------------------------------------------------
 elif pagina == "Férias":
-    st.subheader("Controle de Férias")
-    df_f = df_eventos[df_eventos["Tipo"] == "Férias"].copy()
-    if df_f.empty:
-        st.info("Nenhuma férias lançada.")
-    else:
+    st.subheader("Férias")
+    df_f = df_eventos[df_eventos["Tipo"]=="Férias"].copy()
+    if not df_f.empty:
         df_f["Início"] = df_f["Inicio"].dt.strftime("%d/%m/%Y")
         df_f["Fim"] = df_f["Fim"].dt.strftime("%d/%m/%Y")
         st.dataframe(df_f[["Posto", "Nome", "Início", "Fim", "Duracao_dias"]], use_container_width=True)
+    else:
+        st.info("Nenhuma férias.")
     
     st.markdown("---")
     pct = load_percent_ferias_v2()
     if pct is not None:
-        fig_g = px.pie(names=["Gozadas", "Restantes"], values=[pct, 1-pct], hole=0.5, title="Meta de Férias (V2)")
-        fig_g.update_layout(paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_g, use_container_width=True)
+        fig = px.pie(names=["Gozadas", "Restantes"], values=[pct, 1-pct], hole=0.5, title="Meta de Férias (V2)")
+        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------------------------------------
 # PÁGINA: CURSOS
 # ------------------------------------------------------------
 elif pagina == "Cursos":
-    st.subheader("Controle de Cursos")
-    df_c = df_eventos[df_eventos["Tipo"] == "Curso"].copy()
-    if df_c.empty:
-        st.info("Nenhum curso lançado.")
-    else:
-        passados = df_c[df_c["Fim"] < hoje]
-        futuros = df_c[df_c["Fim"] >= hoje]
-        
+    st.subheader("Cursos")
+    df_c = df_eventos[df_eventos["Tipo"]=="Curso"].copy()
+    if not df_c.empty:
+        real = df_c[df_c["Fim"]<hoje]
+        fut = df_c[df_c["Fim"]>=hoje]
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("### Realizados")
-            if not passados.empty:
-                st.dataframe(passados[["Posto", "Nome", "Motivo", "Fim"]], use_container_width=True)
+            if not real.empty: st.dataframe(real[["Posto", "Nome", "Motivo", "Fim"]], use_container_width=True)
             else: st.info("Nenhum.")
-            
         with c2:
-            st.markdown("### Futuros / Atuais")
-            if not futuros.empty:
-                st.dataframe(futuros[["Posto", "Nome", "Motivo", "Inicio", "Fim"]], use_container_width=True)
+            st.markdown("### Futuros")
+            if not fut.empty: st.dataframe(fut[["Posto", "Nome", "Motivo", "Inicio", "Fim"]], use_container_width=True)
             else: st.info("Nenhum.")
+    else:
+        st.info("Nenhum curso.")
 
 # ------------------------------------------------------------
-# PÁGINA: DEBUG
+# PÁGINA: LOG / DEBUG
 # ------------------------------------------------------------
 elif pagina == "Log / Debug":
-    st.subheader("Diagnóstico Técnico")
+    st.subheader("Diagnóstico de Colunas")
+    st.write(f"Total de Colunas Lidas: **{len(df_raw.columns)}**")
     
-    st.write("### Colunas Detectadas (Indices Reais)")
-    cols_info = {f"Indice {i}": col for i, col in enumerate(df_raw.columns)}
-    st.json(cols_info, expanded=False)
-
-    st.write("### Verificação de Colunas Críticas")
-    # Testar I (Férias) e Y (Periodo 4)
-    teste_cols = [
-        ("I (Férias 1)", get_col_name_strict(df_raw, "I")),
-        ("Y (Periodo 4)", get_col_name_strict(df_raw, "Y")),
-        ("DH (Periodo 9)", get_col_name_strict(df_raw, "DH"))
-    ]
-    st.table(pd.DataFrame(teste_cols, columns=["Letra", "Nome Lido no Pandas"]))
+    st.write("### Teste de Mapeamento Compacto")
+    debug_list = []
+    # Testar colunas críticas
+    test_keys = ["I", "Y", "DH", "ID", "GW", "IG"]
+    for k in test_keys:
+        real_name = get_col_name_compact(df_raw, k)
+        sample = df_raw[real_name].iloc[0] if real_name and not df_raw.empty else "N/A"
+        debug_list.append({"Letra Excel": k, "Nome Coluna Pandas": real_name, "Amostra Dado": str(sample)})
     
-    st.write("### Amostra de Dados (Primeiras 5 linhas)")
-    st.dataframe(df_raw.head())
+    st.table(pd.DataFrame(debug_list))
+    st.write("### Colunas Brutas do DataFrame")
+    st.write(list(df_raw.columns))
 
-st.markdown("<hr/><div style='text-align:center; color:gray'>Versão Corrigida: Mapeamento Estrito</div>", unsafe_allow_html=True)
+st.markdown("<hr/><div style='text-align:center; color:gray'>Versão 1.11 - Mapeamento Compacto</div>", unsafe_allow_html=True)
