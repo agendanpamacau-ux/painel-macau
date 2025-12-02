@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.3.0 (Final Polish - Header Logo & Chart Fixes)"
+SCRIPT_VERSION = "v1.3.1 (Header Fix - Ship Name)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly"
@@ -63,6 +63,21 @@ st.markdown(
     header[data-testid="stHeader"] {
         background-image: linear-gradient(to right, #4099ff, #73b4ff);
         color: white !important;
+    }
+    
+    /* INJECT SHIP NAME INTO HEADER */
+    header[data-testid="stHeader"]::after {
+        content: "Navio-Patrulha Macau";
+        position: absolute;
+        left: 100px; /* Espaço para o menu hamburguer e logo */
+        top: 50%;
+        transform: translateY(-50%);
+        color: white;
+        font-size: 1.2rem;
+        font-weight: 700;
+        font-family: 'Poppins', sans-serif;
+        z-index: 999;
+        pointer-events: none;
     }
     
     header[data-testid="stHeader"] button {
@@ -214,9 +229,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-# REMOVIDO: Cabeçalho Principal no corpo (Logo foi para st.logo, Nome do navio removido conforme pedido)
-# st.markdown(...) 
 
 # ============================================================
 # 2. HELPERS E CONSTANTES
@@ -475,8 +487,6 @@ def filtrar_dias(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_g
 AMEZIA_COLORS = ["#4099ff", "#ff5370", "#2ed8b6", "#ffb64d", "#a3a3a3"]
 
 def update_fig_layout(fig, title=None):
-    # Se title for None, não sobrescrevemos se o gráfico já tiver um título interno.
-    # Mas para garantir consistência, vamos definir explicitamente.
     layout_args = dict(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -511,9 +521,6 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 # ============================================================
 # 8. PARÂMETROS (SIDEBAR) + NAVEGAÇÃO
 # ============================================================
-
-# REMOVIDO: Logo na Sidebar (agora está no header via st.logo)
-# REMOVIDO: Header "Parâmetros"
 
 st.sidebar.markdown("#### Navegação")
 with st.sidebar.container():
@@ -631,8 +638,6 @@ if pagina == "Presentes":
                 df_pr, x="Percentual", y="Indicador", orientation="h", range_x=[0, 100], text="Percentual",
             )
             fig_pr.update_traces(texttemplate="%{x:.1f}%", textposition="inside", marker_color="#2ed8b6")
-            # FIX: Remove title="undefined" by passing None explicitly if needed, or just not passing it.
-            # Here we don't pass title, so update_fig_layout(fig_pr) uses default None.
             update_fig_layout(fig_pr) 
             fig_pr.update_layout(height=160, xaxis=dict(title="%"), yaxis=dict(title=""))
             st.plotly_chart(fig_pr, use_container_width=True)
@@ -760,20 +765,16 @@ else:
                     ano_min = min_data.year if pd.notnull(min_data) else 2025
                     ano_max = max_data.year if pd.notnull(max_data) else 2026
                     
-                    # FIX: Remove "undefined" title.
                     fig = px.timeline(
                         df_gantt, x_start="Inicio", x_end="Fim", y="Nome", color="MotivoAgrupado",
                         hover_data=["Posto", "Escala", "EqMan", "GVI", "IN", "MotivoAgrupado"],
-                        # title="Cronograma de Ausências", # REMOVIDO para evitar undefined se não for passado corretamente
                         color_discrete_sequence=AMEZIA_COLORS
                     )
                     fig.update_yaxes(autorange="reversed")
                     fig.update_xaxes(range=[datetime(ano_min, 1, 1), datetime(ano_max, 12, 31)])
                     fig.add_vline(x=hoje, line_width=2, line_dash="dash", line_color="#ff5370")
                     
-                    # FIX: Improve background contrast subtly
                     update_fig_layout(fig, title="Cronograma de Ausências")
-                    # Force a slightly different plot background for better visibility of bars vs background
                     fig.update_layout(plot_bgcolor="rgba(255,255,255,0.05)")
                     
                     st.plotly_chart(fig, use_container_width=True)
@@ -826,7 +827,6 @@ else:
                             df_diario["Mes"] = df_diario["Data"].dt.to_period("M").dt.to_timestamp()
                             df_mensal = (df_diario.groupby("Mes")["Ausentes"].mean().reset_index(name="Media_ausentes_dia"))
                             
-                            # FIX: Remove undefined title
                             fig_mensal = px.area(
                                 df_mensal, x="Mes", y="Media_ausentes_dia", markers=True,
                                 labels={"Mes": "Mês", "Media_ausentes_dia": "Média de ausentes/dia"}, color_discrete_sequence=["#4099ff"]
@@ -873,7 +873,6 @@ else:
                     col_fx1, col_fx2 = st.columns(2)
                     df_escala = (df_ferias.groupby("Escala")["Nome"].nunique().reset_index(name="Militares").sort_values("Militares", ascending=False))
                     
-                    # FIX: Title "Militares de férias por serviço"
                     fig_escala = px.bar(
                         df_escala, x="Escala", y="Militares",
                         labels={"Militares": "Militares em férias (no ano)"}, color_discrete_sequence=AMEZIA_COLORS
@@ -888,7 +887,6 @@ else:
                             df_dias_ferias["Mes"] = df_dias_ferias["Data"].dt.to_period("M").dt.to_timestamp()
                             df_mes_ferias = (df_dias_ferias[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
                             
-                            # FIX: Title "Quantidade de militares de férias por mês"
                             fig_mes_ferias = px.bar(
                                 df_mes_ferias, x="Mes", y="Militares",
                                 labels={"Mes": "Mês", "Militares": "Militares com férias no mês"}, color_discrete_sequence=["#ffb64d"]
@@ -938,7 +936,6 @@ else:
                     inscritos  = df_cursos[df_cursos["Fim"] >= hoje].copy()
                     col_c1, col_c2 = st.columns(2)
                     with col_c1:
-                        # FIX: Rename to "Cursos realizados"
                         st.markdown("### Cursos realizados")
                         if realizados.empty:
                             st.info("Nenhum curso finalizado até a data de referência.")
@@ -978,7 +975,6 @@ else:
                         col_g1, col_g2 = st.columns(2)
                         df_cursos_freq = (realizados.groupby("Motivo")["Nome"].nunique().reset_index(name="Militares").sort_values("Militares", ascending=False))
                         
-                        # FIX: Title "Cursos realizados"
                         fig_cursos_freq = px.bar(
                             df_cursos_freq, x="Motivo", y="Militares",
                             labels={"Motivo": "Curso", "Militares": "Militares"}, color_discrete_sequence=["#4099ff"]
@@ -993,7 +989,6 @@ else:
                                 df_dias_cursos["Mes"] = df_dias_cursos["Data"].dt.to_period("M").dt.to_timestamp()
                                 df_curso_mes = (df_dias_cursos[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
                                 
-                                # FIX: Title "Militares em curso por mês"
                                 fig_curso_mes = px.area(
                                     df_curso_mes, x="Mes", y="Militares", markers=True,
                                     labels={"Mes": "Mês", "Militares": "Militares em curso"}, color_discrete_sequence=["#ff5370"]
