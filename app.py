@@ -413,7 +413,7 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
 df_eventos = construir_eventos(df_raw, BLOCOS_DATAS)
 
 @st.cache_data(ttl=600)
-def expandir_eventos_por_dia(df_eventos: Pd.DataFrame) -> pd.DataFrame:
+def expandir_eventos_por_dia(df_eventos: pd.DataFrame) -> pd.DataFrame:
     if df_eventos.empty:
         return pd.DataFrame()
     linhas = []
