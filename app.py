@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v0.6.1 (Agendas Oficiais + Painel Macau)"
+SCRIPT_VERSION = "v0.6.2 (Agendas Oficiais + Painel Macau - CSS Fix)"
 
 # Use tema escuro moderno no Plotly
 pio.templates.default = "plotly_dark"
@@ -93,14 +93,14 @@ st.markdown(
     }
 
     /* NAV LATERAL (menu vertical sem bolinhas) */
-    section[data-testid="stSidebar"] .nav-container div[role="radiogroup"] {
+    section[data-testid="stSidebar"] div[role="radiogroup"] {
         display: flex;
         flex-direction: column;
         gap: 0.1rem;
     }
 
     /* Esconde o "círculo" do radio dentro do label */
-    section[data-testid="stSidebar"] .nav-container div[role="radiogroup"] > label > div:first-child {
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {
         display: none !important;
         visibility: hidden !important;
         width: 0 !important;
@@ -109,7 +109,7 @@ st.markdown(
     }
 
     /* Estilo base do item de menu (label) */
-    section[data-testid="stSidebar"] .nav-container div[role="radiogroup"] label {
+    section[data-testid="stSidebar"] div[role="radiogroup"] label {
         padding: 0.30rem 0.60rem;
         border-radius: 0.5rem;
         cursor: pointer;
@@ -120,20 +120,20 @@ st.markdown(
     }
 
     /* Hover */
-    section[data-testid="stSidebar"] .nav-container div[role="radiogroup"] label:hover {
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
         background: rgba(15,23,42,0.9);
         color: #e5e7eb !important;
         transform: translateX(1px);
     }
 
     /* Item selecionado: barra à esquerda + sublinhado no texto */
-    section[data-testid="stSidebar"] .nav-container div[role="radiogroup"] label[data-checked="true"] {
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
         background: linear-gradient(90deg, rgba(56,189,248,0.18), transparent);
         border-left: 3px solid #38bdf8;
         color: #f9fafb !important;
     }
 
-    section[data-testid="stSidebar"] .nav-container div[role="radiogroup"] label[data-checked="true"] span {
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] span {
         text-decoration: underline;
         text-decoration-thickness: 2px;
         text-underline-offset: 0.28rem;
@@ -339,7 +339,6 @@ def descobrir_blocos_datas(df: pd.DataFrame):
 
 BLOCOS_DATAS = descobrir_blocos_datas(df_raw)
 
-
 # ============================================================
 # 5. TRANSFORMAÇÃO EM EVENTOS (WIDE → LONG)
 # ============================================================
@@ -516,7 +515,7 @@ hoje = pd.to_datetime(data_ref)
 
 st.sidebar.markdown("#### Navegação")
 with st.sidebar.container():
-    st.markdown('<div class="nav-container">', unsafe_allow_html=True)
+    # st.markdown('<div class="nav-container">', unsafe_allow_html=True) # REMOVIDO
     pagina = st.radio(
         label="Seções",
         options=[
@@ -533,7 +532,7 @@ with st.sidebar.container():
         label_visibility="collapsed",
         key="pagina_radio"
     )
-    st.markdown('</div>', unsafe_allow_html=True)
+    # st.markdown('</div>', unsafe_allow_html=True) # REMOVIDO
 
 
 # ============================================================
