@@ -119,13 +119,7 @@ st.markdown(
     }}
 
     /* 
-       CRITICAL DARK MODE FIX:
-       We DO NOT force background-color on .stApp based on media queries anymore.
-       This allows Streamlit's internal theme toggle (Light/Dark) to control the main background.
-       If the user selects Dark in Streamlit, the bg will be dark and text white.
-       If the user selects Light, the bg will be light and text dark.
-       
-       We only style the CARDS to match the theme.
+       Dark Mode Fix: Removed forced background on .stApp to allow Streamlit theme to take over.
     */
 
     /* Cards */
@@ -136,20 +130,6 @@ st.markdown(
         position: relative;
         overflow: hidden;
     }}
-
-    /* 
-       We still use media queries for the CARDS because we want them to look "glassy" or specific colors.
-       However, to avoid the "Light OS + Dark App" conflict, we should ideally use transparent backgrounds
-       or neutral ones. But let's try to keep the Amezia look.
-       
-       If we can't detect the Streamlit theme, we'll use a safe fallback:
-       Use a semi-transparent background that works on both, OR rely on the user matching their OS.
-       
-       BUT, to fix the specific complaint: "No modo escuro todas as letras ficam na cor branca mas o background permanece na mesma cor do tema claro".
-       This confirms the user is likely on a Light OS but toggled Streamlit to Dark.
-       The CSS `prefers-color-scheme: light` was forcing `.stApp { background: light }`.
-       REMOVING that force on `.stApp` is the key.
-    */
 
     @media (prefers-color-scheme: dark) {{
         div[data-testid="metric-container"] {{
