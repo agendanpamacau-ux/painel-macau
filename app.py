@@ -11,7 +11,7 @@ import base64
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.5.0 (Dark Mode Fix, Filters Bottom, Monthly View)"
+SCRIPT_VERSION = "v1.6.0 (Dark Mode Fixed, Filters Removed)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly"
@@ -102,10 +102,9 @@ st.markdown(
         pointer-events: none;
     }}
     
-    /* MOBILE RESPONSIVENESS FOR HEADER TEXT */
     @media (max-width: 600px) {{
         header[data-testid="stHeader"]::after {{
-            content: "NPa Macau"; /* Shorten text on mobile */
+            content: "NPa Macau";
             font-size: 1rem;
             left: 100px;
         }}
@@ -119,29 +118,14 @@ st.markdown(
         padding-top: 4rem !important;
     }}
 
-    /* DARK MODE FIX: Force background color on stApp */
-    /* We use a strategy that works for both system preference AND Streamlit toggle if possible.
-       Since we can't easily detect Streamlit toggle via CSS alone without data attributes,
-       we'll rely on the fact that Streamlit's dark theme sets text to white. 
-       If text is white-ish, we want dark bg. But CSS doesn't work that way.
-       We will rely on prefers-color-scheme as the primary driver, 
-       BUT we will also set a default background that is dark IF the user selected dark theme.
-    */
-    
-    @media (prefers-color-scheme: dark) {{
-        .stApp {{
-            background-color: var(--amezia-dark-bg) !important;
-        }}
-    }}
-    
-    /* Fallback: If the user manually sets Dark Mode in Streamlit settings, 
-       Streamlit adds specific classes. We can try to target the root if we knew the class, 
-       but for now, let's ensure that IF the background is dark (default streamlit), 
-       our cards look good. The issue reported is "background remains light". 
-       This implies the browser thinks it's Light mode, but Streamlit might be in Dark? 
-       Or vice versa. 
-       To be safe, let's force the Amezia colors if the OS is dark. 
-       If the OS is light, we use light. 
+    /* 
+       CRITICAL DARK MODE FIX:
+       We DO NOT force background-color on .stApp based on media queries anymore.
+       This allows Streamlit's internal theme toggle (Light/Dark) to control the main background.
+       If the user selects Dark in Streamlit, the bg will be dark and text white.
+       If the user selects Light, the bg will be light and text dark.
+       
+       We only style the CARDS to match the theme.
     */
 
     /* Cards */
@@ -153,17 +137,27 @@ st.markdown(
         overflow: hidden;
     }}
 
+    /* 
+       We still use media queries for the CARDS because we want them to look "glassy" or specific colors.
+       However, to avoid the "Light OS + Dark App" conflict, we should ideally use transparent backgrounds
+       or neutral ones. But let's try to keep the Amezia look.
+       
+       If we can't detect the Streamlit theme, we'll use a safe fallback:
+       Use a semi-transparent background that works on both, OR rely on the user matching their OS.
+       
+       BUT, to fix the specific complaint: "No modo escuro todas as letras ficam na cor branca mas o background permanece na mesma cor do tema claro".
+       This confirms the user is likely on a Light OS but toggled Streamlit to Dark.
+       The CSS `prefers-color-scheme: light` was forcing `.stApp { background: light }`.
+       REMOVING that force on `.stApp` is the key.
+    */
+
     @media (prefers-color-scheme: dark) {{
         div[data-testid="metric-container"] {{
             background: var(--amezia-dark-card);
             box-shadow: 0 4px 24px 0 rgb(34 41 47 / 10%);
             color: var(--text-dark);
         }}
-        /* Fix text visibility in dark mode */
-        .stMarkdown, .stText, p, li, h1, h2, h3, h4, h5, h6, span {{
-            color: #e2e8f0 !important;
-        }}
-        /* Except inside sidebar where we want specific colors */
+        /* Sidebar text fix */
         section[data-testid="stSidebar"] .stMarkdown, 
         section[data-testid="stSidebar"] p, 
         section[data-testid="stSidebar"] span {{
@@ -176,9 +170,6 @@ st.markdown(
             background: var(--amezia-light-card);
             box-shadow: 0 1px 20px 0 rgba(69,90,100,0.08);
             color: var(--text-light);
-        }}
-        .stApp {{
-            background-color: var(--amezia-light-bg);
         }}
     }}
 
@@ -196,7 +187,6 @@ st.markdown(
         color: #aab8c5 !important;
     }}
     
-    /* Aumentar fonte de "Navegação" */
     section[data-testid="stSidebar"] h4 {{
         font-size: 1.2rem !important;
         font-weight: 700 !important;
@@ -654,30 +644,12 @@ hoje_padrao = datetime.today()
 if pagina == "Presentes":
     st.subheader("Presentes a bordo")
     
-    # Placeholder para Data (será lida depois, mas precisamos dela para métricas)
-    # Como o usuário quer os filtros EM BAIXO, precisamos renderizar primeiro a tabela com um valor padrão ou session state?
-    # Streamlit executa de cima para baixo. Se o input está embaixo, não temos o valor dele para filtrar a tabela ACIMA na primeira execução.
-    # SOLUÇÃO: Usar st.session_state para persistir ou renderizar os filtros PRIMEIRO mas usar st.container() para mover visualmente?
-    # Streamlit não permite mover containers para cima se declarados depois.
-    # A única forma de "Filtros embaixo da tabela" funcionar logicamente é:
-    # 1. Ler filtros (renderizá-los embaixo? Não, se renderizar embaixo, o código é executado depois).
-    # 2. Se o código é executado depois, a tabela acima não tem os valores atualizados.
-    # TRUQUE: Renderizar os filtros no topo mas usar CSS para mover? Muito arriscado.
-    # O usuário disse "levadas para baixo APÓS a tabela".
-    # Vamos aceitar que o fluxo de UI será: Tabela (com dados padrão ou anteriores) -> Filtros.
-    # Mas para a tabela reagir, precisamos dos dados.
-    # A melhor UX em Streamlit é Filtros no Topo.
-    # Se o usuário EXIGE filtros embaixo, teremos que ler os inputs ANTES (invisíveis?) ou aceitar que o usuário interage embaixo e a tabela atualiza em cima (rerun).
-    # Vamos colocar os widgets embaixo. O Streamlit vai pegar o valor do session state do rerun anterior. Funciona bem.
-    
-    # Definir container para tabela e métricas
     metrics_placeholder = st.container()
     table_placeholder = st.container()
     
     st.markdown("---")
     st.markdown("##### Filtros & Data")
     
-    # Filtros EM BAIXO
     col_f1, col_f2, col_f3, col_data = st.columns([1.5, 1.5, 1.5, 2])
     apenas_eqman = col_f1.checkbox("Apenas EqMan", key="pres_eqman")
     apenas_in    = col_f2.checkbox("Apenas IN", key="pres_in")
@@ -685,7 +657,6 @@ if pagina == "Presentes":
     data_ref = col_data.date_input("Data de Referência", hoje_padrao, key="data_pres")
     hoje = pd.to_datetime(data_ref)
 
-    # Agora populamos os containers de cima com os valores lidos (que estarão disponíveis no rerun)
     with metrics_placeholder:
         exibir_metricas_globais(hoje)
         st.markdown("---")
@@ -739,14 +710,12 @@ if pagina == "Presentes":
 elif pagina == "Ausentes":
     st.subheader("Ausentes")
 
-    # Containers para conteúdo (Tabela Diária)
     metrics_placeholder = st.container()
     daily_table_placeholder = st.container()
     
     st.markdown("---")
     st.markdown("##### Filtros & Data (Diário)")
     
-    # Filtros EM BAIXO da tabela diária
     col_f1, col_f2, col_f3, col_data = st.columns([1.5, 1.5, 1.5, 2])
     apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman")
     apenas_in    = col_f2.checkbox("Apenas IN", key="aus_in")
@@ -754,12 +723,10 @@ elif pagina == "Ausentes":
     data_ref = col_data.date_input("Data de Referência", hoje_padrao, key="data_aus")
     hoje = pd.to_datetime(data_ref)
 
-    # Popula Métricas Globais
     with metrics_placeholder:
         exibir_metricas_globais(hoje)
         st.markdown("---")
 
-    # Popula Tabela Diária
     with daily_table_placeholder:
         st.markdown("### Ausentes no dia selecionado")
         if df_eventos.empty:
@@ -801,7 +768,7 @@ elif pagina == "Ausentes":
                     )
                     st.warning("🚨 GVI/GP com desfalque: " + "; ".join(lista_gvi))
 
-    # --- NOVA FUNCIONALIDADE: VISÃO MENSAL ---
+    # --- VISÃO MENSAL ---
     st.markdown("---")
     st.markdown("### Ausentes por Mês (Visão Mensal)")
     
@@ -815,8 +782,6 @@ elif pagina == "Ausentes":
     
     mes_sel = meses_dict[mes_sel_nome]
     
-    # Lógica de filtro mensal: Evento deve sobrepor o mês selecionado
-    # Inicio <= FimDoMes AND Fim >= InicioDoMes
     if not df_eventos.empty:
         inicio_mes = pd.Timestamp(year=ano_sel, month=mes_sel, day=1)
         if mes_sel == 12:
@@ -829,6 +794,10 @@ elif pagina == "Ausentes":
             (df_eventos["Fim"] >= inicio_mes)
         ].copy()
         
+        # Filtros aplicados na visão mensal também? O usuário pediu para remover filtros de OUTRAS abas,
+        # mas aqui estamos na aba AUSENTES. A visão mensal deve respeitar os filtros da aba Ausentes?
+        # O usuário disse: "Quero que esses filtros só sejam apresentado na aba presentes e ausentes."
+        # Então SIM, os filtros (EqMan, IN, GVI) devem afetar a visão mensal também.
         ausentes_mes = filtrar_eventos(ausentes_mes, apenas_eqman, apenas_in, apenas_gvi)
         
         if ausentes_mes.empty:
@@ -877,24 +846,19 @@ else:
 
     elif pagina == "Linha do Tempo":
         st.subheader("Planejamento Anual de Ausências")
-        filters_container = st.container()
-        with filters_container:
-            st.markdown("##### Filtros")
-            col_f1, col_f2, col_f3 = st.columns(3)
-            apenas_eqman = col_f1.checkbox("Apenas EqMan", key="gantt_eqman")
-            apenas_in    = col_f2.checkbox("Apenas IN", key="gantt_in")
-            apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="gantt_gvi")
+        # FILTROS REMOVIDOS
         
         content_container = st.container()
         with content_container:
             if df_eventos.empty:
                 st.info("Planilha parece não ter datas preenchidas.")
             else:
-                df_gantt = filtrar_eventos(df_eventos, apenas_eqman, apenas_in, apenas_gvi)
+                # Sem filtros, usa df_eventos direto
+                df_gantt = df_eventos.copy()
+                
                 if df_gantt.empty:
-                    st.info("Nenhum evento encontrado para os filtros atuais.")
+                    st.info("Nenhum evento encontrado.")
                 else:
-                    # FIX: ORDENAÇÃO DO GANTT PELA ORDEM DA PLANILHA
                     ordem_nomes = df_raw["Nome"].unique().tolist()
                     
                     df_gantt["Nome"] = pd.Categorical(df_gantt["Nome"], categories=ordem_nomes, ordered=True)
@@ -911,7 +875,6 @@ else:
                         color_discrete_sequence=AMEZIA_COLORS
                     )
                     
-                    # Garantir que a ordem do eixo Y respeite a categoria definida
                     fig.update_yaxes(autorange="reversed", categoryorder="array", categoryarray=ordem_nomes)
                     fig.update_xaxes(range=[datetime(ano_min, 1, 1), datetime(ano_max, 12, 31)])
                     fig.add_vline(x=hoje, line_width=2, line_dash="dash", line_color="#ff5370")
@@ -923,22 +886,18 @@ else:
 
     elif pagina == "Estatísticas & Análises":
         st.subheader("Visão Analítica de Ausências")
-        filters_container = st.container()
-        with filters_container:
-            st.markdown("##### Filtros")
-            col_f1, col_f2, col_f3 = st.columns(3)
-            apenas_eqman = col_f1.checkbox("Apenas EqMan", key="stats_eqman")
-            apenas_in    = col_f2.checkbox("Apenas IN", key="stats_in")
-            apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="stats_gvi")
+        # FILTROS REMOVIDOS
         
         content_container = st.container()
         with content_container:
             if df_eventos.empty:
                 st.write("Sem dados suficientes para estatísticas.")
             else:
-                df_evt = filtrar_eventos(df_eventos, apenas_eqman, apenas_in, apenas_gvi)
+                # Sem filtros
+                df_evt = df_eventos.copy()
+                
                 if df_evt.empty:
-                    st.info("Nenhum evento para os filtros selecionados.")
+                    st.info("Nenhum evento.")
                 else:
                     col_a1, col_a2, col_a3 = st.columns(3)
                     total_dias_ausencia = df_evt["Duracao_dias"].sum()
@@ -963,7 +922,9 @@ else:
                     if not df_dias.empty:
                         st.markdown("---")
                         st.subheader("Média de militares ausentes por dia (por mês)")
-                        df_dias_filtrado = filtrar_dias(df_dias, apenas_eqman, apenas_in, apenas_gvi)
+                        # Sem filtros
+                        df_dias_filtrado = df_dias.copy()
+                        
                         if not df_dias_filtrado.empty:
                             df_diario = (df_dias_filtrado.groupby("Data")["Nome"].nunique().reset_index(name="Ausentes"))
                             df_diario["Mes"] = df_diario["Data"].dt.to_period("M").dt.to_timestamp()
@@ -976,26 +937,22 @@ else:
                             update_fig_layout(fig_mensal, title="Média de Ausentes por Dia – por Mês")
                             st.plotly_chart(fig_mensal, use_container_width=True)
                         else:
-                            st.info("Sem dados diários para análise mensal com os filtros atuais.")
+                            st.info("Sem dados diários para análise mensal.")
 
     elif pagina == "Férias":
         st.subheader("Férias cadastradas")
-        filters_container = st.container()
-        with filters_container:
-            st.markdown("##### Filtros")
-            col_f1, col_f2, col_f3 = st.columns(3)
-            apenas_eqman = col_f1.checkbox("Apenas EqMan", key="fer_eqman")
-            apenas_in    = col_f2.checkbox("Apenas IN", key="fer_in")
-            apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="fer_gvi")
+        # FILTROS REMOVIDOS
+        
         content_container = st.container()
         with content_container:
             if df_eventos.empty:
                 st.write("Sem dados de férias registrados.")
             else:
                 df_ferias = df_eventos[df_eventos["Tipo"] == "Férias"].copy()
-                df_ferias = filtrar_eventos(df_ferias, apenas_eqman, apenas_in, apenas_gvi)
+                # Sem filtros
+                
                 if df_ferias.empty:
-                    st.info("Nenhuma férias cadastrada na visão atual.")
+                    st.info("Nenhuma férias cadastrada.")
                 else:
                     tabela_ferias = df_ferias[["Posto", "Nome", "Escala", "Inicio", "Fim", "Duracao_dias"]].copy()
                     tabela_ferias["Início"] = tabela_ferias["Inicio"].dt.strftime("%d/%m/%Y")
@@ -1024,7 +981,7 @@ else:
                     
                     if not df_dias.empty:
                         df_dias_ferias = df_dias[df_dias["Tipo"] == "Férias"].copy()
-                        df_dias_ferias = filtrar_dias(df_dias_ferias, apenas_eqman, apenas_in, apenas_gvi)
+                        # Sem filtros
                         if not df_dias_ferias.empty:
                             df_dias_ferias["Mes"] = df_dias_ferias["Data"].dt.to_period("M").dt.to_timestamp()
                             df_mes_ferias = (df_dias_ferias[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
@@ -1036,7 +993,7 @@ else:
                             update_fig_layout(fig_mes_ferias, title="Quantidade de militares de férias por mês")
                             col_fx2.plotly_chart(fig_mes_ferias, use_container_width=True)
                         else:
-                            col_fx2.info("Sem dados diários suficientes para calcular férias por mês com os filtros atuais.")
+                            col_fx2.info("Sem dados diários suficientes para calcular férias por mês.")
                     st.markdown("---")
                     st.subheader("% de férias gozadas (tripulação)")
                     if "%DG" in df_raw.columns:
@@ -1057,22 +1014,18 @@ else:
 
     elif pagina == "Cursos":
         st.subheader("Análises de Cursos")
-        filters_container = st.container()
-        with filters_container:
-            st.markdown("##### Filtros")
-            col_f1, col_f2, col_f3 = st.columns(3)
-            apenas_eqman = col_f1.checkbox("Apenas EqMan", key="cur_eqman")
-            apenas_in    = col_f2.checkbox("Apenas IN", key="cur_in")
-            apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="cur_gvi")
+        # FILTROS REMOVIDOS
+        
         content_container = st.container()
         with content_container:
             if df_eventos.empty:
                 st.write("Sem dados de cursos registrados.")
             else:
                 df_cursos = df_eventos[df_eventos["Tipo"] == "Curso"].copy()
-                df_cursos = filtrar_eventos(df_cursos, apenas_eqman, apenas_in, apenas_gvi)
+                # Sem filtros
+                
                 if df_cursos.empty:
-                    st.info("Nenhum curso cadastrado na visão atual.")
+                    st.info("Nenhum curso cadastrado.")
                 else:
                     realizados = df_cursos[df_cursos["Fim"] < hoje].copy()
                     inscritos  = df_cursos[df_cursos["Fim"] >= hoje].copy()
@@ -1126,7 +1079,7 @@ else:
                         
                         if not df_dias.empty:
                             df_dias_cursos = df_dias[df_dias["Tipo"] == "Curso"].copy()
-                            df_dias_cursos = filtrar_dias(df_dias_cursos, apenas_eqman, apenas_in, apenas_gvi)
+                            # Sem filtros
                             if not df_dias_cursos.empty:
                                 df_dias_cursos["Mes"] = df_dias_cursos["Data"].dt.to_period("M").dt.to_timestamp()
                                 df_curso_mes = (df_dias_cursos[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
