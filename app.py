@@ -10,9 +10,9 @@ from googleapiclient.discovery import build
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.0.0 (Redesign Moderno - Light/Dark)"
+SCRIPT_VERSION = "v1.1.0 (Amezia Theme - Dashboard Style)"
 
-# Configuração do Plotly para ser neutro/transparente
+# Configuração do Plotly
 pio.templates.default = "plotly"
 
 # ============================================================
@@ -24,99 +24,112 @@ st.set_page_config(
     page_icon="logo_npamacau.png"
 )
 
-# --- CSS global / tema moderno adaptativo ---
+# --- CSS global / TEMA AMEZIA ---
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700&family=Poppins:wght@400;500;600;700&display=swap');
 
     :root {
-        --primary-color: #3b82f6;
-        --success-color: #10b981;
-        --warning-color: #f59e0b;
-        --danger-color: #ef4444;
-        --card-bg-light: rgba(255, 255, 255, 0.85);
-        --card-bg-dark: rgba(30, 41, 59, 0.7);
-        --card-border-light: rgba(226, 232, 240, 0.8);
-        --card-border-dark: rgba(51, 65, 85, 0.6);
-        --shadow-light: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        --shadow-dark: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        /* Amezia Colors */
+        --amezia-blue: #4099ff;
+        --amezia-pink: #ff5370;
+        --amezia-green: #2ed8b6;
+        --amezia-orange: #ffb64d;
+        --amezia-dark-bg: #1a2035;
+        --amezia-dark-card: #202940;
+        --amezia-light-bg: #f4f7f6;
+        --amezia-light-card: #ffffff;
+        --text-dark: #aab8c5;
+        --text-light: #3e4b5b;
     }
 
     * {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Nunito Sans', sans-serif;
     }
 
     h1, h2, h3, h4, h5, h6 {
-        font-family: 'Outfit', sans-serif !important;
+        font-family: 'Poppins', sans-serif !important;
         font-weight: 600 !important;
-        letter-spacing: -0.02em;
     }
 
-    /* Ajustes gerais do App */
-    .stApp {
-        /* O background é gerenciado pelo tema do Streamlit, mas podemos adicionar um gradiente sutil se desejado */
-    }
-
-    /* Cards de métricas (Glassmorphism Adaptativo) */
-    div[data-testid="metric-container"] {
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border-radius: 1rem;
-        padding: 1.2rem;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    /* Dark Mode overrides para cards */
-    @media (prefers-color-scheme: dark) {
-        div[data-testid="metric-container"] {
-            background: var(--card-bg-dark);
-            border: 1px solid var(--card-border-dark);
-            box-shadow: var(--shadow-dark);
-        }
-    }
-
-    /* Light Mode overrides para cards (assumindo default do browser ou tema claro) */
-    @media (prefers-color-scheme: light) {
-        div[data-testid="metric-container"] {
-            background: var(--card-bg-light);
-            border: 1px solid var(--card-border-light);
-            box-shadow: var(--shadow-light);
-        }
+    /* HEADER STYLE (Blue Top Bar mimic) */
+    header[data-testid="stHeader"] {
+        background-image: linear-gradient(to right, #4099ff, #73b4ff);
+        color: white !important;
     }
     
-    /* Forçar estilos baseados na classe do Streamlit se disponível, ou fallback */
-    /* Streamlit injeta classes, mas o media query é mais robusto para 'auto' */
-
-    div[data-testid="metric-container"]:hover {
-        transform: translateY(-2px);
+    /* Ajuste para o texto do menu hamburguer ficar visível no header azul */
+    header[data-testid="stHeader"] button {
+        color: white !important;
     }
 
+    /* Cards de métricas (Amezia Style) */
+    div[data-testid="metric-container"] {
+        border-radius: 5px;
+        padding: 1.5rem;
+        transition: all 0.3s ease-in-out;
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* Dark Mode Cards */
+    @media (prefers-color-scheme: dark) {
+        div[data-testid="metric-container"] {
+            background: var(--amezia-dark-card);
+            box-shadow: 0 4px 24px 0 rgb(34 41 47 / 10%);
+            color: var(--text-dark);
+        }
+        .stApp {
+            background-color: var(--amezia-dark-bg);
+        }
+    }
+
+    /* Light Mode Cards */
+    @media (prefers-color-scheme: light) {
+        div[data-testid="metric-container"] {
+            background: var(--amezia-light-card);
+            box-shadow: 0 1px 20px 0 rgba(69,90,100,0.08);
+            color: var(--text-light);
+        }
+        .stApp {
+            background-color: var(--amezia-light-bg);
+        }
+    }
+
+    /* Bordas coloridas para simular os cards do Amezia */
+    /* Como não conseguimos selecionar o "primeiro" ou "segundo" card via CSS puro do Streamlit de forma robusta,
+       vamos aplicar uma borda padrão azul ou usar classes se pudéssemos injetar HTML. 
+       Vamos usar um truque: hover effect colorido. */
+    
+    div[data-testid="metric-container"]:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px -5px rgba(64, 153, 255, 0.3);
+    }
+    
     div[data-testid="metric-container"] > label {
         font-size: 0.85rem;
-        font-weight: 500;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        opacity: 0.8;
-    }
-
-    /* Dataframes */
-    .stDataFrame {
-        border-radius: 0.75rem;
-        overflow: hidden;
+        letter-spacing: 0.5px;
+        opacity: 0.7;
     }
 
     /* Sidebar */
     section[data-testid="stSidebar"] {
-        border-right: 1px solid rgba(148, 163, 184, 0.1);
+        /* Tentar forçar um look dark sidebar mesmo no light mode, comum em dashboards */
+        background-color: #202940; 
+    }
+    
+    section[data-testid="stSidebar"] * {
+        color: #aab8c5 !important;
     }
 
-    /* NAV LATERAL (Radio Buttons Customizados) */
+    /* NAV LATERAL (Amezia Style) */
     section[data-testid="stSidebar"] div[role="radiogroup"] {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
-        margin-top: 1rem;
+        gap: 5px;
+        margin-top: 20px;
     }
 
     section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {
@@ -124,99 +137,91 @@ st.markdown(
     }
 
     section[data-testid="stSidebar"] div[role="radiogroup"] label {
-        padding: 0.5rem 0.75rem;
-        border-radius: 0.5rem;
+        padding: 10px 15px;
+        border-radius: 4px;
         cursor: pointer;
         font-weight: 500;
-        transition: all 0.2s ease;
-        border-left: 3px solid transparent;
+        transition: all 0.3s ease;
+        border-left: 0px solid transparent;
     }
 
     /* Hover */
     section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
-        background: rgba(148, 163, 184, 0.1);
+        background: rgba(255, 255, 255, 0.05);
+        color: #fff !important;
     }
 
     /* Selecionado */
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
-        background: rgba(59, 130, 246, 0.1); /* Blue tint */
-        border-left: 3px solid var(--primary-color);
-        color: var(--primary-color) !important;
-    }
-    
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] span {
-        font-weight: 600;
+        background: linear-gradient(to right, #4099ff, #73b4ff);
+        color: #fff !important;
+        box-shadow: 0 5px 10px 2px rgba(64, 153, 255, 0.19);
     }
 
-    /* Gráficos Plotly */
-    .js-plotly-plot {
-        border-radius: 0.75rem;
+    /* Dataframes */
+    .stDataFrame {
+        border-radius: 5px;
     }
 
-    /* CARD AGENDA GOOGLE */
+    /* Agenda Card */
     .agenda-card {
-        padding: 1rem;
-        border-radius: 0.75rem;
-        margin-bottom: 0.75rem;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 15px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-left: 4px solid var(--primary-color);
+        border-left: 4px solid var(--amezia-blue);
         transition: transform 0.2s;
     }
-    
+
     @media (prefers-color-scheme: dark) {
         .agenda-card {
-            background-color: rgba(30, 41, 59, 0.6);
+            background-color: var(--amezia-dark-card);
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
         .agenda-date {
-            background-color: rgba(15, 23, 42, 0.8);
-            color: #cbd5e1;
-        }
-    }
-    
-    @media (prefers-color-scheme: light) {
-        .agenda-card {
-            background-color: #ffffff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            border: 1px solid #e2e8f0;
-        }
-        .agenda-date {
-            background-color: #f1f5f9;
-            color: #475569;
+            background-color: rgba(0,0,0,0.2);
+            color: #fff;
         }
     }
 
-    .agenda-card:hover {
-        transform: translateX(4px);
+    @media (prefers-color-scheme: light) {
+        .agenda-card {
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .agenda-date {
+            background-color: #f4f7f6;
+            color: #333;
+        }
     }
     
     .agenda-date {
-        padding: 0.35rem 0.75rem;
-        border-radius: 0.5rem;
-        font-size: 0.85rem;
-        font-family: 'Outfit', monospace;
-        font-weight: 600;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-family: monospace;
     }
+
     </style>
     """,
     unsafe_allow_html=True
 )
 
 # Cabeçalho: logo + título
-col_logo, col_title = st.columns([1, 6])
+col_logo, col_title = st.columns([1, 8])
 with col_logo:
     try:
-        st.image("logo_npamacau.png", width=70)
+        st.image("logo_npamacau.png", width=60)
     except Exception:
         st.write("⚓")
 with col_title:
     st.markdown(
         """
-        <h1 style="margin-top: 0.5rem; font-size: 2.2rem;">
-            Navio-Patrulha Macau
-        </h1>
+        <h2 style="margin: 0; padding-top: 10px; color: var(--amezia-blue);">
+            Navio-Patrulha Macau <span style="font-size: 0.6em; opacity: 0.6; color: gray;">| Dashboard</span>
+        </h2>
         """,
         unsafe_allow_html=True
     )
@@ -572,8 +577,11 @@ col4.metric("Prontidão (global)", f"{percentual_global:.1f}%")
 
 
 # ============================================================
-# 10. GRÁFICO DE PIZZA MODERNO (Função Helper)
+# 10. GRÁFICO DE PIZZA MODERNO (Amezia Colors)
 # ============================================================
+
+# Cores do tema Amezia
+AMEZIA_COLORS = ["#4099ff", "#ff5370", "#2ed8b6", "#ffb64d", "#a3a3a3"]
 
 def update_fig_layout(fig, title=None):
     """Aplica o tema transparente e fontes modernas aos gráficos."""
@@ -582,12 +590,11 @@ def update_fig_layout(fig, title=None):
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(
-            family="'Inter', sans-serif",
-            # A cor da fonte será automática pelo Plotly ou adaptada se necessário,
-            # mas para garantir contraste em ambos os modos, deixamos o padrão ou usamos uma cor neutra se o fundo for fixo.
-            # Como o fundo é transparente, o texto padrão do Plotly costuma adaptar-se ao tema do Streamlit.
+            family="'Nunito Sans', sans-serif",
+            size=12
         ),
         margin=dict(t=60, b=20, l=20, r=20),
+        colorway=AMEZIA_COLORS
     )
     return fig
 
@@ -596,14 +603,17 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
         df_motivos_dias,
         names="MotivoAgrupado",
         values="Duracao_dias",
-        hole=0.5,
+        hole=0.7, # Donut chart mais fino como no Amezia
+        color_discrete_sequence=AMEZIA_COLORS
     )
     fig.update_traces(
         textposition="inside",
         textinfo="percent+label",
-        hovertemplate="<b>%{label}</b><br>%{value} dias (%{percent})<extra></extra>"
+        hovertemplate="<b>%{label}</b><br>%{value} dias (%{percent})<extra></extra>",
+        marker=dict(line=dict(color='#ffffff', width=2))
     )
     update_fig_layout(fig, titulo)
+    # Adicionar anotação no centro se quiser
     return fig
 
 
@@ -673,7 +683,7 @@ if pagina == "Presentes":
             fig_pr.update_traces(
                 texttemplate="%{x:.1f}%",
                 textposition="inside",
-                marker_color="#10b981" # Emerald green
+                marker_color="#2ed8b6" # Amezia Teal
             )
             update_fig_layout(fig_pr)
             fig_pr.update_layout(height=160, xaxis=dict(title="%"), yaxis=dict(title=""))
@@ -831,7 +841,8 @@ elif pagina == "Linha do Tempo":
                     y="Nome",
                     color="MotivoAgrupado",
                     hover_data=["Posto", "Escala", "EqMan", "GVI", "IN", "MotivoAgrupado"],
-                    title="Cronograma de Ausências"
+                    title="Cronograma de Ausências",
+                    color_discrete_sequence=AMEZIA_COLORS
                 )
                 fig.update_yaxes(autorange="reversed")
                 fig.update_xaxes(
@@ -844,7 +855,7 @@ elif pagina == "Linha do Tempo":
                     x=hoje,
                     line_width=2,
                     line_dash="dash",
-                    line_color="#f97316"
+                    line_color="#ff5370" # Amezia Pink
                 )
                 update_fig_layout(fig)
                 st.plotly_chart(fig, use_container_width=True)
@@ -917,7 +928,8 @@ elif pagina == "Estatísticas & Análises":
                     y="Duracao_dias",
                     color="Posto",
                     title="Top 10 – Dias de ausência por militar",
-                    labels={"Duracao_dias": "Dias de ausência"}
+                    labels={"Duracao_dias": "Dias de ausência"},
+                    color_discrete_sequence=AMEZIA_COLORS
                 )
                 update_fig_layout(fig_top10)
                 st.plotly_chart(fig_top10, use_container_width=True)
@@ -941,13 +953,15 @@ elif pagina == "Estatísticas & Análises":
                             .reset_index(name="Media_ausentes_dia")
                         )
 
-                        fig_mensal = px.line(
+                        # Gráfico de área com gradiente (simulado com fill='tozeroy')
+                        fig_mensal = px.area(
                             df_mensal,
                             x="Mes",
                             y="Media_ausentes_dia",
                             markers=True,
                             title="Média de Ausentes por Dia – por Mês",
-                            labels={"Mes": "Mês", "Media_ausentes_dia": "Média de ausentes/dia"}
+                            labels={"Mes": "Mês", "Media_ausentes_dia": "Média de ausentes/dia"},
+                            color_discrete_sequence=["#4099ff"] # Blue
                         )
                         update_fig_layout(fig_mensal)
                         st.plotly_chart(fig_mensal, use_container_width=True)
@@ -1016,7 +1030,8 @@ elif pagina == "Férias":
                     x="Escala",
                     y="Militares",
                     title="Quantidade de militares com férias por escala",
-                    labels={"Militares": "Militares em férias (no ano)"}
+                    labels={"Militares": "Militares em férias (no ano)"},
+                    color_discrete_sequence=AMEZIA_COLORS
                 )
                 update_fig_layout(fig_escala)
                 col_fx1.plotly_chart(fig_escala, use_container_width=True)
@@ -1039,7 +1054,8 @@ elif pagina == "Férias":
                             x="Mes",
                             y="Militares",
                             title="Quantidade de militares com férias previstas por mês",
-                            labels={"Mes": "Mês", "Militares": "Militares com férias no mês"}
+                            labels={"Mes": "Mês", "Militares": "Militares com férias no mês"},
+                            color_discrete_sequence=["#ffb64d"] # Orange
                         )
                         update_fig_layout(fig_mes_ferias)
                         col_fx2.plotly_chart(fig_mes_ferias, use_container_width=True)
@@ -1069,7 +1085,8 @@ elif pagina == "Férias":
                             df_pizza_ferias,
                             names="Categoria",
                             values="Valor",
-                            hole=0.55
+                            hole=0.7,
+                            color_discrete_sequence=["#2ed8b6", "#ff5370"] # Teal (Success) and Pink (Fail)
                         )
                         fig_pizza_ferias.update_traces(
                             textposition="inside",
@@ -1172,7 +1189,8 @@ elif pagina == "Cursos":
                         x="Motivo",
                         y="Militares",
                         title="Cursos mais frequentes (militares que já realizaram)",
-                        labels={"Motivo": "Curso", "Militares": "Militares"}
+                        labels={"Motivo": "Curso", "Militares": "Militares"},
+                        color_discrete_sequence=["#4099ff"]
                     )
                     update_fig_layout(fig_cursos_freq)
                     col_g1.plotly_chart(fig_cursos_freq, use_container_width=True)
@@ -1190,13 +1208,14 @@ elif pagina == "Cursos":
                                 .nunique()
                                 .reset_index(name="Militares")
                             )
-                            fig_curso_mes = px.line(
+                            fig_curso_mes = px.area(
                                 df_curso_mes,
                                 x="Mes",
                                 y="Militares",
                                 markers=True,
                                 title="Militares em curso por mês",
-                                labels={"Mes": "Mês", "Militares": "Militares em curso"}
+                                labels={"Mes": "Mês", "Militares": "Militares em curso"},
+                                color_discrete_sequence=["#ff5370"]
                             )
                             update_fig_layout(fig_curso_mes)
                             col_g2.plotly_chart(fig_curso_mes, use_container_width=True)
