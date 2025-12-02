@@ -13,9 +13,6 @@ st.set_page_config(
     page_icon="logo_npamacau.png"
 )
 
-# 🔺 Versão do app – incrementa a cada alteração de script
-APP_VERSION = "v2.5.0"
-
 # --- CSS global / tema ---
 st.markdown(
     """
@@ -36,7 +33,6 @@ st.markdown(
         letter-spacing: 0.03em;
     }
 
-    /* Título com fonte Raleway em negrito */
     h1 {
         font-family: 'Raleway', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         font-weight: 700 !important;
@@ -57,25 +53,21 @@ st.markdown(
         letter-spacing: 0.08em;
     }
 
-    /* Tabs - estilo minimalista, sem efeito "vidro" nem retângulo */
+    /* Tabs - estilo minimalista, sem contorno verde */
     button[data-baseweb="tab"] {
         font-weight: 600;
-        border-radius: 0 !important;
+        border-radius: 999px !important;
         padding: 0.4rem 1rem !important;
         margin-right: 0.3rem;
         border: none;
-        background: transparent;
-        color: #9ca3af;
     }
     button[data-baseweb="tab"]:hover {
-        background: transparent;
-        color: #e5e7eb;
+        background: #0b1120;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        background: transparent;
+        background: #0b1120;
         color: #e5e7eb;
-        box-shadow: none;
-        border-bottom: 2px solid #38bdf8;
+        box-shadow: 0 2px 0 0 #38bdf8 inset;
     }
 
     .stDataFrame {
@@ -164,11 +156,11 @@ def descobrir_ausencias_triplets(df: pd.DataFrame):
     triplets = []
 
     for col in df.columns:
-        if not str(col).startswith("Início"):
+        if not col.startswith("Início"):
             continue
 
         # Sufixo: "", ".1", ".2", ...
-        parts = str(col).split(".", 1)
+        parts = col.split(".", 1)
         if len(parts) == 1:
             sufixo = ""
         else:
@@ -436,48 +428,17 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 
 
 # ============================================================
-# 11. % DE FÉRIAS GLOBAIS A PARTIR DE %DG
-# ============================================================
-
-def calcular_percentual_ferias_global(df_raw: pd.DataFrame):
-    """
-    Usa a coluna '%DG' da planilha (que é justamente a % de férias gozadas por militar)
-    e calcula a média dela. Isso equivale, na prática, ao valor que você tem em V2.
-    """
-    if "%DG" not in df_raw.columns:
-        return None
-
-    serie = df_raw["%DG"]
-
-    # Converte para número, tratando vírgula e sinal de porcentagem, se existirem
-    serie_str = serie.astype(str).str.replace("%", "", regex=False).str.replace(",", ".", regex=False)
-    valores = pd.to_numeric(serie_str, errors="coerce")
-
-    if valores.dropna().empty:
-        return None
-
-    media = valores.mean(skipna=True)
-
-    # Se vier em 0–100, normaliza para 0–1
-    if media > 1.5:
-        media = media / 100.0
-
-    media = max(0.0, min(1.0, media))
-    return media
-
-
-# ============================================================
-# 12. TABS PRINCIPAIS
+# 11. TABS PRINCIPAIS
 # ============================================================
 
 tab_presentes, tab_ausentes, tab_gantt, tab_stats, tab_ferias, tab_cursos, tab_log = st.tabs([
-    "Presentes",
-    "Ausentes",
-    "Linha do Tempo (Gantt)",
-    "Estatísticas & Análises",
-    "Férias",
-    "Cursos",
-    "Log / Debug"
+    "🟢 Presentes",
+    "📋 Ausentes",
+    "📅 Linha do Tempo (Gantt)",
+    "📊 Estatísticas & Análises",
+    "🏖️ Férias",
+    "🎓 Cursos",
+    "🛠 Log / Debug"
 ])
 
 # ------------------------------------------------------------
@@ -512,13 +473,6 @@ with tab_presentes:
     else:
         tabela = df_presentes[["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"]].copy()
         tabela = tabela.rename(columns={"Gvi/GP": "GVI/GP"})
-
-        # GVI/GP e IN como SIM / NÃO
-        if "GVI/GP" in tabela.columns:
-            tabela["GVI/GP"] = tabela["GVI/GP"].apply(lambda v: "SIM" if parse_bool(v) else "NÃO")
-        if "IN" in tabela.columns:
-            tabela["IN"] = tabela["IN"].apply(lambda v: "SIM" if parse_bool(v) else "NÃO")
-
         st.dataframe(tabela, use_container_width=True, hide_index=True)
 
 
@@ -602,8 +556,8 @@ with tab_gantt:
                 x_start="Inicio",
                 x_end="Fim",
                 y="Nome",
-                color="Tipo",  # Férias, Curso, Outros
-                hover_data=["Posto", "Escala", "EqMan", "GVI", "IN", "Motivo"],
+                color="Motivo",
+                hover_data=["Posto", "Escala", "EqMan", "GVI", "IN", "Tipo"],
                 title="Cronograma de Ausências"
             )
             fig.update_yaxes(autorange="reversed")
@@ -662,14 +616,9 @@ with tab_stats:
 
             st.markdown("---")
 
-            # Para o gráfico de pizza, qualquer motivo que comece com "CURSO" vira "CURSO"
-            df_evt_plot = df_evt.copy()
-            df_evt_plot["Motivo"] = df_evt_plot["Motivo"].apply(
-                lambda m: "CURSO" if isinstance(m, str) and m.upper().startswith("CURSO") else m
-            )
-
+            # Gráfico de motivos – donut moderno
             df_motivos_dias = (
-                df_evt_plot.groupby("Motivo")["Duracao_dias"]
+                df_evt.groupby("Motivo")["Duracao_dias"]
                 .sum()
                 .reset_index()
                 .sort_values("Duracao_dias", ascending=False)
@@ -765,7 +714,7 @@ with tab_ferias:
             tabela_ferias = tabela_ferias.rename(columns={"Duracao_dias": "Dias"})
             tabela_ferias = tabela_ferias.sort_values(by=["Nome", "Início"])
 
-            st.markdown("### Todos os períodos de férias registrados")
+            st.markdown("### 📋 Todos os períodos de férias registrados")
             st.dataframe(tabela_ferias, use_container_width=True, hide_index=True)
 
             st.markdown("---")
@@ -833,43 +782,6 @@ with tab_ferias:
             else:
                 col_fx2.info("Sem expansão diária para análise mensal.")
 
-            # 3 - Pizza com % de férias já gozadas (coluna %DG)
-            st.markdown("---")
-            st.subheader("Percentual médio de férias já gozadas (%DG)")
-
-            perc_ferias = calcular_percentual_ferias_global(df_raw)
-            if perc_ferias is not None:
-                df_pct = pd.DataFrame({
-                    "Status": ["Gozadas", "Restantes"],
-                    "Valor": [perc_ferias, 1 - perc_ferias]
-                })
-
-                fig_pct = px.pie(
-                    df_pct,
-                    names="Status",
-                    values="Valor",
-                    hole=0.45
-                )
-                fig_pct.update_traces(
-                    textposition="inside",
-                    textinfo="percent+label",
-                    hovertemplate="<b>%{label}</b><br>%{percent}<extra></extra>"
-                )
-                fig_pct.update_layout(
-                    title="Percentual médio de férias gozadas pela tripulação",
-                    showlegend=True,
-                    margin=dict(t=60, b=20, l=0, r=0),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    font=dict(
-                        family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-                        color="#e5e7eb"
-                    )
-                )
-                st.plotly_chart(fig_pct, use_container_width=True)
-            else:
-                st.info("Não foi possível calcular a média da coluna %DG. Verifique se ela está preenchida corretamente.")
-
 
 # ------------------------------------------------------------
 # TAB 6 – CURSOS
@@ -899,7 +811,7 @@ with tab_cursos:
 
             # Cursos já realizados
             with col_c1:
-                st.markdown("### Cursos já realizados")
+                st.markdown("### ✅ Cursos já realizados")
                 if realizados.empty:
                     st.info("Nenhum curso finalizado até a data de referência.")
                 else:
@@ -913,7 +825,7 @@ with tab_cursos:
 
             # Cursos em andamento / futuros
             with col_c2:
-                st.markdown("### Cursos em andamento / futuros")
+                st.markdown("### 📌 Cursos em andamento / futuros")
                 if inscritos.empty:
                     st.info("Nenhum militar com curso em andamento ou futuro.")
                 else:
@@ -1004,7 +916,7 @@ with tab_cursos:
 with tab_log:
     st.subheader("Log / Debug")
 
-    st.markdown("### df_raw (dados brutos do Google Sheets)")
+    st.markdown("### 🔹 df_raw (dados brutos do Google Sheets)")
     st.write(f"Total de linhas em df_raw: **{len(df_raw)}**")
     st.write("Colunas disponíveis em df_raw:")
     st.write(list(df_raw.columns))
@@ -1013,7 +925,20 @@ with tab_log:
     st.dataframe(df_raw.head(15), use_container_width=True)
 
     st.markdown("---")
-    st.markdown("### df_eventos (eventos gerados)")
+    st.markdown("### 🔹 Mapeamento de Ausências (Início/FIm/Motivo/Curso)")
+
+    if AUSENCIAS_TRIPLETS:
+        debug_rows = []
+        for idx, (c_ini, c_fim, c_mot, tipo_base) in enumerate(AUSENCIAS_TRIPLETS, start=1):
+            debug_rows.append(
+                {"Bloco": idx, "Col_Inicio": c_ini, "Col_Fim": c_fim, "Col_Motivo/Curso": c_mot, "Tipo_base": tipo_base}
+            )
+        st.dataframe(pd.DataFrame(debug_rows), use_container_width=True)
+    else:
+        st.info("Nenhum trio Início/FIm/Motivo/Curso encontrado.")
+
+    st.markdown("---")
+    st.markdown("### 🔹 df_eventos (eventos gerados)")
 
     st.write(f"Total de eventos em df_eventos: **{len(df_eventos)}**")
 
@@ -1027,12 +952,12 @@ with tab_log:
 
 
 # ============================================================
-# 13. RODAPÉ
+# 12. RODAPÉ
 # ============================================================
 st.markdown("<hr style='border-color:#1f2937; margin-top:2rem;'/>", unsafe_allow_html=True)
 st.markdown(
-    f"<div style='text-align:center; color:#9ca3af; padding:0.5rem 0;'>"
-    f"Created by <strong>Klismann Freitas</strong> · Versão {APP_VERSION}"
-    f"</div>",
+    "<div style='text-align:center; color:#9ca3af; padding:0.5rem 0;'>"
+    "Created by <strong>Klismann Freitas</strong>"
+    "</div>",
     unsafe_allow_html=True
 )
