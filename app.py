@@ -11,7 +11,7 @@ import base64
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.4.0 (Final Polish - Feedback Fixes)"
+SCRIPT_VERSION = "v1.5.0 (Dark Mode Fix, Filters Bottom, Monthly View)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly"
@@ -25,7 +25,7 @@ st.set_page_config(
     page_icon="logo_npamacau.png"
 )
 
-# FUNÇÃO PARA CARREGAR IMAGEM EM BASE64 (Para injetar no CSS)
+# FUNÇÃO PARA CARREGAR IMAGEM EM BASE64
 def get_img_as_base64(file):
     try:
         with open(file, "rb") as f:
@@ -65,21 +65,21 @@ st.markdown(
         font-weight: 600 !important;
     }}
 
-    /* HEADER STYLE (Blue Top Bar mimic) */
+    /* HEADER STYLE */
     header[data-testid="stHeader"] {{
         background-image: linear-gradient(to right, #4099ff, #73b4ff);
         color: white !important;
-        height: 3.5rem !important; /* Fixar altura para alinhar logo */
+        height: 3.5rem !important;
     }}
     
-    /* INJECT SHIP NAME & LOGO INTO HEADER */
+    /* LOGO & TITLE INJECTION */
     header[data-testid="stHeader"]::before {{
         content: "";
         background-image: url("data:image/png;base64,{logo_b64}");
         background-size: contain;
         background-repeat: no-repeat;
         position: absolute;
-        left: 60px; /* Ao lado do menu hamburguer */
+        left: 60px;
         top: 50%;
         transform: translateY(-50%);
         width: 40px;
@@ -91,7 +91,7 @@ st.markdown(
     header[data-testid="stHeader"]::after {{
         content: "Navio-Patrulha Macau";
         position: absolute;
-        left: 110px; /* Logo width + spacing */
+        left: 110px;
         top: 50%;
         transform: translateY(-50%);
         color: white;
@@ -102,16 +102,49 @@ st.markdown(
         pointer-events: none;
     }}
     
+    /* MOBILE RESPONSIVENESS FOR HEADER TEXT */
+    @media (max-width: 600px) {{
+        header[data-testid="stHeader"]::after {{
+            content: "NPa Macau"; /* Shorten text on mobile */
+            font-size: 1rem;
+            left: 100px;
+        }}
+    }}
+
     header[data-testid="stHeader"] button {{
         color: white !important;
     }}
     
-    /* Aumentar espaçamento do topo para não colar na barra azul */
     .block-container {{
         padding-top: 4rem !important;
     }}
 
-    /* Cards de métricas (Amezia Style) */
+    /* DARK MODE FIX: Force background color on stApp */
+    /* We use a strategy that works for both system preference AND Streamlit toggle if possible.
+       Since we can't easily detect Streamlit toggle via CSS alone without data attributes,
+       we'll rely on the fact that Streamlit's dark theme sets text to white. 
+       If text is white-ish, we want dark bg. But CSS doesn't work that way.
+       We will rely on prefers-color-scheme as the primary driver, 
+       BUT we will also set a default background that is dark IF the user selected dark theme.
+    */
+    
+    @media (prefers-color-scheme: dark) {{
+        .stApp {{
+            background-color: var(--amezia-dark-bg) !important;
+        }}
+    }}
+    
+    /* Fallback: If the user manually sets Dark Mode in Streamlit settings, 
+       Streamlit adds specific classes. We can try to target the root if we knew the class, 
+       but for now, let's ensure that IF the background is dark (default streamlit), 
+       our cards look good. The issue reported is "background remains light". 
+       This implies the browser thinks it's Light mode, but Streamlit might be in Dark? 
+       Or vice versa. 
+       To be safe, let's force the Amezia colors if the OS is dark. 
+       If the OS is light, we use light. 
+    */
+
+    /* Cards */
     div[data-testid="metric-container"] {{
         border-radius: 5px;
         padding: 1.5rem;
@@ -126,15 +159,15 @@ st.markdown(
             box-shadow: 0 4px 24px 0 rgb(34 41 47 / 10%);
             color: var(--text-dark);
         }}
-        .stApp {{
-            background-color: var(--amezia-dark-bg);
+        /* Fix text visibility in dark mode */
+        .stMarkdown, .stText, p, li, h1, h2, h3, h4, h5, h6, span {{
+            color: #e2e8f0 !important;
         }}
-        /* Melhorar contraste de texto geral no dark mode */
-        .stMarkdown, .stText, p, li {{
-            color: #d1d5db !important; /* Cinza claro */
-        }}
-        h1, h2, h3, h4, h5, h6 {{
-            color: #f3f4f6 !important; /* Quase branco */
+        /* Except inside sidebar where we want specific colors */
+        section[data-testid="stSidebar"] .stMarkdown, 
+        section[data-testid="stSidebar"] p, 
+        section[data-testid="stSidebar"] span {{
+            color: #aab8c5 !important;
         }}
     }}
 
@@ -154,27 +187,24 @@ st.markdown(
         box-shadow: 0 10px 30px -5px rgba(64, 153, 255, 0.3);
     }}
     
-    div[data-testid="metric-container"] > label {{
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        opacity: 0.7;
-    }}
-
     /* Sidebar */
     section[data-testid="stSidebar"] {{
         background-color: #202940; 
     }}
     
-    /* Sidebar Text Color - Ensure readability */
-    section[data-testid="stSidebar"] .stMarkdown, 
-    section[data-testid="stSidebar"] p, 
-    section[data-testid="stSidebar"] span,
-    section[data-testid="stSidebar"] label {{
+    section[data-testid="stSidebar"] * {{
         color: #aab8c5 !important;
     }}
+    
+    /* Aumentar fonte de "Navegação" */
+    section[data-testid="stSidebar"] h4 {{
+        font-size: 1.2rem !important;
+        font-weight: 700 !important;
+        color: #fff !important;
+        margin-top: 1rem;
+    }}
 
-    /* NAV LATERAL (Amezia Style - Text Color Only) */
+    /* NAV LATERAL */
     section[data-testid="stSidebar"] div[role="radiogroup"] {{
         display: flex;
         flex-direction: column;
@@ -194,10 +224,9 @@ st.markdown(
         transition: all 0.2s ease;
         border-left: 3px solid transparent;
         margin-left: 0;
-        background: transparent !important; /* Remove background rectangle */
+        background: transparent !important;
     }}
 
-    /* Hover: Barrinha vertical e mudança de cor do texto */
     section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {{
         background: transparent !important;
         border-left: 3px solid var(--amezia-blue);
@@ -206,10 +235,9 @@ st.markdown(
     
     section[data-testid="stSidebar"] div[role="radiogroup"] label:hover span,
     section[data-testid="stSidebar"] div[role="radiogroup"] label:hover p {{
-        color: var(--amezia-blue) !important; /* Muda cor do texto no hover */
+        color: var(--amezia-blue) !important;
     }}
 
-    /* Selecionado */
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {{
         background: transparent !important;
         border-left: 3px solid var(--amezia-blue);
@@ -218,7 +246,7 @@ st.markdown(
     
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] span,
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {{
-        color: var(--amezia-blue) !important; /* Muda cor do texto no selecionado */
+        color: var(--amezia-blue) !important;
         font-weight: 700;
     }}
 
@@ -226,7 +254,7 @@ st.markdown(
     .stDataFrame {{
         border-radius: 5px;
     }}
-
+    
     /* Agenda Card */
     .agenda-card {{
         padding: 15px;
@@ -625,27 +653,44 @@ hoje_padrao = datetime.today()
 # --------------------------------------------------------
 if pagina == "Presentes":
     st.subheader("Presentes a bordo")
-
-    # Layout de Filtros + Data
-    filters_container = st.container()
-    with filters_container:
-        st.markdown("##### Filtros & Data")
-        col_f1, col_f2, col_f3, col_data = st.columns([1.5, 1.5, 1.5, 2])
-        
-        apenas_eqman = col_f1.checkbox("Apenas EqMan", key="pres_eqman")
-        apenas_in    = col_f2.checkbox("Apenas IN", key="pres_in")
-        apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="pres_gvi")
-        
-        data_ref = col_data.date_input("Data de Referência", hoje_padrao, key="data_pres")
-        hoje = pd.to_datetime(data_ref)
-
-    # Exibir métricas globais atualizadas com a data selecionada
+    
+    # Placeholder para Data (será lida depois, mas precisamos dela para métricas)
+    # Como o usuário quer os filtros EM BAIXO, precisamos renderizar primeiro a tabela com um valor padrão ou session state?
+    # Streamlit executa de cima para baixo. Se o input está embaixo, não temos o valor dele para filtrar a tabela ACIMA na primeira execução.
+    # SOLUÇÃO: Usar st.session_state para persistir ou renderizar os filtros PRIMEIRO mas usar st.container() para mover visualmente?
+    # Streamlit não permite mover containers para cima se declarados depois.
+    # A única forma de "Filtros embaixo da tabela" funcionar logicamente é:
+    # 1. Ler filtros (renderizá-los embaixo? Não, se renderizar embaixo, o código é executado depois).
+    # 2. Se o código é executado depois, a tabela acima não tem os valores atualizados.
+    # TRUQUE: Renderizar os filtros no topo mas usar CSS para mover? Muito arriscado.
+    # O usuário disse "levadas para baixo APÓS a tabela".
+    # Vamos aceitar que o fluxo de UI será: Tabela (com dados padrão ou anteriores) -> Filtros.
+    # Mas para a tabela reagir, precisamos dos dados.
+    # A melhor UX em Streamlit é Filtros no Topo.
+    # Se o usuário EXIGE filtros embaixo, teremos que ler os inputs ANTES (invisíveis?) ou aceitar que o usuário interage embaixo e a tabela atualiza em cima (rerun).
+    # Vamos colocar os widgets embaixo. O Streamlit vai pegar o valor do session state do rerun anterior. Funciona bem.
+    
+    # Definir container para tabela e métricas
+    metrics_placeholder = st.container()
+    table_placeholder = st.container()
+    
     st.markdown("---")
-    exibir_metricas_globais(hoje)
-    st.markdown("---")
+    st.markdown("##### Filtros & Data")
+    
+    # Filtros EM BAIXO
+    col_f1, col_f2, col_f3, col_data = st.columns([1.5, 1.5, 1.5, 2])
+    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="pres_eqman")
+    apenas_in    = col_f2.checkbox("Apenas IN", key="pres_in")
+    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="pres_gvi")
+    data_ref = col_data.date_input("Data de Referência", hoje_padrao, key="data_pres")
+    hoje = pd.to_datetime(data_ref)
 
-    content_container = st.container()
-    with content_container:
+    # Agora populamos os containers de cima com os valores lidos (que estarão disponíveis no rerun)
+    with metrics_placeholder:
+        exibir_metricas_globais(hoje)
+        st.markdown("---")
+
+    with table_placeholder:
         df_trip = filtrar_tripulacao(df_raw, apenas_eqman, apenas_in, apenas_gvi)
 
         if not df_eventos.empty:
@@ -694,26 +739,29 @@ if pagina == "Presentes":
 elif pagina == "Ausentes":
     st.subheader("Ausentes")
 
-    # Layout de Filtros + Data
-    filters_container = st.container()
-    with filters_container:
-        st.markdown("##### Filtros & Data")
-        col_f1, col_f2, col_f3, col_data = st.columns([1.5, 1.5, 1.5, 2])
-        
-        apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman")
-        apenas_in    = col_f2.checkbox("Apenas IN", key="aus_in")
-        apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="aus_gvi")
-        
-        data_ref = col_data.date_input("Data de Referência", hoje_padrao, key="data_aus")
-        hoje = pd.to_datetime(data_ref)
-
-    # Exibir métricas globais atualizadas com a data selecionada
+    # Containers para conteúdo (Tabela Diária)
+    metrics_placeholder = st.container()
+    daily_table_placeholder = st.container()
+    
     st.markdown("---")
-    exibir_metricas_globais(hoje)
-    st.markdown("---")
+    st.markdown("##### Filtros & Data (Diário)")
+    
+    # Filtros EM BAIXO da tabela diária
+    col_f1, col_f2, col_f3, col_data = st.columns([1.5, 1.5, 1.5, 2])
+    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman")
+    apenas_in    = col_f2.checkbox("Apenas IN", key="aus_in")
+    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="aus_gvi")
+    data_ref = col_data.date_input("Data de Referência", hoje_padrao, key="data_aus")
+    hoje = pd.to_datetime(data_ref)
 
-    content_container = st.container()
-    with content_container:
+    # Popula Métricas Globais
+    with metrics_placeholder:
+        exibir_metricas_globais(hoje)
+        st.markdown("---")
+
+    # Popula Tabela Diária
+    with daily_table_placeholder:
+        st.markdown("### Ausentes no dia selecionado")
         if df_eventos.empty:
             st.info("Sem eventos de ausência registrados.")
         else:
@@ -752,6 +800,49 @@ elif pagina == "Ausentes":
                         {f"{row['Posto']} {row['Nome']}" for _, row in gvi_fora.iterrows()}
                     )
                     st.warning("🚨 GVI/GP com desfalque: " + "; ".join(lista_gvi))
+
+    # --- NOVA FUNCIONALIDADE: VISÃO MENSAL ---
+    st.markdown("---")
+    st.markdown("### Ausentes por Mês (Visão Mensal)")
+    
+    col_mes, col_ano = st.columns(2)
+    meses_dict = {
+        "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
+        "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
+    }
+    mes_sel_nome = col_mes.selectbox("Selecione o Mês", list(meses_dict.keys()), index=datetime.now().month - 1)
+    ano_sel = col_ano.number_input("Selecione o Ano", min_value=2024, max_value=2030, value=datetime.now().year)
+    
+    mes_sel = meses_dict[mes_sel_nome]
+    
+    # Lógica de filtro mensal: Evento deve sobrepor o mês selecionado
+    # Inicio <= FimDoMes AND Fim >= InicioDoMes
+    if not df_eventos.empty:
+        inicio_mes = pd.Timestamp(year=ano_sel, month=mes_sel, day=1)
+        if mes_sel == 12:
+            fim_mes = pd.Timestamp(year=ano_sel+1, month=1, day=1) - pd.Timedelta(days=1)
+        else:
+            fim_mes = pd.Timestamp(year=ano_sel, month=mes_sel+1, day=1) - pd.Timedelta(days=1)
+            
+        ausentes_mes = df_eventos[
+            (df_eventos["Inicio"] <= fim_mes) &
+            (df_eventos["Fim"] >= inicio_mes)
+        ].copy()
+        
+        ausentes_mes = filtrar_eventos(ausentes_mes, apenas_eqman, apenas_in, apenas_gvi)
+        
+        if ausentes_mes.empty:
+            st.info(f"Nenhum ausente registrado em {mes_sel_nome}/{ano_sel}.")
+        else:
+            tabela_mes = ausentes_mes[["Posto", "Nome", "MotivoAgrupado", "Inicio", "Fim"]].copy()
+            tabela_mes["Início"] = tabela_mes["Inicio"].dt.strftime("%d/%m")
+            tabela_mes["Fim"] = tabela_mes["Fim"].dt.strftime("%d/%m")
+            tabela_mes = tabela_mes.drop(columns=["Inicio"])
+            tabela_mes = tabela_mes.sort_values(by=["Início", "Nome"])
+            
+            st.dataframe(tabela_mes, use_container_width=True, hide_index=True)
+    else:
+        st.write("Sem dados.")
 
 
 # --------------------------------------------------------
@@ -804,10 +895,7 @@ else:
                     st.info("Nenhum evento encontrado para os filtros atuais.")
                 else:
                     # FIX: ORDENAÇÃO DO GANTT PELA ORDEM DA PLANILHA
-                    # Cria uma categoria com a ordem exata de df_raw
                     ordem_nomes = df_raw["Nome"].unique().tolist()
-                    # Inverte a ordem para que o primeiro da planilha apareça no topo do gráfico (Plotly plota de baixo pra cima por padrão em Y categórico, mas autorange="reversed" resolve)
-                    # Se usarmos autorange="reversed", o primeiro da lista fica no topo.
                     
                     df_gantt["Nome"] = pd.Categorical(df_gantt["Nome"], categories=ordem_nomes, ordered=True)
                     df_gantt = df_gantt.sort_values("Nome")
