@@ -1,5 +1,3 @@
-o codigo esta com um problema, na aba dias de mar, no grafico detalhamento mensal, todos os meses daquele ano escolhido está apresentando resposta 0.
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
