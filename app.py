@@ -203,6 +203,10 @@ st.markdown(
         padding-left: 18px;
     }}
     
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # ============================================================
 # 2. HELPERS E CONSTANTES
