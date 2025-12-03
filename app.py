@@ -197,23 +197,23 @@ st.markdown(
         background: transparent !important;
     }}
 
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {{
         background: transparent !important;
         border-left: 3px solid var(--amezia-blue);
         padding-left: 18px;
-    }
+    }}
     
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {{
         background: transparent !important;
         border-left: 3px solid var(--amezia-blue);
         box-shadow: none;
         padding-left: 18px;
-    }
+    }}
     
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {{
         color: var(--amezia-blue) !important;
         font-weight: 700 !important;
-    }
+    }}
 
     </style>
     """,
