@@ -673,9 +673,6 @@ for i, option in enumerate(options):
     
     if b64:
         # nth-child(i+1) porque CSS conta a partir de 1
-        css_icons += f"""
-    if b64:
-        # nth-child(i+1) porque CSS conta a partir de 1
         # Tentar seletor mais genérico para o texto
         css_icons += f"""
         div[role="radiogroup"] > label:nth-child({i+1}) [data-testid="stMarkdownContainer"] > p {{
