@@ -1332,6 +1332,22 @@ else:
 
         st.dataframe(df_tabela.style.map(color_scale_monthly), use_container_width=True, hide_index=True)
 
+        st.markdown("---")
+        st.markdown("#### Militares fora da escala")
+        
+        # Identificar quem NÃO está em nenhum dos serviços considerados
+        mask_in_service = pd.Series(False, index=df_raw.index)
+        for servico in SERVICOS_CONSIDERADOS:
+            mask_in_service |= df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)
+            
+        df_fora_escala = df_raw[~mask_in_service].copy()
+        
+        if df_fora_escala.empty:
+            st.info("Todos os militares estão alocados em alguma escala considerada.")
+        else:
+            st.write(f"Total de militares que não concorrem à escala: **{len(df_fora_escala)}**")
+            st.dataframe(df_fora_escala[["Posto", "Nome", target_col]], use_container_width=True, hide_index=True)
+
     elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
         st.markdown("### df_raw (dados brutos do Google Sheets)")
