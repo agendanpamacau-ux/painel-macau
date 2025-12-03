@@ -12,7 +12,7 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.9.6 (Fix Gráfico Mensal Completo)"
+SCRIPT_VERSION = "v2.0 (Fix Datas DD/MM)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly_dark"
@@ -227,6 +227,40 @@ def parse_bool(value) -> bool:
         
     return s in ("true", "1", "sim", "yes", "y", "x", "s", "ok", "v", "checked")
 
+def parse_sheet_date(val):
+    """
+    Tenta converter valor para data, assumindo DD/MM ou DD/MM/YY ou DD/MM/YYYY.
+    Se não tiver ano (DD/MM), assume o ano atual (2025).
+    """
+    if pd.isna(val) or str(val).strip() == "":
+        return pd.NaT
+    
+    val_str = str(val).strip()
+    
+    # Tenta converter direto (formato padrão do pandas/sheets)
+    try:
+        dt = pd.to_datetime(val_str, dayfirst=True, errors='coerce')
+        if pd.notna(dt):
+            # Correção ano 2 dígitos (ex: 25 -> 2025)
+            if dt.year < 2000:
+                dt = dt.replace(year=dt.year + 100)
+            return dt
+    except:
+        pass
+
+    # Tenta formato DD/MM explicitamente
+    try:
+        # Adiciona o ano atual se for apenas DD/MM
+        # Assume ano 2025 para este painel específico (Afastamento 2026 tem dados de 25 e 26)
+        # Melhor estratégia: Tentar parser com ano atual
+        dt = datetime.strptime(val_str, "%d/%m")
+        # Substitui pelo ano corrente ou um ano padrão (2025 neste contexto)
+        dt = dt.replace(year=datetime.now().year) 
+        return pd.to_datetime(dt)
+    except:
+        pass
+        
+    return pd.NaT
 
 # ============================================================
 # 3. CARGA DE DADOS
@@ -380,19 +414,15 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
         }
 
         for col_ini, col_fim, col_mot, tipo_base in blocos:
-            ini_raw = row.get(col_ini, pd.NaT)
-            fim_raw = row.get(col_fim, pd.NaT)
-            ini = pd.to_datetime(ini_raw, dayfirst=True, errors="coerce")
-            fim = pd.to_datetime(fim_raw, dayfirst=True, errors="coerce")
+            ini = parse_sheet_date(row.get(col_ini))
+            fim = parse_sheet_date(row.get(col_fim))
 
             if pd.isna(ini) or pd.isna(fim):
                 continue
+            
             if fim < ini:
                 ini, fim = fim, ini
-            if ini.year < 2000:
-                ini = ini.replace(year=ini.year + 100)
-            if fim.year < 2000:
-                fim = fim.replace(year=fim.year + 100)
+                
             dur = (fim - ini).days + 1
             if dur < 1 or dur > 365 * 2:
                 continue
@@ -467,19 +497,17 @@ df_dias = expandir_eventos_por_dia(df_eventos)
 
 def get_status_em_data(row, data_ref, blocos_cols):
     for col_ini, col_fim, col_mot, tipo_base in blocos_cols:
-        ini = row[col_ini]
-        fim = row[col_fim]
+        ini = parse_sheet_date(row.get(col_ini))
+        fim = parse_sheet_date(row.get(col_fim))
+        
         if pd.isna(ini) or pd.isna(fim): continue
-        try:
-            dt_ini = pd.to_datetime(ini, dayfirst=True, errors='coerce')
-            dt_fim = pd.to_datetime(fim, dayfirst=True, errors='coerce')
-            if pd.isna(dt_ini) or pd.isna(dt_fim): continue
-            if dt_ini <= data_ref <= dt_fim:
-                motivo = tipo_base
-                if col_mot and col_mot in row.index and not pd.isna(row[col_mot]):
-                    motivo = str(row[col_mot])
-                return motivo
-        except: continue
+        
+        if ini <= data_ref <= fim:
+            motivo = tipo_base
+            if col_mot and col_mot in row.index and not pd.isna(row[col_mot]):
+                motivo = str(row[col_mot])
+            return motivo
+            
     return "Presente"
 
 
