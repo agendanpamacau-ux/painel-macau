@@ -1,0 +1,31 @@
+<!--?xml version="1.0" encoding="UTF-8"?-->
+<svg width="50" height="50" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Ondas do mar">
+
+  <!-- Onda 1 -->
+  <path d="
+      M5 24 
+      Q 8 21 11 24 T 17 24 
+      Q 20 21 23 24 T 29 24 
+      Q 32 21 35 24 T 41 24 
+      Q 44 21 47 24
+    " fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"></path>
+
+  <!-- Onda 2 -->
+  <path d="
+      M5 31 
+      Q 8 28 11 31 T 17 31 
+      Q 20 28 23 31 T 29 31 
+      Q 32 28 35 31 T 41 31 
+      Q 44 28 47 31
+    " fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"></path>
+
+  <!-- Onda 3 -->
+  <path d="
+      M5 38 
+      Q 8 35 11 38 T 17 38 
+      Q 20 35 23 38 T 29 38 
+      Q 32 35 35 38 T 41 38 
+      Q 44 35 47 38
+    " fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"></path>
+
+</svg>
