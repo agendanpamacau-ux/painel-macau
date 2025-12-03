@@ -1257,64 +1257,64 @@ else:
                     return ""
                 st.dataframe(df_daily.style.map(color_scale_daily, subset=["Escala"]), use_container_width=True, hide_index=True)
 
-            st.markdown("---")
+                st.markdown("---")
 
-    # --- SEÇÃO 2: VISÃO MENSAL ---
-    st.markdown("#### Escala Mensal")
-    
-    # Layout: Full Width (sem colunas restritivas)
-    col_mes_sel, col_ano_sel = st.columns(2)
-    meses_dict = {
-        "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
-        "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
-    }
-    now = datetime.now()
-    sel_mes_nome = col_mes_sel.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_escala")
-    sel_ano = col_ano_sel.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_escala")
-    sel_mes = meses_dict[sel_mes_nome]
-    
-    # Gerar dias do mês
-    days_in_month = pd.Period(f"{sel_ano}-{sel_mes}-01").days_in_month
-    dates = [datetime(sel_ano, sel_mes, d) for d in range(1, days_in_month+1)]
-    
-    data_matrix = []
-    
-    for d in dates:
-        row_data = {"Dia": d.strftime("%d/%m")} # Dias do mês na primeira coluna
+        # --- SEÇÃO 2: VISÃO MENSAL ---
+        st.markdown("#### Escala Mensal")
         
-        for servico in SERVICOS_CONSIDERADOS:
-            people_in_service = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
-            if people_in_service.empty:
-                    people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
-
-            total = len(people_in_service)
-            
-            absent = 0
-            for _, person in people_in_service.iterrows():
-                status = get_status_em_data(person, d, BLOCOS_DATAS)
-                if status != "Presente":
-                    absent += 1
-            
-            available = max(0, total - absent)
-            scale_val = max(0, available - 1)
-            
-            row_data[servico] = f"{scale_val}x1"
+        # Layout: Full Width (sem colunas restritivas)
+        col_mes_sel, col_ano_sel = st.columns(2)
+        meses_dict = {
+            "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
+            "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
+        }
+        now = datetime.now()
+        sel_mes_nome = col_mes_sel.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_escala")
+        sel_ano = col_ano_sel.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_escala")
+        sel_mes = meses_dict[sel_mes_nome]
         
-        data_matrix.append(row_data)
-    
-    df_tabela = pd.DataFrame(data_matrix)
-    
-    def color_scale_monthly(val):
-        if isinstance(val, str):
-            if "0x1" in val or "1x1" in val:
-                return "color: #ff5370; font-weight: bold"
-            elif "2x1" in val:
-                return "color: #ffffff" # White
-            elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
-                    return "color: #2ed8b6; font-weight: bold"
-        return ""
+        # Gerar dias do mês
+        days_in_month = pd.Period(f"{sel_ano}-{sel_mes}-01").days_in_month
+        dates = [datetime(sel_ano, sel_mes, d) for d in range(1, days_in_month+1)]
+        
+        data_matrix = []
+        
+        for d in dates:
+            row_data = {"Dia": d.strftime("%d/%m")} # Dias do mês na primeira coluna
+            
+            for servico in SERVICOS_CONSIDERADOS:
+                people_in_service = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
+                if people_in_service.empty:
+                        people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
 
-    st.dataframe(df_tabela.style.map(color_scale_monthly), use_container_width=True, hide_index=True)
+                total = len(people_in_service)
+                
+                absent = 0
+                for _, person in people_in_service.iterrows():
+                    status = get_status_em_data(person, d, BLOCOS_DATAS)
+                    if status != "Presente":
+                        absent += 1
+                
+                available = max(0, total - absent)
+                scale_val = max(0, available - 1)
+                
+                row_data[servico] = f"{scale_val}x1"
+            
+            data_matrix.append(row_data)
+        
+        df_tabela = pd.DataFrame(data_matrix)
+        
+        def color_scale_monthly(val):
+            if isinstance(val, str):
+                if "0x1" in val or "1x1" in val:
+                    return "color: #ff5370; font-weight: bold"
+                elif "2x1" in val:
+                    return "color: #ffffff" # White
+                elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
+                        return "color: #2ed8b6; font-weight: bold"
+            return ""
+
+        st.dataframe(df_tabela.style.map(color_scale_monthly), use_container_width=True, hide_index=True)
 
     elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
