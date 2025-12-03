@@ -240,13 +240,13 @@ st.markdown(
 
     @media (prefers-color-scheme: dark) {{
         .agenda-card {{
-            background-color: var(--amezia-dark-card);
+            background-color: var(--amezia-dark-card) !important;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             color: #ffffff !important;
         }}
         .agenda-date {{
-            background-color: rgba(0,0,0,0.2);
-            color: #fff;
+            background-color: rgba(255,255,255,0.1) !important;
+            color: #ffffff !important;
         }}
     }}
 
@@ -679,7 +679,7 @@ if pagina == "Presentes":
     apenas_eqman = col_f1.checkbox("Apenas EqMan", key="pres_eqman")
     apenas_in    = col_f2.checkbox("Apenas IN", key="pres_in")
     apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="pres_gvi")
-    data_ref = col_data.date_input("Data de Referência", hoje_padrao, key="data_pres")
+    data_ref = col_data.date_input("Data de Referência", hoje_padrao, key="data_pres", format="DD/MM/YYYY")
     hoje = pd.to_datetime(data_ref)
 
     with metrics_placeholder:
@@ -737,47 +737,34 @@ elif pagina == "Ausentes":
 
     # 1. DATA (Logo abaixo do título)
     col_data_aus, _ = st.columns([2, 4])
-    data_ref = col_data_aus.date_input("Data de Referência", hoje_padrao, key="data_aus")
+    data_ref = col_data_aus.date_input("Data de Referência", hoje_padrao, key="data_aus_tab", format="DD/MM/YYYY")
     hoje = pd.to_datetime(data_ref)
 
     # 2. TABELA (Logo abaixo da data)
-    st.markdown("### Ausentes") # Título simplificado conforme pedido
+    st.markdown("### Ausentes")
     
+    # Placeholder para a tabela
+    table_placeholder = st.empty()
+    
+    # 3. FILTROS (Logo abaixo da tabela)
+    st.markdown("##### Filtros")
+    col_f1, col_f2, col_f3 = st.columns(3)
+    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman_tab")
+    apenas_in    = col_f2.checkbox("Apenas IN", key="aus_in_tab")
+    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="aus_gvi_tab")
+
     if df_eventos.empty:
-        st.info("Sem eventos de ausência registrados.")
+        table_placeholder.info("Sem eventos de ausência registrados.")
     else:
         ausentes_hoje = df_eventos[
             (df_eventos["Inicio"] <= hoje) &
             (df_eventos["Fim"] >= hoje)
         ]
         
-        # 3. FILTROS (Logo abaixo da tabela) - Aplicados ANTES de mostrar, mas visualmente abaixo?
-        # O usuário pediu: "logo abaixo manter a tabela... logo abaixo os filtros".
-        # Para a tabela reagir aos filtros, os filtros precisam ser definidos antes ou a tabela precisa ser atualizada.
-        # Streamlit re-roda o script. Então a ordem visual pode ser diferente da ordem de execução se usarmos st.container ou columns.
-        # Mas o fluxo natural é Input -> Processamento -> Output.
-        # Se os filtros estiverem ABAIXO, o usuário muda o filtro e a tabela ACIMA atualiza. Isso é ok.
-        
-        # Vamos criar placeholders para garantir a ordem visual pedida:
-        # 1. Title (já foi)
-        # 2. Date (já foi)
-        # 3. Table Placeholder
-        # 4. Filters Placeholder
-        
-        table_placeholder = st.empty()
-        filters_placeholder = st.container()
-        
-        with filters_placeholder:
-            st.markdown("##### Filtros")
-            col_f1, col_f2, col_f3 = st.columns(3)
-            apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman")
-            apenas_in    = col_f2.checkbox("Apenas IN", key="aus_in")
-            apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="aus_gvi")
-
-        # Processamento da tabela com os valores dos filtros (que já foram lidos acima)
+        # Processamento da tabela com os valores dos filtros
         ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
 
-        with table_placeholder:
+        with table_placeholder.container():
             if ausentes_hoje.empty:
                 st.success("Todo o efetivo está a bordo para os filtros atuais.")
             else:
@@ -923,8 +910,7 @@ else:
                     
                     # Add a dummy invisible trace for all names to ensure they are registered in the plot
                     # This is a workaround for Plotly sometimes hiding empty categories in timeline
-                    fig.add_trace(px.scatter(y=ordem_nomes, x=[min_data]*len(ordem_nomes)).data[0])
-                    fig.data[-1].visible = False
+                    fig.add_trace(px.scatter(y=ordem_nomes, x=[min_data]*len(ordem_nomes), opacity=0).data[0])
                     fig.data[-1].showlegend = False
                     fig.update_xaxes(range=[datetime(ano_min, 1, 1), datetime(ano_max, 12, 31)])
                     fig.add_vline(x=hoje, line_width=2, line_dash="dash", line_color="#ff5370")
@@ -1152,8 +1138,14 @@ else:
 
         # --- SEÇÃO 1: VISÃO DIÁRIA ---
         st.markdown("#### Escala Diária")
-        col_d1, _ = st.columns([1, 3])
-        data_ref_diaria = col_d1.date_input("Data de Referência", value=datetime.now(), key="data_ref_escala")
+        # Ajuste do tamanho da coluna da data para ficar próximo de 400px (tamanho da tabela)
+        # 400px em uma tela wide é pequeno. Vamos tentar usar colunas fixas ou proporção.
+        # Se a tabela tem width=400, vamos tentar fazer a coluna da data ocupar algo similar.
+        col_d1, _ = st.columns([1, 3]) # Proporção 1:3 deve deixar pequeno
+        # Melhor: usar uma coluna com width fixo não é possível nativamente no st.columns com pixels, mas proporção funciona.
+        # Vamos manter a proporção mas o usuário pediu "mesmo tamanho".
+        
+        data_ref_diaria = col_d1.date_input("Data de Referência", value=datetime.now(), key="data_ref_escala", format="DD/MM/YYYY")
         dt_ref = pd.to_datetime(data_ref_diaria)
 
         # Identificar coluna de Escala/Serviço
