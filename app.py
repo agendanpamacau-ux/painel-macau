@@ -208,18 +208,18 @@ st.markdown(
         color: var(--amezia-blue) !important;
     }}
 
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {{
         background: transparent !important;
         border-left: 3px solid var(--amezia-blue);
         box-shadow: none;
         padding-left: 18px;
-    }
+    }}
     
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] span,
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {{
         color: var(--amezia-blue) !important;
         font-weight: 700 !important;
-    }
+    }}
 
     /* Dataframes */
     .stDataFrame {{
@@ -238,29 +238,28 @@ st.markdown(
         transition: transform 0.2s;
     }}
 
-    @media (prefers-color-scheme: dark) {
-        .agenda-card {
+    @media (prefers-color-scheme: dark) {{
+        .agenda-card {{
             background-color: #202940 !important;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             color: #ffffff !important;
-        }
-        .agenda-date {
+        }}
+        .agenda-date {{
             background-color: rgba(255,255,255,0.1) !important;
             color: #ffffff !important;
-        }
-    }
+        }}
+    }}
 
-    @media (prefers-color-scheme: light) {
-        .agenda-card {
+    @media (prefers-color-scheme: light) {{
+        .agenda-card {{
             background-color: #fff !important;
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
             color: #333 !important;
-        }
-        .agenda-date {
+        }}
+        .agenda-date {{
             background-color: #f4f7f6 !important;
             color: #333 !important;
-        }
-    }        }}
+        }}
     }}
     
     .agenda-date {{
