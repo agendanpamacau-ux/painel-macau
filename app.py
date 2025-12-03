@@ -851,6 +851,23 @@ elif pagina == "Ausentes":
             if df_dias_mes.empty:
                 st.info(f"Sem registros de ausência para {sel_mes_nome_aus}/{sel_ano_aus}.")
             else:
+                # Tabela de ausentes no mês
+                ausentes_mes_evt = df_eventos[
+                    (df_eventos["Inicio"] < end_date) &
+                    (df_eventos["Fim"] >= start_date)
+                ].copy()
+                
+                # Aplicar filtros da aba
+                ausentes_mes_evt = filtrar_eventos(ausentes_mes_evt, apenas_eqman, apenas_in, apenas_gvi)
+                
+                if not ausentes_mes_evt.empty:
+                    tabela_mes = ausentes_mes_evt[["Posto", "Nome", "MotivoAgrupado", "Inicio", "Fim"]].copy()
+                    tabela_mes["Início"] = tabela_mes["Inicio"].dt.strftime("%d/%m")
+                    tabela_mes["Fim"] = tabela_mes["Fim"].dt.strftime("%d/%m")
+                    tabela_mes = tabela_mes.drop(columns=["Inicio", "Fim"])
+                    tabela_mes = tabela_mes.sort_values(by=["Nome"])
+                    st.dataframe(tabela_mes, use_container_width=True, hide_index=True)
+                
                 df_aus_dia = (df_dias_mes.groupby("Data")["Nome"].nunique().reset_index(name="Militares"))
                 
                 fig_aus_dia = px.line(
