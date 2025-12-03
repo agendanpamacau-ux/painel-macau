@@ -12,7 +12,7 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.9.0 (Dias de Mar Added)"
+SCRIPT_VERSION = "v1.9.1 (Fix usecols Dias de Mar)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly"
@@ -245,12 +245,18 @@ def load_data():
 def load_dias_mar():
     """Carrega dados da planilha separada de Dias de Mar"""
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Header na linha 8 (index 7) | Dados de B até H
-    df = conn.read(spreadsheet=URL_DIAS_MAR, header=7, usecols="B:H", ttl="10m")
+    # Header na linha 8 (index 7)
+    # CORREÇÃO AQUI: usecols removido para evitar erro, filtramos depois se precisar
+    df = conn.read(spreadsheet=URL_DIAS_MAR, header=7, ttl="10m")
     
     # Limpeza: Remove linhas onde "TERMO DE VIAGEM" está vazio
     if "TERMO DE VIAGEM" in df.columns:
         df = df.dropna(subset=["TERMO DE VIAGEM"])
+    
+    # Seleciona apenas colunas relevantes se existirem
+    cols_desejadas = ["TERMO DE VIAGEM", "DATA INÍCIO", "DATA TÉRMINO", "ANO", "DIAS DE MAR", "MILHAS NAVEGADAS", "SOMA"]
+    cols_existentes = [c for c in cols_desejadas if c in df.columns]
+    df = df[cols_existentes]
         
     # Conversão de tipos
     numeric_cols = ["DIAS DE MAR", "MILHAS NAVEGADAS", "ANO"]
@@ -829,18 +835,17 @@ elif pagina == "Dias de Mar":
                 
                 # Extrair Mês da Data de Início
                 if "DATA INÍCIO" in df_mar_ano.columns:
-                    df_mar_ano["Mês"] = df_mar_ano["DATA INÍCIO"].dt.month_name(locale="pt_BR") # Requer locale configurado, ou usar month numbers
-                    # Fallback se locale pt_BR nao estiver instalado:
-                    # df_mar_ano["Mês_Num"] = df_mar_ano["DATA INÍCIO"].dt.month
+                    # Se o locale pt_BR não estiver disponível, pode-se usar um mapa de nomes
+                    try:
+                        df_mar_ano["Mês"] = df_mar_ano["DATA INÍCIO"].dt.month_name(locale="pt_BR")
+                    except:
+                        # Fallback para mapa manual se o locale falhar
+                        month_map = {1:'Janeiro', 2:'Fevereiro', 3:'Março', 4:'Abril', 5:'Maio', 6:'Junho', 7:'Julho', 8:'Agosto', 9:'Setembro', 10:'Outubro', 11:'Novembro', 12:'Dezembro'}
+                        df_mar_ano["Mês"] = df_mar_ano["DATA INÍCIO"].dt.month.map(month_map)
                     
-                    # Agrupar por mês
-                    # Truque para ordenar meses corretamente: usar o número do mês
+                    # Agrupar por mês (ordenado por número do mês para gráfico correto)
                     df_mar_ano["Mês_Num"] = df_mar_ano["DATA INÍCIO"].dt.month
-                    df_mensal_mar = df_mar_ano.groupby("Mês_Num")["DIAS DE MAR"].sum().reset_index()
-                    
-                    # Mapear número para nome (hardcoded para garantir PT-BR sem depender do sistema)
-                    mapa_meses = {1:"Jan", 2:"Fev", 3:"Mar", 4:"Abr", 5:"Mai", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Set", 10:"Out", 11:"Nov", 12:"Dez"}
-                    df_mensal_mar["Mês"] = df_mensal_mar["Mês_Num"].map(mapa_meses)
+                    df_mensal_mar = df_mar_ano.groupby("Mês_Num").agg({"DIAS DE MAR": "sum", "Mês": "first"}).reset_index()
                     
                     fig_mes_mar = px.bar(
                         df_mensal_mar, x="Mês", y="DIAS DE MAR",
