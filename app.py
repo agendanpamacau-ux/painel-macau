@@ -7,6 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import base64
+import os
 
 # ============================================================
 # VERSÃO DO SCRIPT
