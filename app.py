@@ -795,7 +795,7 @@ else:
                 st.markdown("---")
                 for _, row in df_cal.iterrows():
                     st.markdown(
-                        f"""<div class="agenda-card"><div style="font-weight: 600; font-size: 1.05rem;">{row['Evento']}</div><div class="agenda-date">{row['Data']}</div></div>""",
+                        f'<div class="agenda-card"><div style="font-weight: 600; font-size: 1.05rem;">{row["Evento"]}</div><div class="agenda-date">{row["Data"]}</div></div>',
                         unsafe_allow_html=True
                     )
 
