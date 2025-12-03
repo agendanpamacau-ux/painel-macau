@@ -12,7 +12,7 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.9.4 (Fix Final Gráfico Mensal)"
+SCRIPT_VERSION = "v1.9.5 (Fix Lógica Mensal)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly_dark"
@@ -246,7 +246,6 @@ def load_dias_mar():
     """Carrega dados da planilha separada de Dias de Mar"""
     conn = st.connection("gsheets", type=GSheetsConnection)
     # Header na linha 8 (index 7)
-    # REMOVIDO usecols para evitar erro, filtramos depois
     df = conn.read(spreadsheet=URL_DIAS_MAR, header=7, ttl="10m")
     
     # Limpeza: Remove linhas onde "TERMO DE VIAGEM" está vazio
@@ -258,12 +257,15 @@ def load_dias_mar():
     cols_existentes = [c for c in cols_desejadas if c in df.columns]
     df = df[cols_existentes]
         
-    # Conversão de tipos
-    numeric_cols = ["DIAS DE MAR", "MILHAS NAVEGADAS", "ANO"]
+    # Conversão de tipos BLINDADA
+    numeric_cols = ["DIAS DE MAR", "MILHAS NAVEGADAS"]
     for col in numeric_cols:
         if col in df.columns:
-            # Força conversão para numérico, erros viram NaN, depois 0
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            
+    # Conversão especial para ANO (forçar Inteiro)
+    if "ANO" in df.columns:
+        df["ANO"] = pd.to_numeric(df["ANO"], errors='coerce').fillna(0).astype(int)
             
     # Conversão de datas
     date_cols = ["DATA INÍCIO", "DATA TÉRMINO"]
