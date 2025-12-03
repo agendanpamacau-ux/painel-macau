@@ -1066,6 +1066,10 @@ else:
                     tabela_ferias["Término"] = tabela_ferias["Fim"].dt.strftime("%d/%m/%Y")
                     tabela_ferias = tabela_ferias.drop(columns=["Inicio", "Fim"])
                     tabela_ferias = tabela_ferias.rename(columns={"Duracao_dias": "Dias"})
+                    
+                    # Ordenar conforme a planilha original
+                    ordem_nomes = df_raw["Nome"].unique().tolist()
+                    tabela_ferias["Nome"] = pd.Categorical(tabela_ferias["Nome"], categories=ordem_nomes, ordered=True)
                     tabela_ferias = tabela_ferias.sort_values(by=["Nome", "Início"])
                     st.markdown("### Todos os períodos de férias registrados")
                     st.dataframe(tabela_ferias, use_container_width=True, hide_index=True)
