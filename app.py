@@ -625,22 +625,70 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 # 8. PARÂMETROS (SIDEBAR) + NAVEGAÇÃO
 # ============================================================
 
-st.sidebar.markdown("#### Navegação")
+st.sidebar.markdown("## Navegação")
+
+# Função para carregar SVG como base64
+def get_svg_as_base64(file_path):
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            svg = f.read()
+        return base64.b64encode(svg.encode("utf-8")).decode("utf-8")
+    except Exception as e:
+        return ""
+
+# Mapeamento de ícones SVG
+ICON_MAP = {
+    "Presentes": "icons8-briefcase-50.svg",
+    "Ausentes": "icons8-box-50.svg",
+    "Agenda do Navio": "icons8-bookmark-50.svg",
+    "Linha do Tempo": "icons8-clock-50.svg",
+    "Equipes Operativas": "icons8-services-50.svg",
+    "Estatísticas & Análises": "icons8-news-50.svg",
+    "Férias": "icons8-sun-50.svg",
+    "Cursos": "icons8-document-50.svg",
+    "Tabela de Serviço": "icons8-tick-box-50.svg",
+    "Log / Debug": "icons8-wrench-50.svg"
+}
+
+# Gerar CSS para ícones
+css_icons = ""
+base_path = "assets" # Caminho relativo para a pasta assets
+options = list(ICON_MAP.keys())
+
+for i, option in enumerate(options):
+    icon_file = ICON_MAP[option]
+    # Tentar caminho absoluto se relativo falhar (ajuste conforme ambiente)
+    # Assumindo que assets está no mesmo diretório do script ou subdiretório
+    full_path = os.path.join(os.getcwd(), base_path, icon_file)
+    
+    b64 = get_svg_as_base64(full_path)
+    if b64:
+        # nth-child(i+1) porque CSS é 1-based
+        css_icons += f"""
+        div[role="radiogroup"] > label:nth-child({i+1}) > div:first-child {{
+            display: flex;
+            align-items: center;
+        }}
+        div[role="radiogroup"] > label:nth-child({i+1}) > div:first-child::before {{
+            content: "";
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            margin-right: 10px;
+            background-image: url('data:image/svg+xml;base64,{b64}');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }}
+        """
+
+if css_icons:
+    st.markdown(f"<style>{css_icons}</style>", unsafe_allow_html=True)
+
 with st.sidebar.container():
     pagina = st.radio(
         label="Seções",
-        options=[
-            "Presentes",
-            "Ausentes",
-            "Agenda do Navio",
-            "Linha do Tempo",
-            "Equipes Operativas",
-            "Estatísticas & Análises",
-            "Férias",
-            "Cursos",
-            "Tabela de Serviço",
-            "Log / Debug"
-        ],
+        options=options,
         index=0,
         label_visibility="collapsed",
         key="pagina_radio"
