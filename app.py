@@ -751,25 +751,26 @@ if pagina == "Presentes":
 # AUSENTES
 # --------------------------------------------------------
 elif pagina == "Ausentes":
-    st.subheader("Ausentes")
+    st.subheader("Ausentes por dia")
 
-    # 1. DATA (Logo abaixo do título)
-    col_data_aus, _ = st.columns([2, 4])
-    data_ref = col_data_aus.date_input("Data de Referência", hoje_padrao, key="data_aus_tab", format="DD/MM/YYYY")
+    # 1. DATA (Centralizada)
+    col_d1, col_d2, col_d3 = st.columns([1, 2, 1])
+    data_ref = col_d2.date_input("Data de Referência", hoje_padrao, key="data_aus_tab", format="DD/MM/YYYY")
     hoje = pd.to_datetime(data_ref)
 
-    # 2. TABELA (Logo abaixo da data)
-    st.markdown("### Ausentes")
-    
+    # 2. TABELA
     # Placeholder para a tabela
     table_placeholder = st.empty()
     
-    # 3. FILTROS (Logo abaixo da tabela)
-    st.markdown("##### Filtros")
-    col_f1, col_f2, col_f3 = st.columns(3)
-    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman_tab")
-    apenas_in    = col_f2.checkbox("Apenas IN", key="aus_in_tab")
-    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="aus_gvi_tab")
+    # 3. FILTROS (Centralizados abaixo da tabela)
+    st.markdown("<br>", unsafe_allow_html=True) # Espaçamento
+    col_f_spacer1, col_f_content, col_f_spacer2 = st.columns([1, 4, 1])
+    with col_f_content:
+        st.markdown("##### Filtros")
+        c_f1, c_f2, c_f3 = st.columns(3)
+        apenas_eqman = c_f1.checkbox("Apenas EqMan", key="aus_eqman_tab")
+        apenas_in    = c_f2.checkbox("Apenas IN", key="aus_in_tab")
+        apenas_gvi   = c_f3.checkbox("Apenas GVI/GP", key="aus_gvi_tab")
 
     if df_eventos.empty:
         table_placeholder.info("Sem eventos de ausência registrados.")
@@ -799,61 +800,72 @@ elif pagina == "Ausentes":
 
                 st.dataframe(show_df, use_container_width=True, hide_index=True)
 
-                eqman_fora = ausentes_hoje[ausentes_hoje["EqMan"] != "Não"]
-                if not eqman_fora.empty:
-                    lista_eqman = sorted(
-                        {f"{row['Posto']} {row['Nome']} ({row['EqMan']})" for _, row in eqman_fora.iterrows()}
-                    )
-                    st.error("⚠️ Atenção! EqMan com desfalque: " + "; ".join(lista_eqman))
-
-                gvi_fora = ausentes_hoje[ausentes_hoje["GVI"] == True]
-                if not gvi_fora.empty:
-                    lista_gvi = sorted(
-                        {f"{row['Posto']} {row['Nome']}" for _, row in gvi_fora.iterrows()}
-                    )
-                    st.warning("🚨 GVI/GP com desfalque: " + "; ".join(lista_gvi))
-
-    # --- VISÃO MENSAL ---
     st.markdown("---")
-    st.markdown("### Ausentes por Mês (Visão Mensal)")
     
-    col_mes, col_ano = st.columns(2)
-    meses_dict = {
-        "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
-        "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
-    }
-    mes_sel_nome = col_mes.selectbox("Selecione o Mês", list(meses_dict.keys()), index=datetime.now().month - 1)
-    ano_sel = col_ano.number_input("Selecione o Ano", min_value=2024, max_value=2030, value=datetime.now().year)
-    
-    mes_sel = meses_dict[mes_sel_nome]
-    
-    if not df_eventos.empty:
-        inicio_mes = pd.Timestamp(year=ano_sel, month=mes_sel, day=1)
-        if mes_sel == 12:
-            fim_mes = pd.Timestamp(year=ano_sel+1, month=1, day=1) - pd.Timedelta(days=1)
-        else:
-            fim_mes = pd.Timestamp(year=ano_sel, month=mes_sel+1, day=1) - pd.Timedelta(days=1)
-            
-        ausentes_mes = df_eventos[
-            (df_eventos["Inicio"] <= fim_mes) &
-            (df_eventos["Fim"] >= inicio_mes)
-        ].copy()
+    # 4. GRÁFICOS
+    if not df_dias.empty:
+        # Filtrar df_dias com os mesmos filtros da tabela
+        df_dias_filt = filtrar_dias(df_dias, apenas_eqman, apenas_in, apenas_gvi)
         
-        # Filtros aplicados na visão mensal também
-        ausentes_mes = filtrar_eventos(ausentes_mes, apenas_eqman, apenas_in, apenas_gvi)
-        
-        if ausentes_mes.empty:
-            st.info(f"Nenhum ausente registrado em {mes_sel_nome}/{ano_sel}.")
-        else:
-            tabela_mes = ausentes_mes[["Posto", "Nome", "MotivoAgrupado", "Inicio", "Fim"]].copy()
-            tabela_mes["Início"] = tabela_mes["Inicio"].dt.strftime("%d/%m")
-            tabela_mes["Fim"] = tabela_mes["Fim"].dt.strftime("%d/%m")
-            tabela_mes = tabela_mes.drop(columns=["Inicio"])
-            tabela_mes = tabela_mes.sort_values(by=["Início", "Nome"])
+        if not df_dias_filt.empty:
+            # GRÁFICO 1: Ausentes por mês (Visão Anual)
+            st.subheader("Quantidade de militares ausentes por mês")
+            df_dias_filt["Mes"] = df_dias_filt["Data"].dt.to_period("M").dt.to_timestamp()
+            df_aus_mes = (df_dias_filt[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
             
-            st.dataframe(tabela_mes, use_container_width=True, hide_index=True)
+            fig_aus_mes = px.bar(
+                df_aus_mes, x="Mes", y="Militares",
+                labels={"Mes": "Mês", "Militares": "Militares Ausentes"}, color_discrete_sequence=["#ff5370"]
+            )
+            update_fig_layout(fig_aus_mes, title="Ausentes por mês (Geral)")
+            st.plotly_chart(fig_aus_mes, use_container_width=True)
+            
+            st.markdown("---")
+            
+            # GRÁFICO 2: Ausentes por dia no mês escolhido
+            st.subheader("Militares ausentes por dia (Mês Específico)")
+            
+            col_sel_m, col_sel_a, _ = st.columns([1, 1, 2])
+            meses_dict = {
+                "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
+                "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
+            }
+            now = datetime.now()
+            sel_mes_nome_aus = col_sel_m.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_aus_graf")
+            sel_ano_aus = col_sel_a.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_aus_graf")
+            sel_mes_aus = meses_dict[sel_mes_nome_aus]
+            
+            # Filtrar para o mês selecionado
+            start_date = datetime(sel_ano_aus, sel_mes_aus, 1)
+            # End date is start of next month
+            if sel_mes_aus == 12:
+                end_date = datetime(sel_ano_aus + 1, 1, 1)
+            else:
+                end_date = datetime(sel_ano_aus, sel_mes_aus + 1, 1)
+                
+            df_dias_mes = df_dias_filt[
+                (df_dias_filt["Data"] >= start_date) & 
+                (df_dias_filt["Data"] < end_date)
+            ].copy()
+            
+            if df_dias_mes.empty:
+                st.info(f"Sem registros de ausência para {sel_mes_nome_aus}/{sel_ano_aus}.")
+            else:
+                df_aus_dia = (df_dias_mes.groupby("Data")["Nome"].nunique().reset_index(name="Militares"))
+                
+                fig_aus_dia = px.bar(
+                    df_aus_dia, x="Data", y="Militares",
+                    labels={"Data": "Dia", "Militares": "Militares Ausentes"}, color_discrete_sequence=["#ffb64d"]
+                )
+                fig_aus_dia.update_xaxes(tickformat="%d/%m")
+                update_fig_layout(fig_aus_dia, title=f"Ausências diárias em {sel_mes_nome_aus}/{sel_ano_aus}")
+                st.plotly_chart(fig_aus_dia, use_container_width=True)
+        else:
+             st.info("Sem dados para gerar gráficos com os filtros atuais.")
     else:
-        st.write("Sem dados.")
+        st.info("Sem dados de ausências para gerar gráficos.")
+
+
 
 
 # --------------------------------------------------------
