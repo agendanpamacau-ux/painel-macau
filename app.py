@@ -197,12 +197,24 @@ st.markdown(
         background: transparent !important;
     }}
 
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {{
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
         background: transparent !important;
         border-left: 3px solid var(--amezia-blue);
         padding-left: 18px;
-    }}
+    }
     
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
+        background: transparent !important;
+        border-left: 3px solid var(--amezia-blue);
+        box-shadow: none;
+        padding-left: 18px;
+    }
+    
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {
+        color: var(--amezia-blue) !important;
+        font-weight: 700 !important;
+    }
+
     </style>
     """,
     unsafe_allow_html=True
@@ -540,32 +552,6 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 
 # ============================================================
 # 8. PARÂMETROS (SIDEBAR) + NAVEGAÇÃO
-# ============================================================
-
-st.sidebar.markdown("#### Navegação")
-with st.sidebar.container():
-    pagina = st.radio(
-        label="Seções",
-        options=[
-            "👥 Presentes",
-            "🚫 Ausentes",
-            "📅 Agenda do Navio",
-            "⏳ Linha do Tempo",
-            "📊 Estatísticas & Análises",
-            "🏖️ Férias",
-            "🎓 Cursos",
-            "⚔️ Tabela de Serviço",
-            "🐞 Log / Debug"
-        ],
-        index=0,
-        label_visibility="collapsed",
-        key="pagina_radio"
-    )
-
-
-# ============================================================
-# 9. MÉTRICAS GLOBAIS (Função)
-# ============================================================
 
 def exibir_metricas_globais(data_referencia):
     """Exibe os cards de métricas globais baseados na data fornecida."""
@@ -601,7 +587,7 @@ hoje_padrao = datetime.today()
 # --------------------------------------------------------
 # PRESENTES
 # --------------------------------------------------------
-if pagina == "👥 Presentes":
+if pagina == "Presentes":
     st.subheader("Presentes a bordo")
     
     metrics_placeholder = st.container()
@@ -667,7 +653,7 @@ if pagina == "👥 Presentes":
 # --------------------------------------------------------
 # AUSENTES
 # --------------------------------------------------------
-elif pagina == "🚫 Ausentes":
+elif pagina == "Ausentes":
     st.subheader("Ausentes")
 
     # 1. DATA (Logo abaixo do título)
@@ -779,7 +765,7 @@ elif pagina == "🚫 Ausentes":
 else:
     hoje = pd.to_datetime(hoje_padrao)
     
-    if pagina == "📅 Agenda do Navio":
+    if pagina == "Agenda do Navio":
         st.subheader("📅 Agenda do Navio (Google Calendar)")
         col_sel, col_btn = st.columns([3, 1])
         with col_sel:
@@ -803,7 +789,7 @@ else:
                         unsafe_allow_html=True
                     )
 
-    elif pagina == "⏳ Linha do Tempo":
+    elif pagina == "Linha do Tempo":
         st.subheader("Planejamento Anual de Ausências")
         # FILTROS REMOVIDOS
         
@@ -863,7 +849,40 @@ else:
                     
                     st.plotly_chart(fig, use_container_width=True)
 
-    elif pagina == "📊 Estatísticas & Análises":
+    elif pagina == "Equipes Operativas":
+        st.subheader("Equipes Operativas")
+        
+        col_eq1, col_eq2, col_eq3 = st.columns(3)
+        
+        with col_eq1:
+            st.markdown("### GVI/GP")
+            df_gvi = df_raw[df_raw["Gvi/GP"].apply(parse_bool)].copy()
+            if df_gvi.empty:
+                st.info("Nenhum militar no GVI/GP.")
+            else:
+                st.dataframe(df_gvi[["Posto", "Nome"]], use_container_width=True, hide_index=True)
+                st.markdown(f"**Total:** {len(df_gvi)}")
+
+        with col_eq2:
+            st.markdown("### Inspetores Navais")
+            df_in = df_raw[df_raw["IN"].apply(parse_bool)].copy()
+            if df_in.empty:
+                st.info("Nenhum Inspetor Naval.")
+            else:
+                st.dataframe(df_in[["Posto", "Nome"]], use_container_width=True, hide_index=True)
+                st.markdown(f"**Total:** {len(df_in)}")
+                
+        with col_eq3:
+            st.markdown("### EqMan")
+            # EqMan != "Não" e != "-"
+            df_eqman = df_raw[ (df_raw["EqMan"].notna()) & (df_raw["EqMan"] != "Não") & (df_raw["EqMan"] != "-") ].copy()
+            if df_eqman.empty:
+                st.info("Nenhum militar na EqMan.")
+            else:
+                st.dataframe(df_eqman[["Posto", "Nome", "EqMan"]], use_container_width=True, hide_index=True)
+                st.markdown(f"**Total:** {len(df_eqman)}")
+
+    elif pagina == "Estatísticas & Análises":
         st.subheader("Visão Analítica de Ausências")
         # FILTROS REMOVIDOS
         
@@ -918,7 +937,7 @@ else:
                         else:
                             st.info("Sem dados diários para análise mensal.")
 
-    elif pagina == "🏖️ Férias":
+    elif pagina == "Férias":
         st.subheader("Férias cadastradas")
         # FILTROS REMOVIDOS
         
@@ -997,7 +1016,7 @@ else:
                             update_fig_layout(fig_pizza_ferias, "Distribuição de férias gozadas x não gozadas")
                             st.plotly_chart(fig_pizza_ferias, use_container_width=True)
 
-    elif pagina == "🎓 Cursos":
+    elif pagina == "Cursos":
         st.subheader("Análises de Cursos")
         # FILTROS REMOVIDOS
         
@@ -1076,14 +1095,14 @@ else:
                                 update_fig_layout(fig_curso_mes, title="Militares em curso por mês")
                                 col_g2.plotly_chart(fig_curso_mes, use_container_width=True)
 
-    elif pagina == "⚔️ Tabela de Serviço":
+    elif pagina == "Tabela de Serviço":
         st.subheader("Tabela de Serviço - Análise de Escalas")
 
         # --- SEÇÃO 1: VISÃO DIÁRIA ---
         st.markdown("#### Escala Diária")
         
         # Layout: Coluna única para garantir mesma largura
-        col_escala_container, _ = st.columns([1, 2]) # Ajuste a proporção conforme necessário para não ficar full width
+        col_escala_container, _ = st.columns([1, 3]) # Ajuste a proporção para ficar mais estreito (aprox 25%)
         
         with col_escala_container:
             data_ref_diaria = st.date_input("Data de Referência", value=datetime.now(), key="data_ref_escala", format="DD/MM/YYYY")
@@ -1200,7 +1219,7 @@ else:
 
             st.dataframe(df_tabela.style.map(color_scale_monthly), use_container_width=True, hide_index=True)
 
-    elif pagina == "🐞 Log / Debug":
+    elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
         st.markdown("### df_raw (dados brutos do Google Sheets)")
         st.write(f"Total de linhas em df_raw: **{len(df_raw)}**")
@@ -1240,3 +1259,5 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
+
+
