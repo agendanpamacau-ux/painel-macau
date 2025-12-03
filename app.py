@@ -1255,6 +1255,11 @@ else:
                         elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
                              return "color: #2ed8b6; font-weight: bold" # Green
                     return ""
+    elif pagina == "Log / Debug":
+        st.subheader("Log / Debug")
+        st.markdown("### df_raw (dados brutos do Google Sheets)")
+        st.write(f"Total de linhas em df_raw: **{len(df_raw)}**")
+        st.write("Colunas disponíveis em df_raw:")
         st.write(list(df_raw.columns))
         st.write("Prévia de df_raw (primeiras 15 linhas):")
         st.dataframe(df_raw.head(15), use_container_width=True)
