@@ -12,10 +12,10 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v2.1 (Ícones Atualizados)"
+SCRIPT_VERSION = "v1.7.0 (Tabela de Serviço Added)"
 
 # Configuração do Plotly
-pio.templates.default = "plotly_dark"
+pio.templates.default = "plotly"
 
 # ============================================================
 # 1. CONFIGURAÇÃO DA PÁGINA
@@ -44,6 +44,7 @@ st.markdown(
     @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700&family=Poppins:wght@400;500;600;700&display=swap');
 
     :root {{
+        /* Amezia Colors */
         --amezia-blue: #4099ff;
         --amezia-pink: #ff5370;
         --amezia-green: #2ed8b6;
@@ -56,8 +57,14 @@ st.markdown(
         --text-light: #3e4b5b;
     }}
 
-    * {{ font-family: 'Nunito Sans', sans-serif; }}
-    h1, h2, h3, h4, h5, h6 {{ font-family: 'Poppins', sans-serif !important; font-weight: 600 !important; }}
+    * {{
+        font-family: 'Nunito Sans', sans-serif;
+    }}
+
+    h1, h2, h3, h4, h5, h6 {{
+        font-family: 'Poppins', sans-serif !important;
+        font-weight: 600 !important;
+    }}
 
     /* HEADER STYLE */
     header[data-testid="stHeader"] {{
@@ -73,34 +80,56 @@ st.markdown(
         background-size: contain;
         background-repeat: no-repeat;
         position: absolute;
-        left: 60px; top: 50%; transform: translateY(-50%);
-        width: 40px; height: 40px;
-        z-index: 999; pointer-events: none;
+        left: 60px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 40px;
+        height: 40px;
+        z-index: 999;
+        pointer-events: none;
     }}
 
     header[data-testid="stHeader"]::after {{
         content: "Navio-Patrulha Macau";
         position: absolute;
-        left: 110px; top: 50%; transform: translateY(-50%);
-        color: white; font-size: 1.2rem; font-weight: 700;
+        left: 110px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: white;
+        font-size: 1.2rem;
+        font-weight: 700;
         font-family: 'Poppins', sans-serif;
-        z-index: 999; pointer-events: none;
+        z-index: 999;
+        pointer-events: none;
     }}
     
     @media (max-width: 600px) {{
         header[data-testid="stHeader"]::after {{
-            content: "NPa Macau"; font-size: 1rem; left: 100px;
+            content: "NPa Macau";
+            font-size: 1rem;
+            left: 100px;
         }}
     }}
 
-    header[data-testid="stHeader"] button {{ color: white !important; }}
+    header[data-testid="stHeader"] button {{
+        color: white !important;
+    }}
     
-    .block-container {{ padding-top: 4rem !important; }}
+    .block-container {{
+        padding-top: 4rem !important;
+    }}
+
+    /* 
+       Dark Mode Fix: Removed forced background on .stApp to allow Streamlit theme to take over.
+    */
 
     /* Cards */
     div[data-testid="metric-container"] {{
-        border-radius: 5px; padding: 1.5rem;
-        transition: all 0.3s ease-in-out; position: relative; overflow: hidden;
+        border-radius: 5px;
+        padding: 1.5rem;
+        transition: all 0.3s ease-in-out;
+        position: relative;
+        overflow: hidden;
     }}
 
     @media (prefers-color-scheme: dark) {{
@@ -109,9 +138,12 @@ st.markdown(
             box-shadow: 0 4px 24px 0 rgb(34 41 47 / 10%);
             color: var(--text-dark);
         }}
+        /* Sidebar text fix */
         section[data-testid="stSidebar"] .stMarkdown, 
         section[data-testid="stSidebar"] p, 
-        section[data-testid="stSidebar"] span {{ color: #aab8c5 !important; }}
+        section[data-testid="stSidebar"] span {{
+            color: #aab8c5 !important;
+        }}
     }}
 
     @media (prefers-color-scheme: light) {{
@@ -128,49 +160,133 @@ st.markdown(
     }}
     
     /* Sidebar */
-    section[data-testid="stSidebar"] {{ background-color: #202940; }}
-    section[data-testid="stSidebar"] * {{ color: #aab8c5 !important; }}
-    section[data-testid="stSidebar"] h4 {{ font-size: 1.2rem !important; font-weight: 700 !important; color: #fff !important; margin-top: 1rem; }}
+    section[data-testid="stSidebar"] {{
+        background-color: #202940; 
+    }}
+    
+    section[data-testid="stSidebar"] * {{
+        color: #aab8c5 !important;
+    }}
+    
+    section[data-testid="stSidebar"] h4 {{
+        font-size: 1.2rem !important;
+        font-weight: 700 !important;
+        color: #fff !important;
+        margin-top: 1rem;
+    }}
 
     /* NAV LATERAL */
-    section[data-testid="stSidebar"] div[role="radiogroup"] {{ display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }}
-    section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {{ display: none !important; }}
+    section[data-testid="stSidebar"] div[role="radiogroup"] {{
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-top: 10px;
+    }}
+
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {{
+        display: none !important;
+    }}
+
     section[data-testid="stSidebar"] div[role="radiogroup"] label {{
-        padding: 10px 15px; border-radius: 0px; cursor: pointer; font-weight: 500;
-        transition: all 0.2s ease; border-left: 3px solid transparent; margin-left: 0; background: transparent !important;
+        padding: 10px 15px;
+        border-radius: 0px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
+        margin-left: 0;
+        background: transparent !important;
     }}
+
     section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {{
-        background: transparent !important; border-left: 3px solid var(--amezia-blue); padding-left: 18px;
+        background: transparent !important;
+        border-left: 3px solid var(--amezia-blue);
+        padding-left: 18px;
     }}
+    
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {{
-        background: transparent !important; border-left: 3px solid var(--amezia-blue); box-shadow: none; padding-left: 18px;
+        background: transparent !important;
+        border-left: 3px solid var(--amezia-blue);
+        box-shadow: none;
+        padding-left: 18px;
     }}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover p {{ color: var(--amezia-blue) !important; }}
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {{ color: var(--amezia-blue) !important; font-weight: 700 !important; }}
+    
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover p {{
+        color: var(--amezia-blue) !important;
+    }}
+
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {{
+        color: var(--amezia-blue) !important;
+        font-weight: 700 !important;
+    }}
     
     /* Center Metrics */
-    div[data-testid="stMetric"] {{ text-align: center !important; justify-content: center !important; align-items: center !important; display: flex; flex-direction: column; }}
-    div[data-testid="stMetricLabel"] {{ justify-content: center !important; width: 100%; display: flex; }}
-    div[data-testid="stMetricValue"] {{ justify-content: center !important; width: 100%; display: flex; }}
+    div[data-testid="stMetric"] {{
+        text-align: center !important;
+        justify-content: center !important;
+        align-items: center !important;
+        display: flex;
+        flex-direction: column;
+    }}
+    div[data-testid="stMetricLabel"] {{
+        justify-content: center !important;
+        width: 100%;
+        display: flex;
+    }}
+    div[data-testid="stMetricValue"] {{
+        justify-content: center !important;
+        width: 100%;
+        display: flex;
+    }}
 
     /* Dataframes */
-    .stDataFrame {{ border-radius: 5px; }}
+    .stDataFrame {{
+        border-radius: 5px;
+    }}
     
     /* Agenda Card */
     .agenda-card {{
-        padding: 15px; border-radius: 5px; margin-bottom: 15px;
-        display: flex; justify-content: space-between; align-items: center;
-        border-left: 4px solid var(--amezia-blue); transition: transform 0.2s;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-left: 4px solid var(--amezia-blue);
+        transition: transform 0.2s;
     }}
+
     @media (prefers-color-scheme: dark) {{
-        .agenda-card {{ background-color: #202940 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.2); color: #ffffff !important; }}
-        .agenda-date {{ background-color: rgba(255,255,255,0.1) !important; color: #ffffff !important; }}
+        .agenda-card {{
+            background-color: #202940 !important;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            color: #ffffff !important;
+        }}
+        .agenda-date {{
+            background-color: rgba(255,255,255,0.1) !important;
+            color: #ffffff !important;
+        }}
     }}
+
     @media (prefers-color-scheme: light) {{
-        .agenda-card {{ background-color: #fff !important; box-shadow: 0 2px 10px rgba(0,0,0,0.05); color: #333 !important; }}
-        .agenda-date {{ background-color: #f4f7f6 !important; color: #333 !important; }}
+        .agenda-card {{
+            background-color: #fff !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            color: #333 !important;
+        }}
+        .agenda-date {{
+            background-color: #f4f7f6 !important;
+            color: #333 !important;
+        }}
     }}
-    .agenda-date {{ padding: 5px 10px; border-radius: 4px; font-weight: bold; font-family: monospace; }}
+    
+    .agenda-date {{
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-family: monospace;
+    }}
+
     </style>
     """,
     unsafe_allow_html=True
@@ -180,7 +296,7 @@ st.markdown(
 # 2. HELPERS E CONSTANTES
 # ============================================================
 
-HEADER_ROW = 2  # linha 3 na planilha principal
+HEADER_ROW = 2  # linha 3 na planilha
 
 AGENDAS_OFICIAIS = {
     "Agenda Permanente": "agenda.npamacau@gmail.com",
@@ -192,121 +308,31 @@ AGENDAS_OFICIAIS = {
 }
 
 SERVICOS_CONSIDERADOS = [
-    "Oficial / Supervisor",
+    "Of / Supervisor",
     "Contramestre 08-12",
     "Contramestre 04-08",
     "Contramestre 00-04",
     "Fiel de CAv"
 ]
 
-# NOVA URL para Dias de Mar
-URL_DIAS_MAR = "https://docs.google.com/spreadsheets/d/1CEVh0EQsnINcuVP4-RbS3KgfAQNKXCwAszbqjDq8phU/edit?usp=sharing"
-
 def parse_bool(value) -> bool:
-    """
-    Função ROBUSTA para detectar True/1.
-    Lida com int, float (1.0), string '1', '1.0', 'true', 'sim'.
-    """
-    if pd.isna(value) or value == "":
+    if pd.isna(value):
         return False
-    
-    # 1. Se já for booleano
-    if isinstance(value, bool):
-        return value
-    
-    # 2. Se for número (int ou float)
-    if isinstance(value, (int, float)):
-        return value > 0
-    
-    # 3. Tratamento de String (caso venha '1', '1.0', 'True')
     s = str(value).strip().lower()
-    
-    # Remove .0 caso venha como texto "1.0"
-    if s.endswith(".0"):
-        s = s[:-2]
-        
-    return s in ("true", "1", "sim", "yes", "y", "x", "s", "ok", "v", "checked")
+    return s in ("true", "1", "sim", "yes", "y", "x")
 
-def parse_sheet_date(val):
-    """
-    Tenta converter valor para data, assumindo DD/MM ou DD/MM/YY ou DD/MM/YYYY.
-    Se não tiver ano (DD/MM), assume o ano atual (2025).
-    """
-    if pd.isna(val) or str(val).strip() == "":
-        return pd.NaT
-    
-    val_str = str(val).strip()
-    
-    # Tenta converter direto (formato padrão do pandas/sheets)
-    try:
-        dt = pd.to_datetime(val_str, dayfirst=True, errors='coerce')
-        if pd.notna(dt):
-            # Correção ano 2 dígitos (ex: 25 -> 2025)
-            if dt.year < 2000:
-                dt = dt.replace(year=dt.year + 100)
-            return dt
-    except:
-        pass
-
-    # Tenta formato DD/MM explicitamente
-    try:
-        # Adiciona o ano atual se for apenas DD/MM
-        # Assume ano 2025 para este painel específico (Afastamento 2026 tem dados de 25 e 26)
-        # Melhor estratégia: Tentar parser com ano atual
-        dt = datetime.strptime(val_str, "%d/%m")
-        # Substitui pelo ano corrente ou um ano padrão (2025 neste contexto)
-        dt = dt.replace(year=datetime.now().year) 
-        return pd.to_datetime(dt)
-    except:
-        pass
-        
-    return pd.NaT
 
 # ============================================================
 # 3. CARGA DE DADOS
 # ============================================================
 
-@st.cache_data(ttl=600, show_spinner="Carregando dados de efetivo...")
+@st.cache_data(ttl=600, show_spinner="Carregando dados...")
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(worksheet="Afastamento 2026", header=HEADER_ROW, ttl="10m")
     if "Nome" in df.columns:
         df = df.dropna(subset=["Nome"])
     df = df.reset_index(drop=True)
-    return df
-
-@st.cache_data(ttl=600, show_spinner="Carregando dados de Mar...")
-def load_dias_mar():
-    """Carrega dados da planilha separada de Dias de Mar"""
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    # Header na linha 8 (index 7)
-    df = conn.read(spreadsheet=URL_DIAS_MAR, header=7, ttl="10m")
-    
-    # Limpeza: Remove linhas onde "TERMO DE VIAGEM" está vazio
-    if "TERMO DE VIAGEM" in df.columns:
-        df = df.dropna(subset=["TERMO DE VIAGEM"])
-    
-    # Seleciona apenas colunas relevantes se existirem
-    cols_desejadas = ["TERMO DE VIAGEM", "DATA INÍCIO", "DATA TÉRMINO", "ANO", "DIAS DE MAR", "MILHAS NAVEGADAS", "SOMA"]
-    cols_existentes = [c for c in cols_desejadas if c in df.columns]
-    df = df[cols_existentes]
-        
-    # Conversão de tipos BLINDADA
-    numeric_cols = ["DIAS DE MAR", "MILHAS NAVEGADAS"]
-    for col in numeric_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            
-    # Conversão especial para ANO (forçar Inteiro)
-    if "ANO" in df.columns:
-        df["ANO"] = pd.to_numeric(df["ANO"], errors='coerce').fillna(0).astype(int)
-            
-    # Conversão de datas
-    date_cols = ["DATA INÍCIO", "DATA TÉRMINO"]
-    for col in date_cols:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce')
-            
     return df
 
 @st.cache_data(ttl=300)
@@ -340,9 +366,8 @@ def load_calendar_events(calendar_id: str) -> pd.DataFrame:
 
 try:
     df_raw = load_data()
-    # Carregamento dos dados de mar é feito sob demanda na aba para economizar recurso inicial
 except Exception as e:
-    st.error(f"Erro de conexão principal: {e}")
+    st.error(f"Erro de conexão. Verifique o arquivo secrets.toml. Detalhe: {e}")
     st.stop()
 
 
@@ -397,32 +422,33 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
         posto  = row.get("Posto", "")
         nome   = row.get("Nome", "")
         escala = row.get("Serviço", "")
-        
-        eqman_val = row.get("EqMan", "")
-        eqman = str(eqman_val) if pd.notna(eqman_val) and str(eqman_val) != "-" else "Não"
-        
-        gvi = parse_bool(row.get("Gvi/GP", ""))
-        insp = parse_bool(row.get("IN", ""))
+        eqman  = row.get("EqMan", "")
+        gvi    = row.get("Gvi/GP", "")
+        insp   = row.get("IN", "")
 
         militar_info = {
             "Posto": posto,
             "Nome": nome,
             "Escala": escala,
-            "EqMan": eqman,
-            "GVI": gvi,
-            "IN": insp,
+            "EqMan": eqman if pd.notna(eqman) and str(eqman) != "-" else "Não",
+            "GVI": parse_bool(gvi),
+            "IN": parse_bool(insp),
         }
 
         for col_ini, col_fim, col_mot, tipo_base in blocos:
-            ini = parse_sheet_date(row.get(col_ini))
-            fim = parse_sheet_date(row.get(col_fim))
+            ini_raw = row.get(col_ini, pd.NaT)
+            fim_raw = row.get(col_fim, pd.NaT)
+            ini = pd.to_datetime(ini_raw, dayfirst=True, errors="coerce")
+            fim = pd.to_datetime(fim_raw, dayfirst=True, errors="coerce")
 
             if pd.isna(ini) or pd.isna(fim):
                 continue
-            
             if fim < ini:
                 ini, fim = fim, ini
-                
+            if ini.year < 2000:
+                ini = ini.replace(year=ini.year + 100)
+            if fim.year < 2000:
+                fim = fim.replace(year=fim.year + 100)
             dur = (fim - ini).days + 1
             if dur < 1 or dur > 365 * 2:
                 continue
@@ -431,7 +457,9 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
                 motivo_real = "Férias"
                 tipo_final = "Férias"
             else:
-                motivo_texto = str(row.get(col_mot, "")).strip()
+                motivo_texto = ""
+                if col_mot is not None:
+                    motivo_texto = str(row.get(col_mot, "")).strip()
                 if tipo_base == "Curso":
                     motivo_real = motivo_texto if motivo_texto and "nan" not in motivo_texto.lower() else "CURSO (não especificado)"
                     tipo_final = "Curso"
@@ -496,17 +524,32 @@ df_dias = expandir_eventos_por_dia(df_eventos)
 # ============================================================
 
 def get_status_em_data(row, data_ref, blocos_cols):
+    """
+    Verifica o status de uma pessoa (row) em uma data específica.
+    Retorna 'Presente' ou o motivo do afastamento.
+    """
     for col_ini, col_fim, col_mot, tipo_base in blocos_cols:
-        ini = parse_sheet_date(row.get(col_ini))
-        fim = parse_sheet_date(row.get(col_fim))
+        ini = row[col_ini]
+        fim = row[col_fim]
         
-        if pd.isna(ini) or pd.isna(fim): continue
-        
-        if ini <= data_ref <= fim:
-            motivo = tipo_base
-            if col_mot and col_mot in row.index and not pd.isna(row[col_mot]):
-                motivo = str(row[col_mot])
-            return motivo
+        if pd.isna(ini) or pd.isna(fim):
+            continue
+            
+        try:
+            # Tenta converter para datetime
+            dt_ini = pd.to_datetime(ini, dayfirst=True, errors='coerce')
+            dt_fim = pd.to_datetime(fim, dayfirst=True, errors='coerce')
+            
+            if pd.isna(dt_ini) or pd.isna(dt_fim):
+                continue
+                
+            if dt_ini <= data_ref <= dt_fim:
+                motivo = tipo_base
+                if col_mot and col_mot in row.index and not pd.isna(row[col_mot]):
+                    motivo = str(row[col_mot])
+                return motivo
+        except:
+            continue
             
     return "Presente"
 
@@ -518,7 +561,7 @@ def get_status_em_data(row, data_ref, blocos_cols):
 def filtrar_tripulacao(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
     res = df.copy()
     if apenas_eqman and "EqMan" in res.columns:
-        res = res[(res["EqMan"].notna()) & (res["EqMan"].astype(str) != "Não") & (res["EqMan"].astype(str) != "-")]
+        res = res[(res["EqMan"].notna()) & (res["EqMan"].astype(str) != "-")]
     if apenas_in and "IN" in res.columns:
         res = res[res["IN"].apply(parse_bool)]
     if apenas_gvi and "Gvi/GP" in res.columns:
@@ -555,17 +598,23 @@ def update_fig_layout(fig, title=None):
         margin=dict(t=60, b=20, l=20, r=20),
         colorway=AMEZIA_COLORS
     )
-    if title: layout_args["title"] = title
+    if title:
+        layout_args["title"] = title
+        
     fig.update_layout(**layout_args)
     return fig
 
 def grafico_pizza_motivos(df_motivos_dias, titulo):
     fig = px.pie(
-        df_motivos_dias, names="MotivoAgrupado", values="Duracao_dias",
-        hole=0.7, color_discrete_sequence=AMEZIA_COLORS
+        df_motivos_dias,
+        names="MotivoAgrupado",
+        values="Duracao_dias",
+        hole=0.7,
+        color_discrete_sequence=AMEZIA_COLORS
     )
     fig.update_traces(
-        textposition="inside", textinfo="percent+label",
+        textposition="inside",
+        textinfo="percent+label",
         hovertemplate="<b>%{label}</b><br>%{value} dias (%{percent})<extra></extra>",
         marker=dict(line=dict(color='#ffffff', width=2))
     )
@@ -585,50 +634,70 @@ def get_svg_as_base64(file_path):
         with open(file_path, "r", encoding="utf-8") as f:
             svg = f.read()
         return base64.b64encode(svg.encode("utf-8")).decode("utf-8")
-    except: return ""
+    except FileNotFoundError:
+        print(f"ERRO: Arquivo não encontrado: {file_path}")
+        return ""
+    except Exception as e:
+        print(f"ERRO: {e}")
+        return ""
 
-# ICONES ATUALIZADOS
+# Mapeamento de ícones SVG
+# ATENÇÃO: Os nomes abaixo devem ser IDÊNTICOS aos arquivos que você jogou na pasta assets
 ICON_MAP = {
-    "Presentes": "presentes.svg",
-    "Ausentes": "ausentes.svg",
-    "Dias de Mar": "dias_mar.svg", 
-    "Agenda do Navio": "agenda.svg",
-    "Linha do Tempo": "linha_tempo.svg",
-    "Equipes Operativas": "equipe_operativa.svg",
-    "Estatísticas & Análises": "analise.svg",
+    "Presentes": "icons8-briefcase-50.svg",
+    "Ausentes": "icons8-box-50.svg",
+    "Agenda do Navio": "icons8-bookmark-50.svg",
+    "Linha do Tempo": "icons8-clock-50.svg",
+    "Equipes Operativas": "icons8-services-50.svg",
+    "Estatísticas & Análises": "icons8-news-50.svg",
     "Férias": "icons8-sun-50.svg",
-    "Cursos": "cursos.svg",
+    "Cursos": "icons8-document-50.svg",
     "Tabela de Serviço": "icons8-tick-box-50.svg",
-    "Log / Debug": "log.svg"
+    "Log / Debug": "icons8-wrench-50.svg"
 }
 
+# Gerar CSS para ícones
 css_icons = ""
+
+# --- CORREÇÃO AQUI: Aponta direto para a pasta 'assets' ---
 folder_path = os.path.join(os.path.dirname(__file__), "assets")
+
 options = list(ICON_MAP.keys())
 
 for i, option in enumerate(options):
     icon_filename = ICON_MAP[option]
-    # Assume que o usuário salvará os arquivos como .svg se não tiverem extensão no dicionário
-    if not icon_filename.endswith(".svg"):
-        icon_filename += ".svg"
-        
+    # Cria o caminho completo: ex: /app/seu-projeto/assets/icons8-briefcase-50.svg
     full_path = os.path.join(folder_path, icon_filename)
+    
     b64 = get_svg_as_base64(full_path)
+    
     if b64:
+        # nth-child(i+1) porque CSS conta a partir de 1
+        # Tentar seletor mais genérico para o texto
         css_icons += f"""
         div[role="radiogroup"] > label:nth-child({i+1}) [data-testid="stMarkdownContainer"] > p {{
-            display: flex; align-items: center;
+            display: flex;
+            align-items: center;
         }}
         div[role="radiogroup"] > label:nth-child({i+1}) [data-testid="stMarkdownContainer"] > p::before {{
-            content: ""; display: inline-block; width: 24px; height: 24px; margin-right: 10px;
+            content: "";
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            margin-right: 10px;
             background-color: currentColor;
             -webkit-mask-image: url('data:image/svg+xml;base64,{b64}');
             mask-image: url('data:image/svg+xml;base64,{b64}');
-            -webkit-mask-size: contain; mask-size: contain;
-            -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
-            -webkit-mask-position: center; mask-position: center;
+            -webkit-mask-size: contain;
+            mask-size: contain;
+            -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+            -webkit-mask-position: center;
+            mask-position: center;
         }}
         """
+    else:
+        st.sidebar.error(f"Falha ao carregar ícone: {icon_filename}")
 
 if css_icons:
     st.markdown(f"<style>{css_icons}</style>", unsafe_allow_html=True)
@@ -643,14 +712,17 @@ with st.sidebar.container():
     )
 
 # ============================================================
-# 9. MÉTRICAS GLOBAIS
+# 9. MÉTRICAS GLOBAIS (Função)
 # ============================================================
 
 def exibir_metricas_globais(data_referencia):
+    """Exibe os cards de métricas globais baseados na data fornecida."""
     hoje_ref = pd.to_datetime(data_referencia)
+    
     if not df_eventos.empty:
         ausentes_hoje_global = df_eventos[
-            (df_eventos["Inicio"] <= hoje_ref) & (df_eventos["Fim"] >= hoje_ref)
+            (df_eventos["Inicio"] <= hoje_ref) &
+            (df_eventos["Fim"] >= hoje_ref)
         ]
     else:
         ausentes_hoje_global = pd.DataFrame()
@@ -671,6 +743,7 @@ def exibir_metricas_globais(data_referencia):
 # 10. PÁGINAS
 # ============================================================
 
+# Data padrão para páginas que não têm seletor
 hoje_padrao = datetime.today()
 
 # --------------------------------------------------------
@@ -678,10 +751,13 @@ hoje_padrao = datetime.today()
 # --------------------------------------------------------
 if pagina == "Presentes":
     st.subheader("Presentes a bordo")
+    
     metrics_placeholder = st.container()
     table_placeholder = st.container()
+    
     st.markdown("---")
     st.markdown("##### Filtros & Data")
+    
     col_f1, col_f2, col_f3, col_data = st.columns([1.5, 1.5, 1.5, 2])
     apenas_eqman = col_f1.checkbox("Apenas EqMan", key="pres_eqman")
     apenas_in    = col_f2.checkbox("Apenas IN", key="pres_in")
@@ -695,26 +771,28 @@ if pagina == "Presentes":
 
     with table_placeholder:
         df_trip = filtrar_tripulacao(df_raw, apenas_eqman, apenas_in, apenas_gvi)
+
         if not df_eventos.empty:
-            ausentes_hoje = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
+            ausentes_hoje = df_eventos[
+                (df_eventos["Inicio"] <= hoje) &
+                (df_eventos["Fim"] >= hoje)
+            ]
             ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
             nomes_ausentes = set(ausentes_hoje["Nome"].unique())
         else:
             nomes_ausentes = set()
 
         df_presentes = df_trip[~df_trip["Nome"].isin(nomes_ausentes)].copy()
+
         st.markdown(f"Total de presentes (visão filtrada): **{len(df_presentes)}**")
 
         if df_presentes.empty:
             st.info("Nenhum militar presente para os filtros atuais.")
         else:
             tabela = df_presentes[["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"]].copy()
-            if "Gvi/GP" in tabela.columns:
-                tabela["GVI/GP"] = tabela["Gvi/GP"].apply(lambda v: "Sim" if parse_bool(v) else "Não")
-            if "IN" in tabela.columns:
-                tabela["IN"] = tabela["IN"].apply(lambda v: "Sim" if parse_bool(v) else "Não")
-            if "Gvi/GP" in tabela.columns:
-                tabela = tabela.drop(columns=["Gvi/GP"])
+            tabela["GVI/GP"] = tabela["Gvi/GP"].apply(lambda v: "Sim" if parse_bool(v) else "Não")
+            tabela["IN"] = tabela["IN"].apply(lambda v: "Sim" if parse_bool(v) else "Não")
+            tabela = tabela.drop(columns=["Gvi/GP"])
             st.dataframe(tabela, use_container_width=True, hide_index=True)
 
         st.markdown("##### Prontidão (visão filtrada)")
@@ -723,26 +801,37 @@ if pagina == "Presentes":
             presentes_filtrado = len(df_presentes)
             pront_pct = presentes_filtrado / total_filtrado * 100
             df_pr = pd.DataFrame({"Indicador": ["Prontidão"], "Percentual": [pront_pct]})
-            fig_pr = px.bar(df_pr, x="Percentual", y="Indicador", orientation="h", range_x=[0, 100], text="Percentual")
+            fig_pr = px.bar(
+                df_pr, x="Percentual", y="Indicador", orientation="h", range_x=[0, 100], text="Percentual",
+            )
             fig_pr.update_traces(texttemplate="%{x:.1f}%", textposition="inside", marker_color="#2ed8b6")
-            update_fig_layout(fig_pr)
+            update_fig_layout(fig_pr) 
             fig_pr.update_layout(height=160, xaxis=dict(title="%"), yaxis=dict(title=""))
             st.plotly_chart(fig_pr, use_container_width=True)
         else:
             st.info("Não há efetivo na visão atual para calcular a prontidão.")
+
 
 # --------------------------------------------------------
 # AUSENTES
 # --------------------------------------------------------
 elif pagina == "Ausentes":
     st.subheader("Ausentes por dia")
+
+    # 1. DATA (Esquerda)
     col_d1, _ = st.columns([2, 4])
     data_ref = col_d1.date_input("Data de Referência", hoje_padrao, key="data_aus_tab", format="DD/MM/YYYY")
     hoje = pd.to_datetime(data_ref)
+
+    # 2. TABELA
+    # Placeholder para a tabela
     table_placeholder = st.empty()
-    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 3. FILTROS (Centralizados abaixo da tabela)
+    st.markdown("<br>", unsafe_allow_html=True) # Espaçamento
     col_f_spacer1, col_f_content, col_f_spacer2 = st.columns([1, 4, 1])
     with col_f_content:
+        # st.markdown("##### Filtros") # REMOVIDO
         c_f1, c_f2, c_f3 = st.columns(3)
         apenas_eqman = c_f1.checkbox("Apenas EqMan", key="aus_eqman_tab")
         apenas_in    = c_f2.checkbox("Apenas IN", key="aus_in_tab")
@@ -751,8 +840,14 @@ elif pagina == "Ausentes":
     if df_eventos.empty:
         table_placeholder.info("Sem eventos de ausência registrados.")
     else:
-        ausentes_hoje = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
+        ausentes_hoje = df_eventos[
+            (df_eventos["Inicio"] <= hoje) &
+            (df_eventos["Fim"] >= hoje)
+        ]
+        
+        # Processamento da tabela com os valores dos filtros
         ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
+
         with table_placeholder.container():
             if ausentes_hoje.empty:
                 st.success("Todo o efetivo está a bordo para os filtros atuais.")
@@ -767,14 +862,18 @@ elif pagina == "Ausentes":
                 show_df["Retorno"] = show_df["Fim"].dt.strftime("%d/%m/%Y")
                 show_df = show_df.drop(columns=["Fim"])
                 show_df = show_df.rename(columns={"MotivoExib": "Motivo"})
+
                 st.dataframe(show_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
     
+    # 4. GRÁFICOS
     if not df_dias.empty:
+        # Filtrar df_dias com os mesmos filtros da tabela
         df_dias_filt = filtrar_dias(df_dias, apenas_eqman, apenas_in, apenas_gvi)
         
         if not df_dias_filt.empty:
+            # GRÁFICO 1: Ausentes por mês (Visão Anual)
             st.subheader("Quantidade de militares ausentes por mês")
             df_dias_filt["Mes"] = df_dias_filt["Data"].dt.to_period("M").dt.to_timestamp()
             df_aus_mes = (df_dias_filt[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
@@ -788,6 +887,7 @@ elif pagina == "Ausentes":
             
             st.markdown("---")
             
+            # GRÁFICO 2: Ausentes por dia no mês escolhido
             st.subheader("Militares ausentes por dia (Mês Específico)")
             
             col_sel_m, col_sel_a, _ = st.columns([1, 1, 2])
@@ -800,7 +900,9 @@ elif pagina == "Ausentes":
             sel_ano_aus = col_sel_a.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_aus_graf")
             sel_mes_aus = meses_dict[sel_mes_nome_aus]
             
+            # Filtrar para o mês selecionado
             start_date = datetime(sel_ano_aus, sel_mes_aus, 1)
+            # End date is start of next month
             if sel_mes_aus == 12:
                 end_date = datetime(sel_ano_aus + 1, 1, 1)
             else:
@@ -814,11 +916,13 @@ elif pagina == "Ausentes":
             if df_dias_mes.empty:
                 st.info(f"Sem registros de ausência para {sel_mes_nome_aus}/{sel_ano_aus}.")
             else:
+                # Tabela de ausentes no mês
                 ausentes_mes_evt = df_eventos[
                     (df_eventos["Inicio"] < end_date) &
                     (df_eventos["Fim"] >= start_date)
                 ].copy()
                 
+                # Aplicar filtros da aba
                 ausentes_mes_evt = filtrar_eventos(ausentes_mes_evt, apenas_eqman, apenas_in, apenas_gvi)
                 
                 if not ausentes_mes_evt.empty:
@@ -843,107 +947,7 @@ elif pagina == "Ausentes":
     else:
         st.info("Sem dados de ausências para gerar gráficos.")
 
-# --------------------------------------------------------
-# NOVO: DIAS DE MAR
-# --------------------------------------------------------
-elif pagina == "Dias de Mar":
-    st.subheader("Dias de Mar e Milhas Navegadas")
-    
-    try:
-        df_mar = load_dias_mar()
-        
-        if df_mar.empty:
-            st.info("Planilha de Dias de Mar vazia ou não encontrada.")
-        else:
-            # Cálculos Gerais
-            total_dias_mar = df_mar["DIAS DE MAR"].sum()
-            total_milhas = df_mar["MILHAS NAVEGADAS"].sum()
-            
-            # Médias por Ano
-            # Agrupa por ANO e soma, depois tira a média dos anos
-            df_por_ano = df_mar.groupby("ANO")[["DIAS DE MAR", "MILHAS NAVEGADAS"]].sum().reset_index()
-            media_dias_ano = df_por_ano["DIAS DE MAR"].mean()
-            media_milhas_ano = df_por_ano["MILHAS NAVEGADAS"].mean()
 
-            # Exibir Cards
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Total Dias de Mar", f"{total_dias_mar:,.1f}")
-            c2.metric("Total Milhas", f"{total_milhas:,.0f}")
-            c3.metric("Média Dias/Ano", f"{media_dias_ano:,.1f}")
-            c4.metric("Média Milhas/Ano", f"{media_milhas_ano:,.0f}")
-            
-            st.markdown("---")
-            
-            # Gráfico 1: Dias de Mar por Ano (LINHA)
-            st.subheader("Evolução Anual")
-            fig_ano = px.line(
-                df_por_ano, x="ANO", y="DIAS DE MAR", 
-                text="DIAS DE MAR", 
-                title="Dias de Mar por Ano",
-                labels={"ANO": "Ano", "DIAS DE MAR": "Dias"},
-                color_discrete_sequence=["#4099ff"],
-                markers=True
-            )
-            # Força o eixo X a exibir todos os anos como categorias para não interpolar
-            fig_ano.update_xaxes(type='category')
-            fig_ano.update_traces(texttemplate='%{text:.1f}', textposition='top center')
-            update_fig_layout(fig_ano)
-            st.plotly_chart(fig_ano, use_container_width=True)
-            
-            st.markdown("---")
-            
-            # Gráfico 2: Detalhamento Mensal (LINHA)
-            st.subheader("Detalhamento Mensal")
-            
-            # Seletor de Ano
-            # Ordena os anos e converte para int para exibir bonito no selectbox
-            anos_disponiveis = sorted(df_mar["ANO"].unique().astype(int), reverse=True)
-            if anos_disponiveis:
-                ano_sel_mar = st.selectbox("Selecione o Ano", anos_disponiveis)
-                
-                # Filtrar dados do ano
-                df_mar_ano = df_mar[df_mar["ANO"] == ano_sel_mar].copy()
-                
-                if not df_mar_ano.empty:
-                    # Extrair Mês da Data de Início
-                    if "DATA INÍCIO" in df_mar_ano.columns:
-                        # Garante que DATA INÍCIO é datetime
-                        df_mar_ano["DATA INÍCIO"] = pd.to_datetime(df_mar_ano["DATA INÍCIO"], errors='coerce')
-                        
-                        # Agrupar por mês (ordenado por número do mês para gráfico correto)
-                        df_mar_ano["Mês_Num"] = df_mar_ano["DATA INÍCIO"].dt.month
-                        
-                        # Agrupamento e soma
-                        df_mensal_mar = df_mar_ano.groupby("Mês_Num")["DIAS DE MAR"].sum().reset_index()
-                        
-                        # --- CRIA O DATAFRAME COM TODOS OS 12 MESES ---
-                        todos_meses = pd.DataFrame({'Mês_Num': range(1, 13)})
-                        df_completo = pd.merge(todos_meses, df_mensal_mar, on='Mês_Num', how='left').fillna(0)
-                        
-                        # Mapear número para nome para o eixo X
-                        mapa_meses = {1:"Jan", 2:"Fev", 3:"Mar", 4:"Abr", 5:"Mai", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Set", 10:"Out", 11:"Nov", 12:"Dez"}
-                        df_completo["Mês"] = df_completo["Mês_Num"].map(mapa_meses)
-                        
-                        fig_mes_mar = px.line(
-                            df_completo, x="Mês", y="DIAS DE MAR",
-                            text="DIAS DE MAR",
-                            title=f"Dias de Mar em {ano_sel_mar} (por mês de início da comissão)",
-                            color_discrete_sequence=["#2ed8b6"],
-                            markers=True
-                        )
-                        fig_mes_mar.update_traces(texttemplate='%{text:.1f}', textposition='top center')
-                        update_fig_layout(fig_mes_mar)
-                        st.plotly_chart(fig_mes_mar, use_container_width=True)
-                        
-                        with st.expander("Ver dados brutos do ano selecionado"):
-                            st.dataframe(df_mar_ano[["TERMO DE VIAGEM", "DATA INÍCIO", "DATA TÉRMINO", "DIAS DE MAR", "MILHAS NAVEGADAS"]], use_container_width=True)
-                    else:
-                        st.warning("Coluna 'DATA INÍCIO' não encontrada ou inválida.")
-                else:
-                    st.info(f"Sem dados de dias de mar para o ano {ano_sel_mar}.")
-
-    except Exception as e:
-        st.error(f"Erro ao processar Dias de Mar: {e}")
 
 
 # --------------------------------------------------------
@@ -978,40 +982,69 @@ else:
 
     elif pagina == "Linha do Tempo":
         st.subheader("Planejamento Anual de Ausências")
+        # FILTROS REMOVIDOS
+        
         content_container = st.container()
         with content_container:
             if df_eventos.empty:
                 st.info("Planilha parece não ter datas preenchidas.")
             else:
+                # Sem filtros, usa df_eventos direto
                 df_gantt = df_eventos.copy()
+                
                 if df_gantt.empty:
                     st.info("Nenhum evento encontrado.")
                 else:
                     ordem_nomes = df_raw["Nome"].unique().tolist()
+                    
                     df_gantt["Nome"] = pd.Categorical(df_gantt["Nome"], categories=ordem_nomes, ordered=True)
                     df_gantt = df_gantt.sort_values("Nome")
+                    
                     min_data = df_gantt["Inicio"].min()
                     max_data = df_gantt["Fim"].max()
                     ano_min = min_data.year if pd.notnull(min_data) else 2025
                     ano_max = max_data.year if pd.notnull(max_data) else 2026
+                    
                     fig = px.timeline(
                         df_gantt, x_start="Inicio", x_end="Fim", y="Nome", color="MotivoAgrupado",
                         hover_data=["Posto", "Escala", "EqMan", "GVI", "IN", "MotivoAgrupado"],
                         color_discrete_sequence=AMEZIA_COLORS
                     )
+                    
+                    # Force all names to appear on Y-axis even if no data
+                    # Calculate height based on number of personnel to ensure no scrolling/hiding
                     chart_height = max(600, len(ordem_nomes) * 30)
-                    fig.update_yaxes(autorange="reversed", categoryorder="array", categoryarray=ordem_nomes, type='category', showgrid=True, tickmode='array', tickvals=ordem_nomes)
+                    
+                    fig.update_yaxes(
+                        autorange="reversed", 
+                        categoryorder="array", 
+                        categoryarray=ordem_nomes,
+                        type='category',
+                        showgrid=True,
+                        tickmode='array',
+                        tickvals=ordem_nomes
+                    )
+                    
+                    # Add a dummy invisible trace for all names to ensure they are registered in the plot
                     fig.add_trace(px.scatter(y=ordem_nomes, x=[min_data]*len(ordem_nomes), opacity=0).data[0])
                     fig.data[-1].showlegend = False
+                    
                     fig.update_xaxes(range=[datetime(ano_min, 1, 1), datetime(ano_max, 12, 31)])
                     fig.add_vline(x=hoje, line_width=2, line_dash="dash", line_color="#ff5370")
+                    
                     update_fig_layout(fig, title="Cronograma de Ausências")
-                    fig.update_layout(plot_bgcolor="rgba(255,255,255,0.05)", height=chart_height)
+                    fig.update_layout(
+                        plot_bgcolor="rgba(255,255,255,0.05)",
+                        height=chart_height
+                    )
+                    
                     st.plotly_chart(fig, use_container_width=True)
 
     elif pagina == "Equipes Operativas":
         st.subheader("Equipes Operativas")
+        
         col_eq1, col_eq2, col_eq3 = st.columns(3)
+        
         with col_eq1:
             st.markdown("### GVI/GP")
             df_gvi = df_raw[df_raw["Gvi/GP"].apply(parse_bool)].copy()
@@ -1020,6 +1053,7 @@ else:
             else:
                 st.dataframe(df_gvi[["Posto", "Nome"]], use_container_width=True, hide_index=True)
                 st.markdown(f"**Total:** {len(df_gvi)}")
+
         with col_eq2:
             st.markdown("### Inspetores Navais")
             df_in = df_raw[df_raw["IN"].apply(parse_bool)].copy()
@@ -1028,9 +1062,11 @@ else:
             else:
                 st.dataframe(df_in[["Posto", "Nome"]], use_container_width=True, hide_index=True)
                 st.markdown(f"**Total:** {len(df_in)}")
+                
         with col_eq3:
             st.markdown("### EqMan")
-            df_eqman = df_raw[(df_raw["EqMan"].notna()) & (df_raw["EqMan"] != "Não") & (df_raw["EqMan"] != "-")].copy()
+            # EqMan != "Não" e != "-"
+            df_eqman = df_raw[ (df_raw["EqMan"].notna()) & (df_raw["EqMan"] != "Não") & (df_raw["EqMan"] != "-") ].copy()
             if df_eqman.empty:
                 st.info("Nenhum militar na EqMan.")
             else:
@@ -1039,12 +1075,16 @@ else:
 
     elif pagina == "Estatísticas & Análises":
         st.subheader("Visão Analítica de Ausências")
+        # FILTROS REMOVIDOS
+        
         content_container = st.container()
         with content_container:
             if df_eventos.empty:
                 st.write("Sem dados suficientes para estatísticas.")
             else:
+                # Sem filtros
                 df_evt = df_eventos.copy()
+                
                 if df_evt.empty:
                     st.info("Nenhum evento.")
                 else:
@@ -1071,11 +1111,14 @@ else:
                     if not df_dias.empty:
                         st.markdown("---")
                         st.subheader("Média de militares ausentes por dia (por mês)")
+                        # Sem filtros
                         df_dias_filtrado = df_dias.copy()
+                        
                         if not df_dias_filtrado.empty:
                             df_diario = (df_dias_filtrado.groupby("Data")["Nome"].nunique().reset_index(name="Ausentes"))
                             df_diario["Mes"] = df_diario["Data"].dt.to_period("M").dt.to_timestamp()
                             df_mensal = (df_diario.groupby("Mes")["Ausentes"].mean().reset_index(name="Media_ausentes_dia"))
+                            
                             fig_mensal = px.area(
                                 df_mensal, x="Mes", y="Media_ausentes_dia", markers=True,
                                 labels={"Mes": "Mês", "Media_ausentes_dia": "Média de ausentes/dia"}, color_discrete_sequence=["#4099ff"]
@@ -1087,12 +1130,16 @@ else:
 
     elif pagina == "Férias":
         st.subheader("Férias cadastradas")
+        # FILTROS REMOVIDOS
+        
         content_container = st.container()
         with content_container:
             if df_eventos.empty:
                 st.write("Sem dados de férias registrados.")
             else:
                 df_ferias = df_eventos[df_eventos["Tipo"] == "Férias"].copy()
+                # Sem filtros
+                
                 if df_ferias.empty:
                     st.info("Nenhuma férias cadastrada.")
                 else:
@@ -1101,34 +1148,43 @@ else:
                     tabela_ferias["Término"] = tabela_ferias["Fim"].dt.strftime("%d/%m/%Y")
                     tabela_ferias = tabela_ferias.drop(columns=["Inicio", "Fim"])
                     tabela_ferias = tabela_ferias.rename(columns={"Duracao_dias": "Dias"})
+                    
+                    # Ordenar conforme a planilha original
                     ordem_nomes = df_raw["Nome"].unique().tolist()
                     tabela_ferias["Nome"] = pd.Categorical(tabela_ferias["Nome"], categories=ordem_nomes, ordered=True)
                     tabela_ferias = tabela_ferias.sort_values(by=["Nome", "Início"])
                     st.markdown("### Todos os períodos de férias registrados")
                     st.dataframe(tabela_ferias, use_container_width=True, hide_index=True)
                     st.markdown("---")
+
                     col_f1m, col_f2m, col_f3m = st.columns(3)
                     total_militares_com_ferias = df_ferias["Nome"].nunique()
                     dias_totais_ferias = df_ferias["Duracao_dias"].sum()
+                    
                     total_efetivo = df_raw["Nome"].nunique()
                     restam_cadastrar = max(0, total_efetivo - total_militares_com_ferias)
+
                     col_f1m.metric("Militares com férias", total_militares_com_ferias)
                     col_f2m.metric("Dias totais", int(dias_totais_ferias))
                     col_f3m.metric("Restam cadastrar", restam_cadastrar)
                     st.markdown("---")
                     col_fx1, col_fx2 = st.columns(2)
                     df_escala = (df_ferias.groupby("Escala")["Nome"].nunique().reset_index(name="Militares").sort_values("Militares", ascending=False))
+                    
                     fig_escala = px.bar(
                         df_escala, x="Escala", y="Militares",
                         labels={"Militares": "Militares em férias (no ano)"}, color_discrete_sequence=AMEZIA_COLORS
                     )
                     update_fig_layout(fig_escala, title="Militares de férias por serviço")
                     col_fx1.plotly_chart(fig_escala, use_container_width=True)
+                    
                     if not df_dias.empty:
                         df_dias_ferias = df_dias[df_dias["Tipo"] == "Férias"].copy()
+                        # Sem filtros
                         if not df_dias_ferias.empty:
                             df_dias_ferias["Mes"] = df_dias_ferias["Data"].dt.to_period("M").dt.to_timestamp()
                             df_mes_ferias = (df_dias_ferias[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
+                            
                             fig_mes_ferias = px.bar(
                                 df_mes_ferias, x="Mes", y="Militares",
                                 labels={"Mes": "Mês", "Militares": "Militares com férias no mês"}, color_discrete_sequence=["#ffb64d"]
@@ -1154,19 +1210,19 @@ else:
                             fig_pizza_ferias.update_traces(textposition="inside", textinfo="percent+label", hovertemplate="<b>%{label}</b><br>%{value:.1f}%<extra></extra>")
                             update_fig_layout(fig_pizza_ferias, "Distribuição de férias gozadas x não gozadas")
                             st.plotly_chart(fig_pizza_ferias, use_container_width=True)
-                        else:
-                            st.info("Não foi possível calcular a média da coluna %DG.")
-                    else:
-                        st.info("Coluna %DG não encontrada na planilha para cálculo do percentual de férias gozadas.")
 
     elif pagina == "Cursos":
         st.subheader("Análises de Cursos")
+        # FILTROS REMOVIDOS
+        
         content_container = st.container()
         with content_container:
             if df_eventos.empty:
                 st.write("Sem dados de cursos registrados.")
             else:
                 df_cursos = df_eventos[df_eventos["Tipo"] == "Curso"].copy()
+                # Sem filtros
+                
                 if df_cursos.empty:
                     st.info("Nenhum curso cadastrado.")
                 else:
@@ -1212,73 +1268,99 @@ else:
                         st.markdown("---")
                         col_g1, col_g2 = st.columns(2)
                         df_cursos_freq = (realizados.groupby("Motivo")["Nome"].nunique().reset_index(name="Militares").sort_values("Militares", ascending=False))
+                        
                         fig_cursos_freq = px.bar(
                             df_cursos_freq, x="Motivo", y="Militares",
                             labels={"Motivo": "Curso", "Militares": "Militares"}, color_discrete_sequence=["#4099ff"]
                         )
                         update_fig_layout(fig_cursos_freq, title="Cursos realizados")
                         col_g1.plotly_chart(fig_cursos_freq, use_container_width=True)
+                        
                         if not df_dias.empty:
                             df_dias_cursos = df_dias[df_dias["Tipo"] == "Curso"].copy()
+                            # Sem filtros
                             if not df_dias_cursos.empty:
                                 df_dias_cursos["Mes"] = df_dias_cursos["Data"].dt.to_period("M").dt.to_timestamp()
                                 df_curso_mes = (df_dias_cursos[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
+                                
                                 fig_curso_mes = px.area(
                                     df_curso_mes, x="Mes", y="Militares", markers=True,
                                     labels={"Mes": "Mês", "Militares": "Militares em curso"}, color_discrete_sequence=["#ff5370"]
                                 )
                                 update_fig_layout(fig_curso_mes, title="Militares em curso por mês")
                                 col_g2.plotly_chart(fig_curso_mes, use_container_width=True)
-                            else:
-                                col_g2.info("Sem dados diários suficientes para análise mensal de cursos.")
 
     elif pagina == "Tabela de Serviço":
         st.subheader("Tabela de Serviço - Análise de Escalas")
+
+        # --- SEÇÃO 1: VISÃO DIÁRIA ---
         st.markdown("#### Escala Diária")
-        col_escala_container, _ = st.columns([1, 3])
+        
+        # Layout: Coluna única para garantir mesma largura
+        col_escala_container, _ = st.columns([1, 3]) # Ajuste a proporção para ficar mais estreito (aprox 25%)
+        
         with col_escala_container:
             data_ref_diaria = st.date_input("Data de Referência", value=datetime.now(), key="data_ref_escala", format="DD/MM/YYYY")
             dt_ref = pd.to_datetime(data_ref_diaria)
+
+            # Identificar coluna de Escala/Serviço
             col_escala = None
             possiveis = ["Escala", "Serviço", "Função", "Setor", "Divisão"]
             for c in possiveis:
                 if c in df_raw.columns:
                     col_escala = c
                     break
+            
             target_col = col_escala if col_escala else "Posto/Grad"
+
             if not col_escala and "Posto/Grad" not in df_raw.columns:
                 st.error("Não foi possível identificar a coluna de Escala/Serviço para cálculo.")
             else:
+                # Calcular escala para o dia selecionado
                 daily_data = []
                 for servico in SERVICOS_CONSIDERADOS:
+                    # Filtrar pessoas desse serviço
                     people_in_service = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
                     if people_in_service.empty:
                          people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
+
                     total = len(people_in_service)
+                    
+                    # Contar ausentes no dia
                     absent = 0
                     for _, person in people_in_service.iterrows():
                         status = get_status_em_data(person, dt_ref, BLOCOS_DATAS)
                         if status != "Presente":
                             absent += 1
+                    
                     available = max(0, total - absent)
                     scale_val = max(0, available - 1)
+                    
                     daily_data.append({
                         "Serviço": servico,
                         "Escala": f"{scale_val}x1"
                     })
+                
                 df_daily = pd.DataFrame(daily_data)
+                
+                # Color logic
                 def color_scale_daily(val):
                     if isinstance(val, str):
                         if "0x1" in val or "1x1" in val:
-                            return "color: #ff5370; font-weight: bold"
+                            return "color: #ff5370; font-weight: bold" # Red
                         elif "2x1" in val:
-                            return "color: #ffb64d; font-weight: bold"
+                            return "color: #ffb64d; font-weight: bold" # Yellow
                         elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
-                             return "color: #2ed8b6; font-weight: bold"
+                             return "color: #2ed8b6; font-weight: bold" # Green
                     return ""
                 st.dataframe(df_daily.style.map(color_scale_daily, subset=["Escala"]), use_container_width=True, hide_index=True)
+
                 st.markdown("---")
+
+        # --- SEÇÃO 2: VISÃO MENSAL ---
         st.markdown("#### Escala Mensal")
+        
+        # Layout: Full Width (sem colunas restritivas)
         col_mes_sel, col_ano_sel = st.columns(2)
         meses_dict = {
             "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
@@ -1288,86 +1370,65 @@ else:
         sel_mes_nome = col_mes_sel.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_escala")
         sel_ano = col_ano_sel.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_escala")
         sel_mes = meses_dict[sel_mes_nome]
+        
+        # Gerar dias do mês
         days_in_month = pd.Period(f"{sel_ano}-{sel_mes}-01").days_in_month
         dates = [datetime(sel_ano, sel_mes, d) for d in range(1, days_in_month+1)]
+        
         data_matrix = []
+        
         for d in dates:
-            row_data = {"Dia": d.strftime("%d/%m")}
+            row_data = {"Dia": d.strftime("%d/%m")} # Dias do mês na primeira coluna
+            
             for servico in SERVICOS_CONSIDERADOS:
                 people_in_service = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
                 if people_in_service.empty:
                         people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
+
                 total = len(people_in_service)
+                
                 absent = 0
                 for _, person in people_in_service.iterrows():
                     status = get_status_em_data(person, d, BLOCOS_DATAS)
                     if status != "Presente":
                         absent += 1
+                
                 available = max(0, total - absent)
                 scale_val = max(0, available - 1)
+                
                 row_data[servico] = f"{scale_val}x1"
+            
             data_matrix.append(row_data)
+        
         df_tabela = pd.DataFrame(data_matrix)
+        
         def color_scale_monthly(val):
             if isinstance(val, str):
                 if "0x1" in val or "1x1" in val:
                     return "color: #ff5370; font-weight: bold"
                 elif "2x1" in val:
-                    return "color: #ffb64d; font-weight: bold"
+                    return "color: #ffb64d; font-weight: bold" # Yellow
                 elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
                         return "color: #2ed8b6; font-weight: bold"
             return ""
+
         st.dataframe(df_tabela.style.map(color_scale_monthly), use_container_width=True, hide_index=True)
+
         st.markdown("---")
         st.markdown("#### Militares fora da escala")
+        
+        # Identificar quem tem "não concorre" na coluna de escala
+        # target_col já foi identificado acima
         df_fora_escala = df_raw[df_raw[target_col].astype(str).str.contains("não concorre", case=False, na=False)].copy()
+        
         if df_fora_escala.empty:
             st.info("Todos os militares estão alocados em alguma escala considerada.")
         else:
             st.write(f"Total de militares que não concorrem à escala: **{len(df_fora_escala)}**")
             st.dataframe(df_fora_escala[["Posto", "Nome", target_col]], use_container_width=True, hide_index=True)
 
-        st.markdown("---")
-        st.markdown("#### Componentes das Escalas")
-        cols_srv = st.columns(len(SERVICOS_CONSIDERADOS))
-        tabs_escalas = st.tabs(SERVICOS_CONSIDERADOS)
-        for i, servico in enumerate(SERVICOS_CONSIDERADOS):
-            with tabs_escalas[i]:
-                people = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
-                if people.empty:
-                    people = df_raw[df_raw[target_col].astype(str) == servico]
-                if not people.empty:
-                    st.write(f"**Total:** {len(people)}")
-                    st.dataframe(people[["Posto", "Nome"]], use_container_width=True, hide_index=True)
-                else:
-                    st.info(f"Ninguém cadastrado como {servico}.")
-
     elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
-        
-        # --- NEW DEBUG SECTION FOR CHECKBOXES ---
-        st.markdown("### 🔍 Diagnóstico de Colunas GVI e IN")
-        st.info("Use esta seção para verificar como o Python está lendo os valores das checkboxes.")
-        
-        cols_debug = []
-        if "Gvi/GP" in df_raw.columns: cols_debug.append("Gvi/GP")
-        if "IN" in df_raw.columns: cols_debug.append("IN")
-        
-        if cols_debug:
-            st.write("Valores únicos encontrados nas colunas:")
-            for col in cols_debug:
-                unique_vals = df_raw[col].unique()
-                st.write(f"**{col}:** {unique_vals}")
-                
-            st.markdown("##### Teste da função `parse_bool`:")
-            test_val = st.text_input("Digite um valor para testar se é True/False (ex: 'Sim', 'TRUE', 'x'):")
-            if test_val:
-                res = parse_bool(test_val)
-                st.write(f"O valor '{test_val}' é considerado: **{res}**")
-        else:
-            st.error("Colunas Gvi/GP ou IN não encontradas na planilha.")
-            
-        st.markdown("---")
         st.markdown("### df_raw (dados brutos do Google Sheets)")
         st.write(f"Total de linhas em df_raw: **{len(df_raw)}**")
         st.write("Colunas disponíveis em df_raw:")
@@ -1401,10 +1462,10 @@ else:
 # ============================================================
 st.markdown("<hr style='border-color: rgba(148, 163, 184, 0.2); margin-top:2rem;'/>", unsafe_allow_html=True)
 st.markdown(
-    f"""
-    <div style='text-align:center; color:#94a3b8; padding:0.5rem 0; font-size:0.85rem;'>
-    Created by <strong>Klismann Freitas</strong> - Versão do painel: <strong>{SCRIPT_VERSION}</strong>
-    </div>
-    """,
+    "<div style='text-align:center; color:#94a3b8; padding:0.5rem 0; font-size:0.85rem;'>"
+    "Created by <strong>Klismann Freitas</strong> - Versão do painel: <strong>" + SCRIPT_VERSION + "</strong>"
+    "</div>",
     unsafe_allow_html=True
 )
+
+
