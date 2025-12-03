@@ -298,12 +298,12 @@ st.markdown(
 HEADER_ROW = 2  # linha 3 na planilha
 
 AGENDAS_OFICIAIS = {
-    "📅 Agenda Permanente": "agenda.npamacau@gmail.com",
-    "⚓ Agenda Eventual": "32e9bbd3bca994bdab0b3cd648f2cb4bc13b0cf312a6a2c5a763527a5c610917@group.calendar.google.com",
-    "🎂 Aniversários OM": "9f856c62f2420cd3ce5173197855b6726dd0a73d159ba801afd4eddfcac651db@group.calendar.google.com",
-    "🎉 Aniversários Tripulação": "8641c7fc86973e09bbb682f8841908cc9240b25b1990f179137dfa7d2b23b2da@group.calendar.google.com",
-    "📋 Comissão": "ff1a7d8acb9ea68eed3ec9b0e279f2a91fb962e4faa9f7a3e7187fade00eb0d6@group.calendar.google.com",
-    "🛠️ NSD": "d7d9199712991f81e35116b9ec1ed492ac672b72b7103a3a89fb3f66ae635fb7@group.calendar.google.com"
+    "Agenda Permanente": "agenda.npamacau@gmail.com",
+    "Agenda Eventual": "32e9bbd3bca994bdab0b3cd648f2cb4bc13b0cf312a6a2c5a763527a5c610917@group.calendar.google.com",
+    "Aniversários OM": "9f856c62f2420cd3ce5173197855b6726dd0a73d159ba801afd4eddfcac651db@group.calendar.google.com",
+    "Aniversários Tripulação": "8641c7fc86973e09bbb682f8841908cc9240b25b1990f179137dfa7d2b23b2da@group.calendar.google.com",
+    "Comissão": "ff1a7d8acb9ea68eed3ec9b0e279f2a91fb962e4faa9f7a3e7187fade00eb0d6@group.calendar.google.com",
+    "NSD": "d7d9199712991f81e35116b9ec1ed492ac672b72b7103a3a89fb3f66ae635fb7@group.calendar.google.com"
 }
 
 SERVICOS_CONSIDERADOS = [
@@ -892,7 +892,7 @@ else:
     hoje = pd.to_datetime(hoje_padrao)
     
     if pagina == "Agenda do Navio":
-        st.subheader("📅 Agenda do Navio (Google Calendar)")
+        st.subheader("Agenda do Navio (Google Calendar)")
         col_sel, col_btn = st.columns([3, 1])
         with col_sel:
             nome_agenda = st.selectbox("Selecione a Agenda:", list(AGENDAS_OFICIAIS.keys()))
@@ -900,7 +900,7 @@ else:
         with col_btn:
             st.write("")
             st.write("")
-            if st.button("🔄 Atualizar eventos"):
+            if st.button("Atualizar eventos"):
                 load_calendar_events.clear()
                 st.rerun()
         if selected_id:
