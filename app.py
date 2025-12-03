@@ -1231,11 +1231,9 @@ else:
 # ============================================================
 st.markdown("<hr style='border-color: rgba(148, 163, 184, 0.2); margin-top:2rem;'/>", unsafe_allow_html=True)
 st.markdown(
-    f"""
-    <div style='text-align:center; color:#94a3b8; padding:0.5rem 0; font-size:0.85rem;'>
-        Created by <strong>Klismann Freitas</strong> - Versão do painel: <strong>{SCRIPT_VERSION}</strong>
-    </div>
-    """,
+    "<div style='text-align:center; color:#94a3b8; padding:0.5rem 0; font-size:0.85rem;'>"
+    "Created by <strong>Klismann Freitas</strong> - Versão do painel: <strong>" + SCRIPT_VERSION + "</strong>"
+    "</div>",
     unsafe_allow_html=True
 )
 
