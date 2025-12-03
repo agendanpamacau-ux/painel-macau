@@ -685,10 +685,15 @@ for i, option in enumerate(options):
             width: 24px;
             height: 24px;
             margin-right: 10px;
-            background-image: url('data:image/svg+xml;base64,{b64}');
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
+            background-color: currentColor;
+            -webkit-mask-image: url('data:image/svg+xml;base64,{b64}');
+            mask-image: url('data:image/svg+xml;base64,{b64}');
+            -webkit-mask-size: contain;
+            mask-size: contain;
+            -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+            -webkit-mask-position: center;
+            mask-position: center;
         }}
         """
     else:
