@@ -12,7 +12,7 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.9.5 (Fix Lógica Mensal)"
+SCRIPT_VERSION = "v1.9.6 (Fix Gráfico Mensal Completo)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly_dark"
