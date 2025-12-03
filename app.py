@@ -12,10 +12,10 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.9.1 (Fix usecols Dias de Mar)"
+SCRIPT_VERSION = "v1.9.2 (Fix Gráficos Dias de Mar)"
 
 # Configuração do Plotly
-pio.templates.default = "plotly"
+pio.templates.default = "plotly_dark"
 
 # ============================================================
 # 1. CONFIGURAÇÃO DA PÁGINA
@@ -246,7 +246,7 @@ def load_dias_mar():
     """Carrega dados da planilha separada de Dias de Mar"""
     conn = st.connection("gsheets", type=GSheetsConnection)
     # Header na linha 8 (index 7)
-    # CORREÇÃO AQUI: usecols removido para evitar erro, filtramos depois se precisar
+    # REMOVIDO usecols para evitar erro, filtramos depois
     df = conn.read(spreadsheet=URL_DIAS_MAR, header=7, ttl="10m")
     
     # Limpeza: Remove linhas onde "TERMO DE VIAGEM" está vazio
@@ -262,6 +262,7 @@ def load_dias_mar():
     numeric_cols = ["DIAS DE MAR", "MILHAS NAVEGADAS", "ANO"]
     for col in numeric_cols:
         if col in df.columns:
+            # Força conversão para numérico, erros viram NaN, depois 0
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
     # Conversão de datas
@@ -398,9 +399,7 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
                 motivo_real = "Férias"
                 tipo_final = "Férias"
             else:
-                motivo_texto = ""
-                if col_mot is not None:
-                    motivo_texto = str(row.get(col_mot, "")).strip()
+                motivo_texto = str(row.get(col_mot, "")).strip() if col_mot else ""
                 if tipo_base == "Curso":
                     motivo_real = motivo_texto if motivo_texto and "nan" not in motivo_texto.lower() else "CURSO (não especificado)"
                     tipo_final = "Curso"
@@ -793,7 +792,6 @@ elif pagina == "Dias de Mar":
             total_milhas = df_mar["MILHAS NAVEGADAS"].sum()
             
             # Médias por Ano
-            # Agrupa por ANO e soma, depois tira a média dos anos
             df_por_ano = df_mar.groupby("ANO")[["DIAS DE MAR", "MILHAS NAVEGADAS"]].sum().reset_index()
             media_dias_ano = df_por_ano["DIAS DE MAR"].mean()
             media_milhas_ano = df_por_ano["MILHAS NAVEGADAS"].mean()
@@ -807,25 +805,29 @@ elif pagina == "Dias de Mar":
             
             st.markdown("---")
             
-            # Gráfico 1: Dias de Mar por Ano (Barra)
+            # Gráfico 1: Dias de Mar por Ano (LINHA)
             st.subheader("Evolução Anual")
-            fig_ano = px.bar(
+            fig_ano = px.line(
                 df_por_ano, x="ANO", y="DIAS DE MAR", 
                 text="DIAS DE MAR", 
                 title="Dias de Mar por Ano",
                 labels={"ANO": "Ano", "DIAS DE MAR": "Dias"},
-                color_discrete_sequence=["#4099ff"]
+                color_discrete_sequence=["#4099ff"],
+                markers=True
             )
-            fig_ano.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+            # Força o eixo X a exibir todos os anos como categorias para não interpolar
+            fig_ano.update_xaxes(type='category')
+            fig_ano.update_traces(texttemplate='%{text:.1f}', textposition='top center')
             update_fig_layout(fig_ano)
             st.plotly_chart(fig_ano, use_container_width=True)
             
             st.markdown("---")
             
-            # Gráfico 2: Detalhamento Mensal
+            # Gráfico 2: Detalhamento Mensal (LINHA)
             st.subheader("Detalhamento Mensal")
             
             # Seletor de Ano
+            # Ordena os anos e converte para int para exibir bonito no selectbox
             anos_disponiveis = sorted(df_mar["ANO"].unique().astype(int), reverse=True)
             if anos_disponiveis:
                 ano_sel_mar = st.selectbox("Selecione o Ano", anos_disponiveis)
@@ -833,32 +835,42 @@ elif pagina == "Dias de Mar":
                 # Filtrar dados do ano
                 df_mar_ano = df_mar[df_mar["ANO"] == ano_sel_mar].copy()
                 
-                # Extrair Mês da Data de Início
-                if "DATA INÍCIO" in df_mar_ano.columns:
-                    # Se o locale pt_BR não estiver disponível, pode-se usar um mapa de nomes
-                    try:
-                        df_mar_ano["Mês"] = df_mar_ano["DATA INÍCIO"].dt.month_name(locale="pt_BR")
-                    except:
-                        # Fallback para mapa manual se o locale falhar
-                        month_map = {1:'Janeiro', 2:'Fevereiro', 3:'Março', 4:'Abril', 5:'Maio', 6:'Junho', 7:'Julho', 8:'Agosto', 9:'Setembro', 10:'Outubro', 11:'Novembro', 12:'Dezembro'}
-                        df_mar_ano["Mês"] = df_mar_ano["DATA INÍCIO"].dt.month.map(month_map)
-                    
-                    # Agrupar por mês (ordenado por número do mês para gráfico correto)
-                    df_mar_ano["Mês_Num"] = df_mar_ano["DATA INÍCIO"].dt.month
-                    df_mensal_mar = df_mar_ano.groupby("Mês_Num").agg({"DIAS DE MAR": "sum", "Mês": "first"}).reset_index()
-                    
-                    fig_mes_mar = px.bar(
-                        df_mensal_mar, x="Mês", y="DIAS DE MAR",
-                        text="DIAS DE MAR",
-                        title=f"Dias de Mar em {ano_sel_mar} (por mês de início da comissão)",
-                        color_discrete_sequence=["#2ed8b6"]
-                    )
-                    fig_mes_mar.update_traces(texttemplate='%{text:.1f}', textposition='outside')
-                    update_fig_layout(fig_mes_mar)
-                    st.plotly_chart(fig_mes_mar, use_container_width=True)
-                    
-                    with st.expander("Ver dados brutos do ano selecionado"):
-                        st.dataframe(df_mar_ano[["TERMO DE VIAGEM", "DATA INÍCIO", "DATA TÉRMINO", "DIAS DE MAR", "MILHAS NAVEGADAS"]], use_container_width=True)
+                if not df_mar_ano.empty:
+                    # Extrair Mês da Data de Início
+                    if "DATA INÍCIO" in df_mar_ano.columns:
+                        # Garante que DATA INÍCIO é datetime
+                        df_mar_ano["DATA INÍCIO"] = pd.to_datetime(df_mar_ano["DATA INÍCIO"], errors='coerce')
+                        
+                        # Agrupar por mês (ordenado por número do mês para gráfico correto)
+                        df_mar_ano["Mês_Num"] = df_mar_ano["DATA INÍCIO"].dt.month
+                        
+                        # Agrupamento e soma
+                        df_mensal_mar = df_mar_ano.groupby("Mês_Num")["DIAS DE MAR"].sum().reset_index()
+                        
+                        # Mapear número para nome para o eixo X
+                        mapa_meses = {1:"Jan", 2:"Fev", 3:"Mar", 4:"Abr", 5:"Mai", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Set", 10:"Out", 11:"Nov", 12:"Dez"}
+                        df_mensal_mar["Mês"] = df_mensal_mar["Mês_Num"].map(mapa_meses)
+                        
+                        # Ordena pelo número do mês para a linha não ficar bagunçada
+                        df_mensal_mar = df_mensal_mar.sort_values("Mês_Num")
+                        
+                        fig_mes_mar = px.line(
+                            df_mensal_mar, x="Mês", y="DIAS DE MAR",
+                            text="DIAS DE MAR",
+                            title=f"Dias de Mar em {ano_sel_mar} (por mês de início da comissão)",
+                            color_discrete_sequence=["#2ed8b6"],
+                            markers=True
+                        )
+                        fig_mes_mar.update_traces(texttemplate='%{text:.1f}', textposition='top center')
+                        update_fig_layout(fig_mes_mar)
+                        st.plotly_chart(fig_mes_mar, use_container_width=True)
+                        
+                        with st.expander("Ver dados brutos do ano selecionado"):
+                            st.dataframe(df_mar_ano[["TERMO DE VIAGEM", "DATA INÍCIO", "DATA TÉRMINO", "DIAS DE MAR", "MILHAS NAVEGADAS"]], use_container_width=True)
+                    else:
+                        st.warning("Coluna 'DATA INÍCIO' não encontrada ou inválida.")
+                else:
+                    st.info(f"Sem dados de dias de mar para o ano {ano_sel_mar}.")
 
     except Exception as e:
         st.error(f"Erro ao processar Dias de Mar: {e}")
