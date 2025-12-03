@@ -12,7 +12,7 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v2.1 (Fix Gráficos Dias de Mar)"
+SCRIPT_VERSION = "v2.1 (Ícones Atualizados)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly_dark"
@@ -587,20 +587,19 @@ def get_svg_as_base64(file_path):
         return base64.b64encode(svg.encode("utf-8")).decode("utf-8")
     except: return ""
 
-# ÍCONE DE DIAS DE MAR ADICIONADO AQUI (icons8-water-50.svg)
-# Certifique-se de ter esse arquivo na pasta assets, ou use um existente.
+# ICONES ATUALIZADOS
 ICON_MAP = {
-    "Presentes": "icons8-briefcase-50.svg",
-    "Ausentes": "icons8-box-50.svg",
-    "Dias de Mar": "icons8-water-50.svg", # NOVO ÍCONE
-    "Agenda do Navio": "icons8-bookmark-50.svg",
-    "Linha do Tempo": "icons8-clock-50.svg",
-    "Equipes Operativas": "icons8-services-50.svg",
-    "Estatísticas & Análises": "icons8-news-50.svg",
+    "Presentes": "presentes.svg",
+    "Ausentes": "ausentes.svg",
+    "Dias de Mar": "dias_mar.svg", 
+    "Agenda do Navio": "agenda.svg",
+    "Linha do Tempo": "linha_tempo.svg",
+    "Equipes Operativas": "equipe_operativa.svg",
+    "Estatísticas & Análises": "analise.svg",
     "Férias": "icons8-sun-50.svg",
-    "Cursos": "icons8-document-50.svg",
+    "Cursos": "cursos.svg",
     "Tabela de Serviço": "icons8-tick-box-50.svg",
-    "Log / Debug": "icons8-wrench-50.svg"
+    "Log / Debug": "log.svg"
 }
 
 css_icons = ""
@@ -609,6 +608,10 @@ options = list(ICON_MAP.keys())
 
 for i, option in enumerate(options):
     icon_filename = ICON_MAP[option]
+    # Assume que o usuário salvará os arquivos como .svg se não tiverem extensão no dicionário
+    if not icon_filename.endswith(".svg"):
+        icon_filename += ".svg"
+        
     full_path = os.path.join(folder_path, icon_filename)
     b64 = get_svg_as_base64(full_path)
     if b64:
