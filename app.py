@@ -12,7 +12,7 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v2.0 (Fix Datas DD/MM)"
+SCRIPT_VERSION = "v2.1 (Fix Gráficos Dias de Mar)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly_dark"
