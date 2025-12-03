@@ -12,7 +12,7 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.9.3 (Fix Gráficos Dias de Mar - Linha)"
+SCRIPT_VERSION = "v1.9.4 (Fix Final Gráfico Mensal)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly_dark"
@@ -725,7 +725,11 @@ elif pagina == "Ausentes":
                 st.success("Todo o efetivo está a bordo para os filtros atuais.")
             else:
                 temp = ausentes_hoje.copy()
-                temp["MotivoExib"] = temp.apply(lambda r: "Férias" if r["Tipo"] == "Férias" else ("Curso" if r["Tipo"] == "Curso" else str(r["Motivo"])), axis=1)
+                temp["MotivoExib"] = temp.apply(
+                    lambda r: "Férias" if r["Tipo"] == "Férias"
+                    else ("Curso" if r["Tipo"] == "Curso" else str(r["Motivo"])),
+                    axis=1
+                )
                 show_df = temp[["Posto", "Nome", "MotivoExib", "Fim"]].copy()
                 show_df["Retorno"] = show_df["Fim"].dt.strftime("%d/%m/%Y")
                 show_df = show_df.drop(columns=["Fim"])
@@ -733,31 +737,57 @@ elif pagina == "Ausentes":
                 st.dataframe(show_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
+    
     if not df_dias.empty:
         df_dias_filt = filtrar_dias(df_dias, apenas_eqman, apenas_in, apenas_gvi)
+        
         if not df_dias_filt.empty:
             st.subheader("Quantidade de militares ausentes por mês")
             df_dias_filt["Mes"] = df_dias_filt["Data"].dt.to_period("M").dt.to_timestamp()
             df_aus_mes = (df_dias_filt[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
-            fig_aus_mes = px.line(df_aus_mes, x="Mes", y="Militares", markers=True, labels={"Mes": "Mês", "Militares": "Militares Ausentes"}, color_discrete_sequence=["#ff5370"])
+            
+            fig_aus_mes = px.line(
+                df_aus_mes, x="Mes", y="Militares", markers=True,
+                labels={"Mes": "Mês", "Militares": "Militares Ausentes"}, color_discrete_sequence=["#ff5370"]
+            )
             update_fig_layout(fig_aus_mes, title="Ausentes por mês (Geral)")
             st.plotly_chart(fig_aus_mes, use_container_width=True)
+            
             st.markdown("---")
+            
             st.subheader("Militares ausentes por dia (Mês Específico)")
+            
             col_sel_m, col_sel_a, _ = st.columns([1, 1, 2])
-            meses_dict = {"Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6, "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12}
+            meses_dict = {
+                "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
+                "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
+            }
             now = datetime.now()
             sel_mes_nome_aus = col_sel_m.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_aus_graf")
             sel_ano_aus = col_sel_a.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_aus_graf")
             sel_mes_aus = meses_dict[sel_mes_nome_aus]
+            
             start_date = datetime(sel_ano_aus, sel_mes_aus, 1)
-            end_date = datetime(sel_ano_aus + 1, 1, 1) if sel_mes_aus == 12 else datetime(sel_ano_aus, sel_mes_aus + 1, 1)
-            df_dias_mes = df_dias_filt[(df_dias_filt["Data"] >= start_date) & (df_dias_filt["Data"] < end_date)].copy()
+            if sel_mes_aus == 12:
+                end_date = datetime(sel_ano_aus + 1, 1, 1)
+            else:
+                end_date = datetime(sel_ano_aus, sel_mes_aus + 1, 1)
+                
+            df_dias_mes = df_dias_filt[
+                (df_dias_filt["Data"] >= start_date) & 
+                (df_dias_filt["Data"] < end_date)
+            ].copy()
+            
             if df_dias_mes.empty:
                 st.info(f"Sem registros de ausência para {sel_mes_nome_aus}/{sel_ano_aus}.")
             else:
-                ausentes_mes_evt = df_eventos[(df_eventos["Inicio"] < end_date) & (df_eventos["Fim"] >= start_date)].copy()
+                ausentes_mes_evt = df_eventos[
+                    (df_eventos["Inicio"] < end_date) &
+                    (df_eventos["Fim"] >= start_date)
+                ].copy()
+                
                 ausentes_mes_evt = filtrar_eventos(ausentes_mes_evt, apenas_eqman, apenas_in, apenas_gvi)
+                
                 if not ausentes_mes_evt.empty:
                     tabela_mes = ausentes_mes_evt[["Posto", "Nome", "MotivoAgrupado", "Inicio", "Fim"]].copy()
                     tabela_mes["Início"] = tabela_mes["Inicio"].dt.strftime("%d/%m")
@@ -765,8 +795,13 @@ elif pagina == "Ausentes":
                     tabela_mes = tabela_mes.drop(columns=["Inicio", "Fim"])
                     tabela_mes = tabela_mes.sort_values(by=["Nome"])
                     st.dataframe(tabela_mes, use_container_width=True, hide_index=True)
+                
                 df_aus_dia = (df_dias_mes.groupby("Data")["Nome"].nunique().reset_index(name="Militares"))
-                fig_aus_dia = px.line(df_aus_dia, x="Data", y="Militares", markers=True, labels={"Data": "Dia", "Militares": "Militares Ausentes"}, color_discrete_sequence=["#ffb64d"])
+                
+                fig_aus_dia = px.line(
+                    df_aus_dia, x="Data", y="Militares", markers=True,
+                    labels={"Data": "Dia", "Militares": "Militares Ausentes"}, color_discrete_sequence=["#ffb64d"]
+                )
                 fig_aus_dia.update_xaxes(tickformat="%d/%m")
                 update_fig_layout(fig_aus_dia, title=f"Ausências diárias em {sel_mes_nome_aus}/{sel_ano_aus}")
                 st.plotly_chart(fig_aus_dia, use_container_width=True)
@@ -792,6 +827,7 @@ elif pagina == "Dias de Mar":
             total_milhas = df_mar["MILHAS NAVEGADAS"].sum()
             
             # Médias por Ano
+            # Agrupa por ANO e soma, depois tira a média dos anos
             df_por_ano = df_mar.groupby("ANO")[["DIAS DE MAR", "MILHAS NAVEGADAS"]].sum().reset_index()
             media_dias_ano = df_por_ano["DIAS DE MAR"].mean()
             media_milhas_ano = df_por_ano["MILHAS NAVEGADAS"].mean()
@@ -847,15 +883,16 @@ elif pagina == "Dias de Mar":
                         # Agrupamento e soma
                         df_mensal_mar = df_mar_ano.groupby("Mês_Num")["DIAS DE MAR"].sum().reset_index()
                         
+                        # --- CRIA O DATAFRAME COM TODOS OS 12 MESES ---
+                        todos_meses = pd.DataFrame({'Mês_Num': range(1, 13)})
+                        df_completo = pd.merge(todos_meses, df_mensal_mar, on='Mês_Num', how='left').fillna(0)
+                        
                         # Mapear número para nome para o eixo X
                         mapa_meses = {1:"Jan", 2:"Fev", 3:"Mar", 4:"Abr", 5:"Mai", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Set", 10:"Out", 11:"Nov", 12:"Dez"}
-                        df_mensal_mar["Mês"] = df_mensal_mar["Mês_Num"].map(mapa_meses)
-                        
-                        # Ordena pelo número do mês para a linha não ficar bagunçada
-                        df_mensal_mar = df_mensal_mar.sort_values("Mês_Num")
+                        df_completo["Mês"] = df_completo["Mês_Num"].map(mapa_meses)
                         
                         fig_mes_mar = px.line(
-                            df_mensal_mar, x="Mês", y="DIAS DE MAR",
+                            df_completo, x="Mês", y="DIAS DE MAR",
                             text="DIAS DE MAR",
                             title=f"Dias de Mar em {ano_sel_mar} (por mês de início da comissão)",
                             color_discrete_sequence=["#2ed8b6"],
