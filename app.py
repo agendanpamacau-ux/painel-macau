@@ -203,6 +203,11 @@ st.markdown(
         padding-left: 18px;
     }}
     
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover span,
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover p {{
+        color: var(--amezia-blue) !important;
+    }}
+
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {{
         background: transparent !important;
         border-left: 3px solid var(--amezia-blue);
@@ -210,9 +215,58 @@ st.markdown(
         padding-left: 18px;
     }}
     
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] span,
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {{
         color: var(--amezia-blue) !important;
         font-weight: 700 !important;
+    }}
+
+    /* Dataframes */
+    .stDataFrame {{
+        border-radius: 5px;
+    }}
+    
+    /* Agenda Card */
+    .agenda-card {{
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-left: 4px solid var(--amezia-blue);
+        transition: transform 0.2s;
+    }}
+
+    @media (prefers-color-scheme: dark) {{
+        .agenda-card {{
+            background-color: #202940 !important;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            color: #ffffff !important;
+        }}
+        .agenda-date {{
+            background-color: rgba(255,255,255,0.1) !important;
+            color: #ffffff !important;
+        }}
+    }}
+
+    @media (prefers-color-scheme: light) {{
+        .agenda-card {{
+            background-color: #fff !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            color: #333 !important;
+        }}
+        .agenda-date {{
+            background-color: #f4f7f6 !important;
+            color: #333 !important;
+        }}
+    }}
+    
+    .agenda-date {{
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-family: monospace;
     }}
 
     </style>
@@ -563,7 +617,6 @@ with st.sidebar.container():
             "Ausentes",
             "Agenda do Navio",
             "Linha do Tempo",
-            "Equipes Operativas",
             "Estatísticas & Análises",
             "Férias",
             "Cursos",
@@ -574,6 +627,7 @@ with st.sidebar.container():
         label_visibility="collapsed",
         key="pagina_radio"
     )
+
 
 # ============================================================
 # 9. MÉTRICAS GLOBAIS (Função)
@@ -811,7 +865,7 @@ else:
                 st.markdown("---")
                 for _, row in df_cal.iterrows():
                     st.markdown(
-                        f'<div class="agenda-card"><div style="font-weight: 600; font-size: 1.05rem;">{row["Evento"]}</div><div class="agenda-date">{row["Data"]}</div></div>',
+                        f"""<div class="agenda-card"><div style="font-weight: 600; font-size: 1.05rem;">{row['Evento']}</div><div class="agenda-date">{row['Data']}</div></div>""",
                         unsafe_allow_html=True
                     )
 
@@ -874,39 +928,6 @@ else:
                     )
                     
                     st.plotly_chart(fig, use_container_width=True)
-
-    elif pagina == "Equipes Operativas":
-        st.subheader("Equipes Operativas")
-        
-        col_eq1, col_eq2, col_eq3 = st.columns(3)
-        
-        with col_eq1:
-            st.markdown("### GVI/GP")
-            df_gvi = df_raw[df_raw["Gvi/GP"].apply(parse_bool)].copy()
-            if df_gvi.empty:
-                st.info("Nenhum militar no GVI/GP.")
-            else:
-                st.dataframe(df_gvi[["Posto", "Nome"]], use_container_width=True, hide_index=True)
-                st.markdown(f"**Total:** {len(df_gvi)}")
-
-        with col_eq2:
-            st.markdown("### Inspetores Navais")
-            df_in = df_raw[df_raw["IN"].apply(parse_bool)].copy()
-            if df_in.empty:
-                st.info("Nenhum Inspetor Naval.")
-            else:
-                st.dataframe(df_in[["Posto", "Nome"]], use_container_width=True, hide_index=True)
-                st.markdown(f"**Total:** {len(df_in)}")
-                
-        with col_eq3:
-            st.markdown("### EqMan")
-            # EqMan != "Não" e != "-"
-            df_eqman = df_raw[ (df_raw["EqMan"].notna()) & (df_raw["EqMan"] != "Não") & (df_raw["EqMan"] != "-") ].copy()
-            if df_eqman.empty:
-                st.info("Nenhum militar na EqMan.")
-            else:
-                st.dataframe(df_eqman[["Posto", "Nome", "EqMan"]], use_container_width=True, hide_index=True)
-                st.markdown(f"**Total:** {len(df_eqman)}")
 
     elif pagina == "Estatísticas & Análises":
         st.subheader("Visão Analítica de Ausências")
@@ -1128,7 +1149,7 @@ else:
         st.markdown("#### Escala Diária")
         
         # Layout: Coluna única para garantir mesma largura
-        col_escala_container, _ = st.columns([1, 3]) # Ajuste a proporção para ficar mais estreito (aprox 25%)
+        col_escala_container, _ = st.columns([1, 2]) # Ajuste a proporção conforme necessário para não ficar full width
         
         with col_escala_container:
             data_ref_diaria = st.date_input("Data de Referência", value=datetime.now(), key="data_ref_escala", format="DD/MM/YYYY")
@@ -1180,7 +1201,7 @@ else:
                         if "0x1" in val or "1x1" in val:
                             return "color: #ff5370; font-weight: bold" # Red
                         elif "2x1" in val:
-                            return "color: #ffb64d; font-weight: bold" # Yellow
+                            return "color: #ffffff" # White (assuming dark mode or visible on light) - user asked for white
                         elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
                              return "color: #2ed8b6; font-weight: bold" # Green
                     return ""
@@ -1238,7 +1259,7 @@ else:
                     if "0x1" in val or "1x1" in val:
                         return "color: #ff5370; font-weight: bold"
                     elif "2x1" in val:
-                        return "color: #ffb64d; font-weight: bold" # Yellow
+                        return "color: #ffffff" # White
                     elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
                          return "color: #2ed8b6; font-weight: bold"
                 return ""
@@ -1280,9 +1301,11 @@ else:
 # ============================================================
 st.markdown("<hr style='border-color: rgba(148, 163, 184, 0.2); margin-top:2rem;'/>", unsafe_allow_html=True)
 st.markdown(
-    "<div style='text-align:center; color:#94a3b8; padding:0.5rem 0; font-size:0.85rem;'>"
-    "Created by <strong>Klismann Freitas</strong> - Versão do painel: <strong>" + SCRIPT_VERSION + "</strong>"
-    "</div>",
+    f"""
+    <div style='text-align:center; color:#94a3b8; padding:0.5rem 0; font-size:0.85rem;'>
+        Created by <strong>Klismann Freitas</strong> • Versão do painel: <strong>{SCRIPT_VERSION}</strong>
+    </div>
+    """,
     unsafe_allow_html=True
 )
 
