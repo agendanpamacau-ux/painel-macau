@@ -1264,7 +1264,8 @@ else:
             st.markdown("#### Escala Mensal")
             
             # Layout: Full Width (sem colunas restritivas)
-            col_mes_sel, col_ano_sel, _ = st.columns([1, 1, 4])
+            # Ajustando para [1, 1, 2] para deixar os seletores mais largos (25% cada)
+            col_mes_sel, col_ano_sel, _ = st.columns([1, 1, 2])
             meses_dict = {
                 "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
                 "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
