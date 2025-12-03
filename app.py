@@ -1315,6 +1315,8 @@ else:
         return ""
 
     st.dataframe(df_tabela.style.map(color_scale_monthly), use_container_width=True, hide_index=True)
+
+    elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
         st.markdown("### df_raw (dados brutos do Google Sheets)")
         st.write(f"Total de linhas em df_raw: **{len(df_raw)}**")
