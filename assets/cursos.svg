@@ -1,0 +1,20 @@
+<svg width="50" height="50" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+  <!-- Livro aberto -->
+  <path d="M10 14
+       Q20 10 25 15
+       Q30 10 40 14
+       L40 36
+       Q30 32 25 36
+       Q20 32 10 36
+       Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path>
+
+  <!-- Linhas de texto do lado esquerdo -->
+  <line x1="14" y1="20" x2="22" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+  <line x1="14" y1="25" x2="22" y2="25" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+  <line x1="14" y1="30" x2="21" y2="30" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+
+  <!-- Linhas de texto do lado direito -->
+  <line x1="28" y1="20" x2="36" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+  <line x1="28" y1="25" x2="36" y2="25" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+  <line x1="29" y1="30" x2="36" y2="30" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+</svg>

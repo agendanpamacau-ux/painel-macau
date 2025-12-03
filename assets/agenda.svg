@@ -1,0 +1,19 @@
+<!--?xml version="1.0" encoding="UTF-8"?-->
+<svg width="50" height="50" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg" aria-label="Ícone Agenda">
+
+  <!-- Corpo da agenda -->
+  <rect x="8" y="12" width="34" height="30" stroke="#000" stroke-width="3" fill="none" rx="3"></rect>
+
+  <!-- Barra superior -->
+  <rect x="8" y="12" width="34" height="8" fill="#000"></rect>
+
+  <!-- “Argolas” da agenda -->
+  <line x1="16" y1="8" x2="16" y2="14" stroke="#000" stroke-width="3" stroke-linecap="round"></line>
+  <line x1="25" y1="8" x2="25" y2="14" stroke="#000" stroke-width="3" stroke-linecap="round"></line>
+  <line x1="34" y1="8" x2="34" y2="14" stroke="#000" stroke-width="3" stroke-linecap="round"></line>
+
+  <!-- Linhas internas (opcional para dar aspecto de conteúdo) -->
+  <line x1="14" y1="25" x2="36" y2="25" stroke="#000" stroke-width="2" stroke-linecap="round"></line>
+  <line x1="14" y1="32" x2="36" y2="32" stroke="#000" stroke-width="2" stroke-linecap="round"></line>
+
+</svg>
