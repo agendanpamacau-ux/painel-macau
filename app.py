@@ -634,10 +634,15 @@ def get_svg_as_base64(file_path):
         with open(file_path, "r", encoding="utf-8") as f:
             svg = f.read()
         return base64.b64encode(svg.encode("utf-8")).decode("utf-8")
+    except FileNotFoundError:
+        print(f"ERRO: Arquivo não encontrado: {file_path}")
+        return ""
     except Exception as e:
+        print(f"ERRO: {e}")
         return ""
 
 # Mapeamento de ícones SVG
+# ATENÇÃO: Os nomes abaixo devem ser IDÊNTICOS aos arquivos que você jogou na pasta assets
 ICON_MAP = {
     "Presentes": "icons8-briefcase-50.svg",
     "Ausentes": "icons8-box-50.svg",
@@ -653,18 +658,21 @@ ICON_MAP = {
 
 # Gerar CSS para ícones
 css_icons = ""
-base_path = "assets" # Caminho relativo para a pasta assets
+
+# --- CORREÇÃO AQUI: Aponta direto para a pasta 'assets' ---
+folder_path = os.path.join(os.path.dirname(__file__), "assets")
+
 options = list(ICON_MAP.keys())
 
 for i, option in enumerate(options):
-    icon_file = ICON_MAP[option]
-    # Tentar caminho absoluto se relativo falhar (ajuste conforme ambiente)
-    # Assumindo que assets está no mesmo diretório do script ou subdiretório
-    full_path = os.path.join(os.getcwd(), base_path, icon_file)
+    icon_filename = ICON_MAP[option]
+    # Cria o caminho completo: ex: /app/seu-projeto/assets/icons8-briefcase-50.svg
+    full_path = os.path.join(folder_path, icon_filename)
     
     b64 = get_svg_as_base64(full_path)
+    
     if b64:
-        # nth-child(i+1) porque CSS é 1-based
+        # nth-child(i+1) porque CSS conta a partir de 1
         css_icons += f"""
         div[role="radiogroup"] > label:nth-child({i+1}) > div:first-child {{
             display: flex;
