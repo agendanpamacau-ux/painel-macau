@@ -12,7 +12,7 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.8.0 (Lista de Componentes por Escala)"
+SCRIPT_VERSION = "v1.9.0 (Dias de Mar Added)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly"
@@ -180,7 +180,7 @@ st.markdown(
 # 2. HELPERS E CONSTANTES
 # ============================================================
 
-HEADER_ROW = 2  # linha 3 na planilha
+HEADER_ROW = 2  # linha 3 na planilha principal
 
 AGENDAS_OFICIAIS = {
     "Agenda Permanente": "agenda.npamacau@gmail.com",
@@ -191,7 +191,6 @@ AGENDAS_OFICIAIS = {
     "NSD": "d7d9199712991f81e35116b9ec1ed492ac672b72b7103a3a89fb3f66ae635fb7@group.calendar.google.com"
 }
 
-# Nomes EXATOS conforme sua planilha
 SERVICOS_CONSIDERADOS = [
     "Oficial / Supervisor",
     "Contramestre 08-12",
@@ -199,6 +198,9 @@ SERVICOS_CONSIDERADOS = [
     "Contramestre 00-04",
     "Fiel de CAv"
 ]
+
+# NOVA URL para Dias de Mar
+URL_DIAS_MAR = "https://docs.google.com/spreadsheets/d/1CEVh0EQsnINcuVP4-RbS3KgfAQNKXCwAszbqjDq8phU/edit?usp=sharing"
 
 def parse_bool(value) -> bool:
     """
@@ -230,13 +232,38 @@ def parse_bool(value) -> bool:
 # 3. CARGA DE DADOS
 # ============================================================
 
-@st.cache_data(ttl=600, show_spinner="Carregando dados...")
+@st.cache_data(ttl=600, show_spinner="Carregando dados de efetivo...")
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(worksheet="Afastamento 2026", header=HEADER_ROW, ttl="10m")
     if "Nome" in df.columns:
         df = df.dropna(subset=["Nome"])
     df = df.reset_index(drop=True)
+    return df
+
+@st.cache_data(ttl=600, show_spinner="Carregando dados de Mar...")
+def load_dias_mar():
+    """Carrega dados da planilha separada de Dias de Mar"""
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # Header na linha 8 (index 7) | Dados de B até H
+    df = conn.read(spreadsheet=URL_DIAS_MAR, header=7, usecols="B:H", ttl="10m")
+    
+    # Limpeza: Remove linhas onde "TERMO DE VIAGEM" está vazio
+    if "TERMO DE VIAGEM" in df.columns:
+        df = df.dropna(subset=["TERMO DE VIAGEM"])
+        
+    # Conversão de tipos
+    numeric_cols = ["DIAS DE MAR", "MILHAS NAVEGADAS", "ANO"]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            
+    # Conversão de datas
+    date_cols = ["DATA INÍCIO", "DATA TÉRMINO"]
+    for col in date_cols:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce')
+            
     return df
 
 @st.cache_data(ttl=300)
@@ -270,8 +297,9 @@ def load_calendar_events(calendar_id: str) -> pd.DataFrame:
 
 try:
     df_raw = load_data()
+    # Carregamento dos dados de mar é feito sob demanda na aba para economizar recurso inicial
 except Exception as e:
-    st.error(f"Erro de conexão. Verifique o arquivo secrets.toml. Detalhe: {e}")
+    st.error(f"Erro de conexão principal: {e}")
     st.stop()
 
 
@@ -327,11 +355,9 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
         nome   = row.get("Nome", "")
         escala = row.get("Serviço", "")
         
-        # Correção EqMan: Verifica se não é nulo e não é traço
         eqman_val = row.get("EqMan", "")
         eqman = str(eqman_val) if pd.notna(eqman_val) and str(eqman_val) != "-" else "Não"
         
-        # Correção GVI/IN: Usa o parse_bool robusto
         gvi = parse_bool(row.get("Gvi/GP", ""))
         insp = parse_bool(row.get("IN", ""))
 
@@ -526,9 +552,12 @@ def get_svg_as_base64(file_path):
         return base64.b64encode(svg.encode("utf-8")).decode("utf-8")
     except: return ""
 
+# ÍCONE DE DIAS DE MAR ADICIONADO AQUI (icons8-water-50.svg)
+# Certifique-se de ter esse arquivo na pasta assets, ou use um existente.
 ICON_MAP = {
     "Presentes": "icons8-briefcase-50.svg",
     "Ausentes": "icons8-box-50.svg",
+    "Dias de Mar": "icons8-water-50.svg", # NOVO ÍCONE
     "Agenda do Navio": "icons8-bookmark-50.svg",
     "Linha do Tempo": "icons8-clock-50.svg",
     "Equipes Operativas": "icons8-services-50.svg",
@@ -740,6 +769,95 @@ elif pagina == "Ausentes":
              st.info("Sem dados para gerar gráficos com os filtros atuais.")
     else:
         st.info("Sem dados de ausências para gerar gráficos.")
+
+# --------------------------------------------------------
+# NOVO: DIAS DE MAR
+# --------------------------------------------------------
+elif pagina == "Dias de Mar":
+    st.subheader("Dias de Mar e Milhas Navegadas")
+    
+    try:
+        df_mar = load_dias_mar()
+        
+        if df_mar.empty:
+            st.info("Planilha de Dias de Mar vazia ou não encontrada.")
+        else:
+            # Cálculos Gerais
+            total_dias_mar = df_mar["DIAS DE MAR"].sum()
+            total_milhas = df_mar["MILHAS NAVEGADAS"].sum()
+            
+            # Médias por Ano
+            # Agrupa por ANO e soma, depois tira a média dos anos
+            df_por_ano = df_mar.groupby("ANO")[["DIAS DE MAR", "MILHAS NAVEGADAS"]].sum().reset_index()
+            media_dias_ano = df_por_ano["DIAS DE MAR"].mean()
+            media_milhas_ano = df_por_ano["MILHAS NAVEGADAS"].mean()
+
+            # Exibir Cards
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Total Dias de Mar", f"{total_dias_mar:,.1f}")
+            c2.metric("Total Milhas", f"{total_milhas:,.0f}")
+            c3.metric("Média Dias/Ano", f"{media_dias_ano:,.1f}")
+            c4.metric("Média Milhas/Ano", f"{media_milhas_ano:,.0f}")
+            
+            st.markdown("---")
+            
+            # Gráfico 1: Dias de Mar por Ano (Barra)
+            st.subheader("Evolução Anual")
+            fig_ano = px.bar(
+                df_por_ano, x="ANO", y="DIAS DE MAR", 
+                text="DIAS DE MAR", 
+                title="Dias de Mar por Ano",
+                labels={"ANO": "Ano", "DIAS DE MAR": "Dias"},
+                color_discrete_sequence=["#4099ff"]
+            )
+            fig_ano.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+            update_fig_layout(fig_ano)
+            st.plotly_chart(fig_ano, use_container_width=True)
+            
+            st.markdown("---")
+            
+            # Gráfico 2: Detalhamento Mensal
+            st.subheader("Detalhamento Mensal")
+            
+            # Seletor de Ano
+            anos_disponiveis = sorted(df_mar["ANO"].unique().astype(int), reverse=True)
+            if anos_disponiveis:
+                ano_sel_mar = st.selectbox("Selecione o Ano", anos_disponiveis)
+                
+                # Filtrar dados do ano
+                df_mar_ano = df_mar[df_mar["ANO"] == ano_sel_mar].copy()
+                
+                # Extrair Mês da Data de Início
+                if "DATA INÍCIO" in df_mar_ano.columns:
+                    df_mar_ano["Mês"] = df_mar_ano["DATA INÍCIO"].dt.month_name(locale="pt_BR") # Requer locale configurado, ou usar month numbers
+                    # Fallback se locale pt_BR nao estiver instalado:
+                    # df_mar_ano["Mês_Num"] = df_mar_ano["DATA INÍCIO"].dt.month
+                    
+                    # Agrupar por mês
+                    # Truque para ordenar meses corretamente: usar o número do mês
+                    df_mar_ano["Mês_Num"] = df_mar_ano["DATA INÍCIO"].dt.month
+                    df_mensal_mar = df_mar_ano.groupby("Mês_Num")["DIAS DE MAR"].sum().reset_index()
+                    
+                    # Mapear número para nome (hardcoded para garantir PT-BR sem depender do sistema)
+                    mapa_meses = {1:"Jan", 2:"Fev", 3:"Mar", 4:"Abr", 5:"Mai", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Set", 10:"Out", 11:"Nov", 12:"Dez"}
+                    df_mensal_mar["Mês"] = df_mensal_mar["Mês_Num"].map(mapa_meses)
+                    
+                    fig_mes_mar = px.bar(
+                        df_mensal_mar, x="Mês", y="DIAS DE MAR",
+                        text="DIAS DE MAR",
+                        title=f"Dias de Mar em {ano_sel_mar} (por mês de início da comissão)",
+                        color_discrete_sequence=["#2ed8b6"]
+                    )
+                    fig_mes_mar.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+                    update_fig_layout(fig_mes_mar)
+                    st.plotly_chart(fig_mes_mar, use_container_width=True)
+                    
+                    with st.expander("Ver dados brutos do ano selecionado"):
+                        st.dataframe(df_mar_ano[["TERMO DE VIAGEM", "DATA INÍCIO", "DATA TÉRMINO", "DIAS DE MAR", "MILHAS NAVEGADAS"]], use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Erro ao processar Dias de Mar: {e}")
+
 
 # --------------------------------------------------------
 # OUTRAS PÁGINAS (Usam Data Padrão Hoje)
@@ -1121,20 +1239,16 @@ else:
         else:
             st.write(f"Total de militares que não concorrem à escala: **{len(df_fora_escala)}**")
             st.dataframe(df_fora_escala[["Posto", "Nome", target_col]], use_container_width=True, hide_index=True)
-            
+
         st.markdown("---")
         st.markdown("#### Componentes das Escalas")
-
         cols_srv = st.columns(len(SERVICOS_CONSIDERADOS))
         tabs_escalas = st.tabs(SERVICOS_CONSIDERADOS)
-
         for i, servico in enumerate(SERVICOS_CONSIDERADOS):
             with tabs_escalas[i]:
-                # Using same logic as above to find people
-                people = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False, na=False)]
+                people = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
                 if people.empty:
                     people = df_raw[df_raw[target_col].astype(str) == servico]
-
                 if not people.empty:
                     st.write(f"**Total:** {len(people)}")
                     st.dataframe(people[["Posto", "Nome"]], use_container_width=True, hide_index=True)
