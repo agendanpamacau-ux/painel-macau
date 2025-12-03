@@ -813,8 +813,8 @@ elif pagina == "Ausentes":
             df_dias_filt["Mes"] = df_dias_filt["Data"].dt.to_period("M").dt.to_timestamp()
             df_aus_mes = (df_dias_filt[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
             
-            fig_aus_mes = px.bar(
-                df_aus_mes, x="Mes", y="Militares",
+            fig_aus_mes = px.line(
+                df_aus_mes, x="Mes", y="Militares", markers=True,
                 labels={"Mes": "Mês", "Militares": "Militares Ausentes"}, color_discrete_sequence=["#ff5370"]
             )
             update_fig_layout(fig_aus_mes, title="Ausentes por mês (Geral)")
