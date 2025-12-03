@@ -212,6 +212,7 @@ st.markdown(
         background: transparent !important;
         border-left: 3px solid var(--amezia-blue);
         box-shadow: none;
+        padding-left: 18px;
     }}
     
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] span,
@@ -241,6 +242,7 @@ st.markdown(
         .agenda-card {{
             background-color: var(--amezia-dark-card);
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            color: #ffffff !important;
         }}
         .agenda-date {{
             background-color: rgba(0,0,0,0.2);
@@ -733,34 +735,49 @@ if pagina == "Presentes":
 elif pagina == "Ausentes":
     st.subheader("Ausentes")
 
-    metrics_placeholder = st.container()
-    daily_table_placeholder = st.container()
-    
-    st.markdown("---")
-    st.markdown("##### Filtros & Data (Diário)")
-    
-    col_f1, col_f2, col_f3, col_data = st.columns([1.5, 1.5, 1.5, 2])
-    apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman")
-    apenas_in    = col_f2.checkbox("Apenas IN", key="aus_in")
-    apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="aus_gvi")
-    data_ref = col_data.date_input("Data de Referência", hoje_padrao, key="data_aus")
+    # 1. DATA (Logo abaixo do título)
+    col_data_aus, _ = st.columns([2, 4])
+    data_ref = col_data_aus.date_input("Data de Referência", hoje_padrao, key="data_aus")
     hoje = pd.to_datetime(data_ref)
 
-    with metrics_placeholder:
-        exibir_metricas_globais(hoje)
-        st.markdown("---")
+    # 2. TABELA (Logo abaixo da data)
+    st.markdown("### Ausentes") # Título simplificado conforme pedido
+    
+    if df_eventos.empty:
+        st.info("Sem eventos de ausência registrados.")
+    else:
+        ausentes_hoje = df_eventos[
+            (df_eventos["Inicio"] <= hoje) &
+            (df_eventos["Fim"] >= hoje)
+        ]
+        
+        # 3. FILTROS (Logo abaixo da tabela) - Aplicados ANTES de mostrar, mas visualmente abaixo?
+        # O usuário pediu: "logo abaixo manter a tabela... logo abaixo os filtros".
+        # Para a tabela reagir aos filtros, os filtros precisam ser definidos antes ou a tabela precisa ser atualizada.
+        # Streamlit re-roda o script. Então a ordem visual pode ser diferente da ordem de execução se usarmos st.container ou columns.
+        # Mas o fluxo natural é Input -> Processamento -> Output.
+        # Se os filtros estiverem ABAIXO, o usuário muda o filtro e a tabela ACIMA atualiza. Isso é ok.
+        
+        # Vamos criar placeholders para garantir a ordem visual pedida:
+        # 1. Title (já foi)
+        # 2. Date (já foi)
+        # 3. Table Placeholder
+        # 4. Filters Placeholder
+        
+        table_placeholder = st.empty()
+        filters_placeholder = st.container()
+        
+        with filters_placeholder:
+            st.markdown("##### Filtros")
+            col_f1, col_f2, col_f3 = st.columns(3)
+            apenas_eqman = col_f1.checkbox("Apenas EqMan", key="aus_eqman")
+            apenas_in    = col_f2.checkbox("Apenas IN", key="aus_in")
+            apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="aus_gvi")
 
-    with daily_table_placeholder:
-        st.markdown("### Ausentes no dia selecionado")
-        if df_eventos.empty:
-            st.info("Sem eventos de ausência registrados.")
-        else:
-            ausentes_hoje = df_eventos[
-                (df_eventos["Inicio"] <= hoje) &
-                (df_eventos["Fim"] >= hoje)
-            ]
-            ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
+        # Processamento da tabela com os valores dos filtros (que já foram lidos acima)
+        ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
 
+        with table_placeholder:
             if ausentes_hoje.empty:
                 st.success("Todo o efetivo está a bordo para os filtros atuais.")
             else:
@@ -817,10 +834,7 @@ elif pagina == "Ausentes":
             (df_eventos["Fim"] >= inicio_mes)
         ].copy()
         
-        # Filtros aplicados na visão mensal também? O usuário pediu para remover filtros de OUTRAS abas,
-        # mas aqui estamos na aba AUSENTES. A visão mensal deve respeitar os filtros da aba Ausentes?
-        # O usuário disse: "Quero que esses filtros só sejam apresentado na aba presentes e ausentes."
-        # Então SIM, os filtros (EqMan, IN, GVI) devem afetar a visão mensal também.
+        # Filtros aplicados na visão mensal também
         ausentes_mes = filtrar_eventos(ausentes_mes, apenas_eqman, apenas_in, apenas_gvi)
         
         if ausentes_mes.empty:
@@ -898,7 +912,20 @@ else:
                         color_discrete_sequence=AMEZIA_COLORS
                     )
                     
-                    fig.update_yaxes(autorange="reversed", categoryorder="array", categoryarray=ordem_nomes)
+                    # Force all names to appear on Y-axis even if no data
+                    fig.update_yaxes(
+                        autorange="reversed", 
+                        categoryorder="array", 
+                        categoryarray=ordem_nomes,
+                        type='category',
+                        showgrid=True
+                    )
+                    
+                    # Add a dummy invisible trace for all names to ensure they are registered in the plot
+                    # This is a workaround for Plotly sometimes hiding empty categories in timeline
+                    fig.add_trace(px.scatter(y=ordem_nomes, x=[min_data]*len(ordem_nomes)).data[0])
+                    fig.data[-1].visible = False
+                    fig.data[-1].showlegend = False
                     fig.update_xaxes(range=[datetime(ano_min, 1, 1), datetime(ano_max, 12, 31)])
                     fig.add_vline(x=hoje, line_width=2, line_dash="dash", line_color="#ff5370")
                     
@@ -986,11 +1013,17 @@ else:
                     st.markdown("### Todos os períodos de férias registrados")
                     st.dataframe(tabela_ferias, use_container_width=True, hide_index=True)
                     st.markdown("---")
-                    col_f1m, col_f2m = st.columns(2)
+
+                    col_f1m, col_f2m, col_f3m = st.columns(3)
                     total_militares_com_ferias = df_ferias["Nome"].nunique()
                     dias_totais_ferias = df_ferias["Duracao_dias"].sum()
-                    col_f1m.metric("Militares com férias cadastradas", total_militares_com_ferias)
-                    col_f2m.metric("Dias totais de férias", int(dias_totais_ferias))
+                    
+                    total_efetivo = df_raw["Nome"].nunique()
+                    restam_cadastrar = max(0, total_efetivo - total_militares_com_ferias)
+
+                    col_f1m.metric("Militares com férias", total_militares_com_ferias)
+                    col_f2m.metric("Dias totais", int(dias_totais_ferias))
+                    col_f3m.metric("Restam cadastrar", restam_cadastrar)
                     st.markdown("---")
                     col_fx1, col_fx2 = st.columns(2)
                     df_escala = (df_ferias.groupby("Escala")["Nome"].nunique().reset_index(name="Militares").sort_values("Militares", ascending=False))
@@ -1162,7 +1195,19 @@ else:
                 })
             
             df_daily = pd.DataFrame(daily_data)
-            st.dataframe(df_daily, use_container_width=False, hide_index=True, width=400)
+            
+            # Color logic
+            def color_scale_daily(val):
+                if isinstance(val, str):
+                    if "0x1" in val or "1x1" in val:
+                        return "color: #ff5370; font-weight: bold" # Red
+                    elif "2x1" in val:
+                        return "color: #ffffff" # White (assuming dark mode or visible on light) - user asked for white
+                    elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
+                         return "color: #2ed8b6; font-weight: bold" # Green
+                return ""
+
+            st.dataframe(df_daily.style.map(color_scale_daily, subset=["Escala"]), use_container_width=False, hide_index=True, width=400)
 
             st.markdown("---")
 
@@ -1209,7 +1254,18 @@ else:
                 data_matrix.append(row_data)
             
             df_tabela = pd.DataFrame(data_matrix)
-            st.dataframe(df_tabela, use_container_width=True, hide_index=True)
+            
+            def color_scale_monthly(val):
+                if isinstance(val, str):
+                    if "0x1" in val or "1x1" in val:
+                        return "color: #ff5370; font-weight: bold"
+                    elif "2x1" in val:
+                        return "color: #ffffff" # White
+                    elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
+                         return "color: #2ed8b6; font-weight: bold"
+                return ""
+
+            st.dataframe(df_tabela.style.map(color_scale_monthly), use_container_width=True, hide_index=True)
 
     elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
