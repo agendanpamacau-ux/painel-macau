@@ -208,18 +208,18 @@ st.markdown(
         color: var(--amezia-blue) !important;
     }}
 
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {{
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {
         background: transparent !important;
         border-left: 3px solid var(--amezia-blue);
         box-shadow: none;
         padding-left: 18px;
-    }}
+    }
     
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] span,
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {{
+    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {
         color: var(--amezia-blue) !important;
-        font-weight: 700;
-    }}
+        font-weight: 700 !important;
+    }
 
     /* Dataframes */
     .stDataFrame {{
@@ -238,27 +238,29 @@ st.markdown(
         transition: transform 0.2s;
     }}
 
-    @media (prefers-color-scheme: dark) {{
-        .agenda-card {{
-            background-color: var(--amezia-dark-card) !important;
+    @media (prefers-color-scheme: dark) {
+        .agenda-card {
+            background-color: #202940 !important;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             color: #ffffff !important;
-        }}
-        .agenda-date {{
+        }
+        .agenda-date {
             background-color: rgba(255,255,255,0.1) !important;
             color: #ffffff !important;
-        }}
-    }}
+        }
+    }
 
-    @media (prefers-color-scheme: light) {{
-        .agenda-card {{
-            background-color: #fff;
+    @media (prefers-color-scheme: light) {
+        .agenda-card {
+            background-color: #fff !important;
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }}
-        .agenda-date {{
-            background-color: #f4f7f6;
-            color: #333;
-        }}
+            color: #333 !important;
+        }
+        .agenda-date {
+            background-color: #f4f7f6 !important;
+            color: #333 !important;
+        }
+    }        }}
     }}
     
     .agenda-date {{
@@ -900,23 +902,31 @@ else:
                     )
                     
                     # Force all names to appear on Y-axis even if no data
+                    # Calculate height based on number of personnel to ensure no scrolling/hiding
+                    chart_height = max(600, len(ordem_nomes) * 30)
+                    
                     fig.update_yaxes(
                         autorange="reversed", 
                         categoryorder="array", 
                         categoryarray=ordem_nomes,
                         type='category',
-                        showgrid=True
+                        showgrid=True,
+                        tickmode='array',
+                        tickvals=ordem_nomes
                     )
                     
                     # Add a dummy invisible trace for all names to ensure they are registered in the plot
-                    # This is a workaround for Plotly sometimes hiding empty categories in timeline
                     fig.add_trace(px.scatter(y=ordem_nomes, x=[min_data]*len(ordem_nomes), opacity=0).data[0])
                     fig.data[-1].showlegend = False
+                    
                     fig.update_xaxes(range=[datetime(ano_min, 1, 1), datetime(ano_max, 12, 31)])
                     fig.add_vline(x=hoje, line_width=2, line_dash="dash", line_color="#ff5370")
                     
                     update_fig_layout(fig, title="Cronograma de Ausências")
-                    fig.update_layout(plot_bgcolor="rgba(255,255,255,0.05)")
+                    fig.update_layout(
+                        plot_bgcolor="rgba(255,255,255,0.05)",
+                        height=chart_height
+                    )
                     
                     st.plotly_chart(fig, use_container_width=True)
 
@@ -1138,68 +1148,66 @@ else:
 
         # --- SEÇÃO 1: VISÃO DIÁRIA ---
         st.markdown("#### Escala Diária")
-        # Ajuste do tamanho da coluna da data para ficar próximo de 400px (tamanho da tabela)
-        # 400px em uma tela wide é pequeno. Vamos tentar usar colunas fixas ou proporção.
-        # Se a tabela tem width=400, vamos tentar fazer a coluna da data ocupar algo similar.
-        col_d1, _ = st.columns([1, 3]) # Proporção 1:3 deve deixar pequeno
-        # Melhor: usar uma coluna com width fixo não é possível nativamente no st.columns com pixels, mas proporção funciona.
-        # Vamos manter a proporção mas o usuário pediu "mesmo tamanho".
         
-        data_ref_diaria = col_d1.date_input("Data de Referência", value=datetime.now(), key="data_ref_escala", format="DD/MM/YYYY")
-        dt_ref = pd.to_datetime(data_ref_diaria)
-
-        # Identificar coluna de Escala/Serviço
-        col_escala = None
-        possiveis = ["Escala", "Serviço", "Função", "Setor", "Divisão"]
-        for c in possiveis:
-            if c in df_raw.columns:
-                col_escala = c
-                break
+        # Layout: Coluna única para garantir mesma largura
+        col_escala_container, _ = st.columns([1, 2]) # Ajuste a proporção conforme necessário para não ficar full width
         
-        target_col = col_escala if col_escala else "Posto/Grad"
+        with col_escala_container:
+            data_ref_diaria = st.date_input("Data de Referência", value=datetime.now(), key="data_ref_escala", format="DD/MM/YYYY")
+            dt_ref = pd.to_datetime(data_ref_diaria)
 
-        if not col_escala and "Posto/Grad" not in df_raw.columns:
-            st.error("Não foi possível identificar a coluna de Escala/Serviço para cálculo.")
-        else:
-            # Calcular escala para o dia selecionado
-            daily_data = []
-            for servico in SERVICOS_CONSIDERADOS:
-                # Filtrar pessoas desse serviço
-                people_in_service = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
-                if people_in_service.empty:
-                     people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
-
-                total = len(people_in_service)
-                
-                # Contar ausentes no dia
-                absent = 0
-                for _, person in people_in_service.iterrows():
-                    status = get_status_em_data(person, dt_ref, BLOCOS_DATAS)
-                    if status != "Presente":
-                        absent += 1
-                
-                available = max(0, total - absent)
-                scale_val = max(0, available - 1)
-                
-                daily_data.append({
-                    "Serviço": servico,
-                    "Escala": f"{scale_val}x1"
-                })
+            # Identificar coluna de Escala/Serviço
+            col_escala = None
+            possiveis = ["Escala", "Serviço", "Função", "Setor", "Divisão"]
+            for c in possiveis:
+                if c in df_raw.columns:
+                    col_escala = c
+                    break
             
-            df_daily = pd.DataFrame(daily_data)
-            
-            # Color logic
-            def color_scale_daily(val):
-                if isinstance(val, str):
-                    if "0x1" in val or "1x1" in val:
-                        return "color: #ff5370; font-weight: bold" # Red
-                    elif "2x1" in val:
-                        return "color: #ffffff" # White (assuming dark mode or visible on light) - user asked for white
-                    elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
-                         return "color: #2ed8b6; font-weight: bold" # Green
-                return ""
+            target_col = col_escala if col_escala else "Posto/Grad"
 
-            st.dataframe(df_daily.style.map(color_scale_daily, subset=["Escala"]), use_container_width=False, hide_index=True, width=400)
+            if not col_escala and "Posto/Grad" not in df_raw.columns:
+                st.error("Não foi possível identificar a coluna de Escala/Serviço para cálculo.")
+            else:
+                # Calcular escala para o dia selecionado
+                daily_data = []
+                for servico in SERVICOS_CONSIDERADOS:
+                    # Filtrar pessoas desse serviço
+                    people_in_service = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
+                    if people_in_service.empty:
+                         people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
+
+                    total = len(people_in_service)
+                    
+                    # Contar ausentes no dia
+                    absent = 0
+                    for _, person in people_in_service.iterrows():
+                        status = get_status_em_data(person, dt_ref, BLOCOS_DATAS)
+                        if status != "Presente":
+                            absent += 1
+                    
+                    available = max(0, total - absent)
+                    scale_val = max(0, available - 1)
+                    
+                    daily_data.append({
+                        "Serviço": servico,
+                        "Escala": f"{scale_val}x1"
+                    })
+                
+                df_daily = pd.DataFrame(daily_data)
+                
+                # Color logic
+                def color_scale_daily(val):
+                    if isinstance(val, str):
+                        if "0x1" in val or "1x1" in val:
+                            return "color: #ff5370; font-weight: bold" # Red
+                        elif "2x1" in val:
+                            return "color: #ffffff" # White (assuming dark mode or visible on light) - user asked for white
+                        elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
+                             return "color: #2ed8b6; font-weight: bold" # Green
+                    return ""
+
+                st.dataframe(df_daily.style.map(color_scale_daily, subset=["Escala"]), use_container_width=True, hide_index=True)
 
             st.markdown("---")
 
