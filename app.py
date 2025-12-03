@@ -552,6 +552,32 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 
 # ============================================================
 # 8. PARÂMETROS (SIDEBAR) + NAVEGAÇÃO
+# ============================================================
+
+st.sidebar.markdown("#### Navegação")
+with st.sidebar.container():
+    pagina = st.radio(
+        label="Seções",
+        options=[
+            "Presentes",
+            "Ausentes",
+            "Agenda do Navio",
+            "Linha do Tempo",
+            "Equipes Operativas",
+            "Estatísticas & Análises",
+            "Férias",
+            "Cursos",
+            "Tabela de Serviço",
+            "Log / Debug"
+        ],
+        index=0,
+        label_visibility="collapsed",
+        key="pagina_radio"
+    )
+
+# ============================================================
+# 9. MÉTRICAS GLOBAIS (Função)
+# ============================================================
 
 def exibir_metricas_globais(data_referencia):
     """Exibe os cards de métricas globais baseados na data fornecida."""
