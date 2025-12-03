@@ -203,435 +203,6 @@ st.markdown(
         padding-left: 18px;
     }}
     
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover span,
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover p {{
-        color: var(--amezia-blue) !important;
-    }}
-
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] {{
-        background: transparent !important;
-        border-left: 3px solid var(--amezia-blue);
-        box-shadow: none;
-        padding-left: 18px;
-    }}
-    
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] span,
-    section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {{
-        color: var(--amezia-blue) !important;
-        font-weight: 700 !important;
-    }}
-
-    /* Dataframes */
-    .stDataFrame {{
-        border-radius: 5px;
-    }}
-    
-    /* Agenda Card */
-    .agenda-card {{
-        padding: 15px;
-        border-radius: 5px;
-        margin-bottom: 15px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-left: 4px solid var(--amezia-blue);
-        transition: transform 0.2s;
-    }}
-
-    @media (prefers-color-scheme: dark) {{
-        .agenda-card {{
-            background-color: #202940 !important;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            color: #ffffff !important;
-        }}
-        .agenda-date {{
-            background-color: rgba(255,255,255,0.1) !important;
-            color: #ffffff !important;
-        }}
-    }}
-
-    @media (prefers-color-scheme: light) {{
-        .agenda-card {{
-            background-color: #fff !important;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            color: #333 !important;
-        }}
-        .agenda-date {{
-            background-color: #f4f7f6 !important;
-            color: #333 !important;
-        }}
-    }}
-    
-    .agenda-date {{
-        padding: 5px 10px;
-        border-radius: 4px;
-        font-weight: bold;
-        font-family: monospace;
-    }}
-
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# ============================================================
-# 2. HELPERS E CONSTANTES
-# ============================================================
-
-HEADER_ROW = 2  # linha 3 na planilha
-
-AGENDAS_OFICIAIS = {
-    "📅 Agenda Permanente": "agenda.npamacau@gmail.com",
-    "⚓ Agenda Eventual": "32e9bbd3bca994bdab0b3cd648f2cb4bc13b0cf312a6a2c5a763527a5c610917@group.calendar.google.com",
-    "🎂 Aniversários OM": "9f856c62f2420cd3ce5173197855b6726dd0a73d159ba801afd4eddfcac651db@group.calendar.google.com",
-    "🎉 Aniversários Tripulação": "8641c7fc86973e09bbb682f8841908cc9240b25b1990f179137dfa7d2b23b2da@group.calendar.google.com",
-    "📋 Comissão": "ff1a7d8acb9ea68eed3ec9b0e279f2a91fb962e4faa9f7a3e7187fade00eb0d6@group.calendar.google.com",
-    "🛠️ NSD": "d7d9199712991f81e35116b9ec1ed492ac672b72b7103a3a89fb3f66ae635fb7@group.calendar.google.com"
-}
-
-SERVICOS_CONSIDERADOS = [
-    "Of / Supervisor",
-    "Contramestre 08-12",
-    "Contramestre 04-08",
-    "Contramestre 00-04",
-    "Fiel de CAv"
-]
-
-def parse_bool(value) -> bool:
-    if pd.isna(value):
-        return False
-    s = str(value).strip().lower()
-    return s in ("true", "1", "sim", "yes", "y", "x")
-
-
-# ============================================================
-# 3. CARGA DE DADOS
-# ============================================================
-
-@st.cache_data(ttl=600, show_spinner="Carregando dados...")
-def load_data():
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(worksheet="Afastamento 2026", header=HEADER_ROW, ttl="10m")
-    if "Nome" in df.columns:
-        df = df.dropna(subset=["Nome"])
-    df = df.reset_index(drop=True)
-    return df
-
-@st.cache_data(ttl=300)
-def load_calendar_events(calendar_id: str) -> pd.DataFrame:
-    try:
-        creds_dict = dict(st.secrets["connections"]["gsheets"])
-        creds = service_account.Credentials.from_service_account_info(
-            creds_dict,
-            scopes=["https://www.googleapis.com/auth/calendar.readonly"]
-        )
-        service = build("calendar", "v3", credentials=creds)
-        now = datetime.utcnow().isoformat() + "Z"
-        events_result = service.events().list(
-            calendarId=calendar_id, timeMin=now, maxResults=30, singleEvents=True, orderBy="startTime"
-        ).execute()
-        events = events_result.get("items", [])
-        data = []
-        for event in events:
-            start = event["start"].get("dateTime", event["start"].get("date"))
-            summary = event.get("summary", "Sem título")
-            try:
-                dt_obj = pd.to_datetime(start)
-                fmt = "%d/%m %H:%M" if "T" in start else "%d/%m"
-                data_fmt = dt_obj.strftime(fmt)
-            except Exception:
-                data_fmt = start
-            data.append({"Data": data_fmt, "Evento": summary})
-        return pd.DataFrame(data)
-    except Exception:
-        return pd.DataFrame()
-
-try:
-    df_raw = load_data()
-except Exception as e:
-    st.error(f"Erro de conexão. Verifique o arquivo secrets.toml. Detalhe: {e}")
-    st.stop()
-
-
-# ============================================================
-# 4. DESCOBRIR BLOCOS DE DATAS
-# ============================================================
-
-def descobrir_blocos_datas(df: pd.DataFrame):
-    cols = list(df.columns)
-    blocos = []
-    for i, nome_col in enumerate(cols):
-        n = str(nome_col)
-        if not (n.startswith("Início") or n.startswith("Inicio")):
-            continue
-        j = None
-        for idx2 in range(i + 1, len(cols)):
-            n2 = str(cols[idx2])
-            if n2.startswith("Fim") or n2.startswith("FIm"):
-                j = idx2
-                break
-        if j is None:
-            continue
-        k = None
-        tipo_base = "Férias"
-        max_busca = min(j + 4, len(cols))
-        for idx3 in range(j + 1, max_busca):
-            n3 = str(cols[idx3])
-            if "Motivo" in n3:
-                k = idx3
-                tipo_base = "Outros"
-                break
-            if "Curso" in n3:
-                k = idx3
-                tipo_base = "Curso"
-                break
-        col_ini = cols[i]
-        col_fim = cols[j]
-        col_mot = cols[k] if k is not None else None
-        blocos.append((col_ini, col_fim, col_mot, tipo_base))
-    return blocos
-
-BLOCOS_DATAS = descobrir_blocos_datas(df_raw)
-
-# ============================================================
-# 5. TRANSFORMAÇÃO EM EVENTOS (WIDE → LONG)
-# ============================================================
-
-@st.cache_data(ttl=600)
-def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
-    eventos = []
-    for _, row in df_raw.iterrows():
-        posto  = row.get("Posto", "")
-        nome   = row.get("Nome", "")
-        escala = row.get("Serviço", "")
-        eqman  = row.get("EqMan", "")
-        gvi    = row.get("Gvi/GP", "")
-        insp   = row.get("IN", "")
-
-        militar_info = {
-            "Posto": posto,
-            "Nome": nome,
-            "Escala": escala,
-            "EqMan": eqman if pd.notna(eqman) and str(eqman) != "-" else "Não",
-            "GVI": parse_bool(gvi),
-            "IN": parse_bool(insp),
-        }
-
-        for col_ini, col_fim, col_mot, tipo_base in blocos:
-            ini_raw = row.get(col_ini, pd.NaT)
-            fim_raw = row.get(col_fim, pd.NaT)
-            ini = pd.to_datetime(ini_raw, dayfirst=True, errors="coerce")
-            fim = pd.to_datetime(fim_raw, dayfirst=True, errors="coerce")
-
-            if pd.isna(ini) or pd.isna(fim):
-                continue
-            if fim < ini:
-                ini, fim = fim, ini
-            if ini.year < 2000:
-                ini = ini.replace(year=ini.year + 100)
-            if fim.year < 2000:
-                fim = fim.replace(year=fim.year + 100)
-            dur = (fim - ini).days + 1
-            if dur < 1 or dur > 365 * 2:
-                continue
-
-            if tipo_base == "Férias":
-                motivo_real = "Férias"
-                tipo_final = "Férias"
-            else:
-                motivo_texto = ""
-                if col_mot is not None:
-                    motivo_texto = str(row.get(col_mot, "")).strip()
-                if tipo_base == "Curso":
-                    motivo_real = motivo_texto if motivo_texto and "nan" not in motivo_texto.lower() else "CURSO (não especificado)"
-                    tipo_final = "Curso"
-                else:
-                    motivo_real = motivo_texto if motivo_texto and "nan" not in motivo_texto.lower() else "OUTROS"
-                    tipo_final = "Outros"
-
-            if tipo_final == "Férias":
-                motivo_agr = "Férias"
-            elif tipo_final == "Curso":
-                motivo_agr = "Curso"
-            else:
-                motivo_agr = motivo_real
-
-            eventos.append({
-                **militar_info,
-                "Inicio": ini,
-                "Fim": fim,
-                "Duracao_dias": dur,
-                "Motivo": motivo_real,
-                "MotivoAgrupado": motivo_agr,
-                "Tipo": tipo_final
-            })
-    return pd.DataFrame(eventos)
-
-df_eventos = construir_eventos(df_raw, BLOCOS_DATAS)
-
-
-# ============================================================
-# 6. EXPANSÃO POR DIA
-# ============================================================
-
-@st.cache_data(ttl=600)
-def expandir_eventos_por_dia(df_eventos: pd.DataFrame) -> pd.DataFrame:
-    if df_eventos.empty:
-        return pd.DataFrame()
-    linhas = []
-    for _, ev in df_eventos.iterrows():
-        ini = ev["Inicio"]
-        fim = ev["Fim"]
-        if pd.isna(ini) or pd.isna(fim):
-            continue
-        for data in pd.date_range(ini, fim):
-            linhas.append({
-                "Data": data,
-                "Posto": ev["Posto"],
-                "Nome": ev["Nome"],
-                "Escala": ev["Escala"],
-                "EqMan": ev["EqMan"],
-                "GVI": ev["GVI"],
-                "IN": ev["IN"],
-                "Motivo": ev["Motivo"],
-                "MotivoAgrupado": ev["MotivoAgrupado"],
-                "Tipo": ev["Tipo"]
-            })
-    return pd.DataFrame(linhas)
-
-df_dias = expandir_eventos_por_dia(df_eventos)
-
-# ============================================================
-# 7.1 HELPER PARA STATUS EM DATA (NOVO)
-# ============================================================
-
-def get_status_em_data(row, data_ref, blocos_cols):
-    """
-    Verifica o status de uma pessoa (row) em uma data específica.
-    Retorna 'Presente' ou o motivo do afastamento.
-    """
-    for col_ini, col_fim, col_mot, tipo_base in blocos_cols:
-        ini = row[col_ini]
-        fim = row[col_fim]
-        
-        if pd.isna(ini) or pd.isna(fim):
-            continue
-            
-        try:
-            # Tenta converter para datetime
-            dt_ini = pd.to_datetime(ini, dayfirst=True, errors='coerce')
-            dt_fim = pd.to_datetime(fim, dayfirst=True, errors='coerce')
-            
-            if pd.isna(dt_ini) or pd.isna(dt_fim):
-                continue
-                
-            if dt_ini <= data_ref <= dt_fim:
-                motivo = tipo_base
-                if col_mot and col_mot in row.index and not pd.isna(row[col_mot]):
-                    motivo = str(row[col_mot])
-                return motivo
-        except:
-            continue
-            
-    return "Presente"
-
-
-# ============================================================
-# 7. FUNÇÕES DE FILTRO E GRÁFICOS
-# ============================================================
-
-def filtrar_tripulacao(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
-    res = df.copy()
-    if apenas_eqman and "EqMan" in res.columns:
-        res = res[(res["EqMan"].notna()) & (res["EqMan"].astype(str) != "-")]
-    if apenas_in and "IN" in res.columns:
-        res = res[res["IN"].apply(parse_bool)]
-    if apenas_gvi and "Gvi/GP" in res.columns:
-        res = res[res["Gvi/GP"].apply(parse_bool)]
-    return res
-
-def filtrar_eventos(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
-    res = df.copy()
-    if apenas_eqman:
-        res = res[res["EqMan"] != "Não"]
-    if apenas_in:
-        res = res[res["IN"] == True]
-    if apenas_gvi:
-        res = res[res["GVI"] == True]
-    return res
-
-def filtrar_dias(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
-    res = df.copy()
-    if apenas_eqman:
-        res = res[res["EqMan"] != "Não"]
-    if apenas_in:
-        res = res[res["IN"] == True]
-    if apenas_gvi:
-        res = res[res["GVI"] == True]
-    return res
-
-AMEZIA_COLORS = ["#4099ff", "#ff5370", "#2ed8b6", "#ffb64d", "#a3a3a3"]
-
-def update_fig_layout(fig, title=None):
-    layout_args = dict(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="'Nunito Sans', sans-serif", size=12),
-        margin=dict(t=60, b=20, l=20, r=20),
-        colorway=AMEZIA_COLORS
-    )
-    if title:
-        layout_args["title"] = title
-        
-    fig.update_layout(**layout_args)
-    return fig
-
-def grafico_pizza_motivos(df_motivos_dias, titulo):
-    fig = px.pie(
-        df_motivos_dias,
-        names="MotivoAgrupado",
-        values="Duracao_dias",
-        hole=0.7,
-        color_discrete_sequence=AMEZIA_COLORS
-    )
-    fig.update_traces(
-        textposition="inside",
-        textinfo="percent+label",
-        hovertemplate="<b>%{label}</b><br>%{value} dias (%{percent})<extra></extra>",
-        marker=dict(line=dict(color='#ffffff', width=2))
-    )
-    update_fig_layout(fig, titulo)
-    return fig
-
-
-# ============================================================
-# 8. PARÂMETROS (SIDEBAR) + NAVEGAÇÃO
-# ============================================================
-
-st.sidebar.markdown("#### Navegação")
-with st.sidebar.container():
-    pagina = st.radio(
-        label="Seções",
-        options=[
-            "Presentes",
-            "Ausentes",
-            "Agenda do Navio",
-            "Linha do Tempo",
-            "Estatísticas & Análises",
-            "Férias",
-            "Cursos",
-            "Tabela de Serviço",
-            "Log / Debug"
-        ],
-        index=0,
-        label_visibility="collapsed",
-        key="pagina_radio"
-    )
-
-
-# ============================================================
-# 9. MÉTRICAS GLOBAIS (Função)
-# ============================================================
 
 def exibir_metricas_globais(data_referencia):
     """Exibe os cards de métricas globais baseados na data fornecida."""
@@ -667,7 +238,7 @@ hoje_padrao = datetime.today()
 # --------------------------------------------------------
 # PRESENTES
 # --------------------------------------------------------
-if pagina == "Presentes":
+if pagina == "👥 Presentes":
     st.subheader("Presentes a bordo")
     
     metrics_placeholder = st.container()
@@ -733,7 +304,7 @@ if pagina == "Presentes":
 # --------------------------------------------------------
 # AUSENTES
 # --------------------------------------------------------
-elif pagina == "Ausentes":
+elif pagina == "🚫 Ausentes":
     st.subheader("Ausentes")
 
     # 1. DATA (Logo abaixo do título)
@@ -845,7 +416,7 @@ elif pagina == "Ausentes":
 else:
     hoje = pd.to_datetime(hoje_padrao)
     
-    if pagina == "Agenda do Navio":
+    if pagina == "📅 Agenda do Navio":
         st.subheader("📅 Agenda do Navio (Google Calendar)")
         col_sel, col_btn = st.columns([3, 1])
         with col_sel:
@@ -869,7 +440,7 @@ else:
                         unsafe_allow_html=True
                     )
 
-    elif pagina == "Linha do Tempo":
+    elif pagina == "⏳ Linha do Tempo":
         st.subheader("Planejamento Anual de Ausências")
         # FILTROS REMOVIDOS
         
@@ -929,7 +500,7 @@ else:
                     
                     st.plotly_chart(fig, use_container_width=True)
 
-    elif pagina == "Estatísticas & Análises":
+    elif pagina == "📊 Estatísticas & Análises":
         st.subheader("Visão Analítica de Ausências")
         # FILTROS REMOVIDOS
         
@@ -984,7 +555,7 @@ else:
                         else:
                             st.info("Sem dados diários para análise mensal.")
 
-    elif pagina == "Férias":
+    elif pagina == "🏖️ Férias":
         st.subheader("Férias cadastradas")
         # FILTROS REMOVIDOS
         
@@ -1063,7 +634,7 @@ else:
                             update_fig_layout(fig_pizza_ferias, "Distribuição de férias gozadas x não gozadas")
                             st.plotly_chart(fig_pizza_ferias, use_container_width=True)
 
-    elif pagina == "Cursos":
+    elif pagina == "🎓 Cursos":
         st.subheader("Análises de Cursos")
         # FILTROS REMOVIDOS
         
@@ -1142,7 +713,7 @@ else:
                                 update_fig_layout(fig_curso_mes, title="Militares em curso por mês")
                                 col_g2.plotly_chart(fig_curso_mes, use_container_width=True)
 
-    elif pagina == "Tabela de Serviço":
+    elif pagina == "⚔️ Tabela de Serviço":
         st.subheader("Tabela de Serviço - Análise de Escalas")
 
         # --- SEÇÃO 1: VISÃO DIÁRIA ---
@@ -1201,7 +772,7 @@ else:
                         if "0x1" in val or "1x1" in val:
                             return "color: #ff5370; font-weight: bold" # Red
                         elif "2x1" in val:
-                            return "color: #ffffff" # White (assuming dark mode or visible on light) - user asked for white
+                            return "color: #ffb64d; font-weight: bold" # Yellow
                         elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
                              return "color: #2ed8b6; font-weight: bold" # Green
                     return ""
@@ -1259,14 +830,14 @@ else:
                     if "0x1" in val or "1x1" in val:
                         return "color: #ff5370; font-weight: bold"
                     elif "2x1" in val:
-                        return "color: #ffffff" # White
+                        return "color: #ffb64d; font-weight: bold" # Yellow
                     elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
                          return "color: #2ed8b6; font-weight: bold"
                 return ""
 
             st.dataframe(df_tabela.style.map(color_scale_monthly), use_container_width=True, hide_index=True)
 
-    elif pagina == "Log / Debug":
+    elif pagina == "🐞 Log / Debug":
         st.subheader("Log / Debug")
         st.markdown("### df_raw (dados brutos do Google Sheets)")
         st.write(f"Total de linhas em df_raw: **{len(df_raw)}**")
