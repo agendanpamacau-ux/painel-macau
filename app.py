@@ -210,9 +210,32 @@ st.markdown(
         padding-left: 18px;
     }}
     
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover p {{
+        color: var(--amezia-blue) !important;
+    }}
+
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {{
         color: var(--amezia-blue) !important;
         font-weight: 700 !important;
+    }}
+    
+    /* Center Metrics */
+    div[data-testid="stMetric"] {{
+        text-align: center !important;
+        justify-content: center !important;
+        align-items: center !important;
+        display: flex;
+        flex-direction: column;
+    }}
+    div[data-testid="stMetricLabel"] {{
+        justify-content: center !important;
+        width: 100%;
+        display: flex;
+    }}
+    div[data-testid="stMetricValue"] {{
+        justify-content: center !important;
+        width: 100%;
+        display: flex;
     }}
 
     /* Dataframes */
@@ -1240,14 +1263,15 @@ else:
             # --- SEÇÃO 2: VISÃO MENSAL ---
             st.markdown("#### Escala Mensal")
             
-            col1, col2 = st.columns(2)
+            # Layout: Full Width (sem colunas restritivas)
+            col_mes_sel, col_ano_sel, _ = st.columns([1, 1, 4])
             meses_dict = {
                 "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
                 "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
             }
             now = datetime.now()
-            sel_mes_nome = col1.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_escala")
-            sel_ano = col2.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_escala")
+            sel_mes_nome = col_mes_sel.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_escala")
+            sel_ano = col_ano_sel.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_escala")
             sel_mes = meses_dict[sel_mes_nome]
             
             # Gerar dias do mês
