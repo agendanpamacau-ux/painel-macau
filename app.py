@@ -753,9 +753,9 @@ if pagina == "Presentes":
 elif pagina == "Ausentes":
     st.subheader("Ausentes por dia")
 
-    # 1. DATA (Centralizada)
-    col_d1, col_d2, col_d3 = st.columns([1, 2, 1])
-    data_ref = col_d2.date_input("Data de Referência", hoje_padrao, key="data_aus_tab", format="DD/MM/YYYY")
+    # 1. DATA (Esquerda)
+    col_d1, _ = st.columns([2, 4])
+    data_ref = col_d1.date_input("Data de Referência", hoje_padrao, key="data_aus_tab", format="DD/MM/YYYY")
     hoje = pd.to_datetime(data_ref)
 
     # 2. TABELA
@@ -766,7 +766,7 @@ elif pagina == "Ausentes":
     st.markdown("<br>", unsafe_allow_html=True) # Espaçamento
     col_f_spacer1, col_f_content, col_f_spacer2 = st.columns([1, 4, 1])
     with col_f_content:
-        st.markdown("##### Filtros")
+        # st.markdown("##### Filtros") # REMOVIDO
         c_f1, c_f2, c_f3 = st.columns(3)
         apenas_eqman = c_f1.checkbox("Apenas EqMan", key="aus_eqman_tab")
         apenas_in    = c_f2.checkbox("Apenas IN", key="aus_in_tab")
@@ -853,8 +853,8 @@ elif pagina == "Ausentes":
             else:
                 df_aus_dia = (df_dias_mes.groupby("Data")["Nome"].nunique().reset_index(name="Militares"))
                 
-                fig_aus_dia = px.bar(
-                    df_aus_dia, x="Data", y="Militares",
+                fig_aus_dia = px.line(
+                    df_aus_dia, x="Data", y="Militares", markers=True,
                     labels={"Data": "Dia", "Militares": "Militares Ausentes"}, color_discrete_sequence=["#ffb64d"]
                 )
                 fig_aus_dia.update_xaxes(tickformat="%d/%m")
