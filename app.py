@@ -1309,7 +1309,7 @@ else:
                 if "0x1" in val or "1x1" in val:
                     return "color: #ff5370; font-weight: bold"
                 elif "2x1" in val:
-                    return "color: #ffffff" # White
+                    return "color: #ffb64d; font-weight: bold" # Yellow
                 elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
                         return "color: #2ed8b6; font-weight: bold"
             return ""
