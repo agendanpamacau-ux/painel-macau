@@ -12,7 +12,7 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.9.2 (Fix Gráficos Dias de Mar)"
+SCRIPT_VERSION = "v1.9.3 (Fix Gráficos Dias de Mar - Linha)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly_dark"
@@ -399,7 +399,7 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
                 motivo_real = "Férias"
                 tipo_final = "Férias"
             else:
-                motivo_texto = str(row.get(col_mot, "")).strip() if col_mot else ""
+                motivo_texto = str(row.get(col_mot, "")).strip()
                 if tipo_base == "Curso":
                     motivo_real = motivo_texto if motivo_texto and "nan" not in motivo_texto.lower() else "CURSO (não especificado)"
                     tipo_final = "Curso"
