@@ -12,7 +12,7 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.7.2 (Correção GVI/IN Checkbox)"
+SCRIPT_VERSION = "v1.7.3 (Fix Oficial de Serviço)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly"
@@ -191,8 +191,9 @@ AGENDAS_OFICIAIS = {
     "NSD": "d7d9199712991f81e35116b9ec1ed492ac672b72b7103a3a89fb3f66ae635fb7@group.calendar.google.com"
 }
 
+# AQUI FOI FEITA A CORREÇÃO DO NOME DA ESCALA
 SERVICOS_CONSIDERADOS = [
-    "Of / Supervisor",
+    "Oficial / Supervisor",
     "Contramestre 08-12",
     "Contramestre 04-08",
     "Contramestre 00-04",
