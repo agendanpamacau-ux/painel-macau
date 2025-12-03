@@ -12,7 +12,7 @@ import os
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v1.7.3 (Fix Oficial de Serviço)"
+SCRIPT_VERSION = "v1.8.0 (Lista de Componentes por Escala)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly"
@@ -191,7 +191,7 @@ AGENDAS_OFICIAIS = {
     "NSD": "d7d9199712991f81e35116b9ec1ed492ac672b72b7103a3a89fb3f66ae635fb7@group.calendar.google.com"
 }
 
-# AQUI FOI FEITA A CORREÇÃO DO NOME DA ESCALA
+# Nomes EXATOS conforme sua planilha
 SERVICOS_CONSIDERADOS = [
     "Oficial / Supervisor",
     "Contramestre 08-12",
@@ -1121,6 +1121,25 @@ else:
         else:
             st.write(f"Total de militares que não concorrem à escala: **{len(df_fora_escala)}**")
             st.dataframe(df_fora_escala[["Posto", "Nome", target_col]], use_container_width=True, hide_index=True)
+            
+        st.markdown("---")
+        st.markdown("#### Componentes das Escalas")
+
+        cols_srv = st.columns(len(SERVICOS_CONSIDERADOS))
+        tabs_escalas = st.tabs(SERVICOS_CONSIDERADOS)
+
+        for i, servico in enumerate(SERVICOS_CONSIDERADOS):
+            with tabs_escalas[i]:
+                # Using same logic as above to find people
+                people = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False, na=False)]
+                if people.empty:
+                    people = df_raw[df_raw[target_col].astype(str) == servico]
+
+                if not people.empty:
+                    st.write(f"**Total:** {len(people)}")
+                    st.dataframe(people[["Posto", "Nome"]], use_container_width=True, hide_index=True)
+                else:
+                    st.info(f"Ninguém cadastrado como {servico}.")
 
     elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
