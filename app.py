@@ -674,11 +674,15 @@ for i, option in enumerate(options):
     if b64:
         # nth-child(i+1) porque CSS conta a partir de 1
         css_icons += f"""
-        div[role="radiogroup"] > label:nth-child({i+1}) > div:first-child {{
+    if b64:
+        # nth-child(i+1) porque CSS conta a partir de 1
+        # Tentar seletor mais genérico para o texto
+        css_icons += f"""
+        div[role="radiogroup"] > label:nth-child({i+1}) [data-testid="stMarkdownContainer"] > p {{
             display: flex;
             align-items: center;
         }}
-        div[role="radiogroup"] > label:nth-child({i+1}) > div:first-child::before {{
+        div[role="radiogroup"] > label:nth-child({i+1}) [data-testid="stMarkdownContainer"] > p::before {{
             content: "";
             display: inline-block;
             width: 24px;
@@ -690,6 +694,8 @@ for i, option in enumerate(options):
             background-position: center;
         }}
         """
+    else:
+        st.sidebar.error(f"Falha ao carregar ícone: {icon_filename}")
 
 if css_icons:
     st.markdown(f"<style>{css_icons}</style>", unsafe_allow_html=True)
