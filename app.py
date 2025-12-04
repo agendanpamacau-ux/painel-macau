@@ -68,7 +68,7 @@ def make_echarts_rose_pie(data_list, title):
             {
                 "name": title,
                 "type": "pie",
-                "radius": [20, 140],
+                "radius": [50, 250],
                 "center": ["50%", "50%"],
                 "roseType": "area",
                 "itemStyle": {"borderRadius": 8},
