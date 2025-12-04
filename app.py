@@ -275,6 +275,36 @@ def load_data():
     df = df.reset_index(drop=True)
     return df
 
+def parse_mar_date(val, ano):
+    """
+    Parser específico para Dias de Mar.
+    Se a data for DD/MM, acopla o ANO da linha.
+    """
+    if pd.isna(val) or str(val).strip() == "":
+        return pd.NaT
+    
+    s_val = str(val).strip()
+    
+    # 1. Tenta parse direto (ex: 15/02/2024)
+    try:
+        dt = pd.to_datetime(s_val, dayfirst=True)
+        # Se o ano for 1900 (comum quando se passa só dia/mês), tenta corrigir com o ANO da linha
+        if dt.year == 1900 and pd.notna(ano) and int(ano) > 1900:
+            return dt.replace(year=int(ano))
+        return dt
+    except:
+        pass
+        
+    # 2. Tenta concatenar com o ANO (ex: 15/02 + 2024 -> 15/02/2024)
+    if pd.notna(ano) and int(ano) > 1900:
+        try:
+            full_date = f"{s_val}/{int(ano)}"
+            return pd.to_datetime(full_date, dayfirst=True)
+        except:
+            pass
+            
+    return pd.NaT
+
 @st.cache_data(ttl=600, show_spinner="Carregando dados de Mar...")
 def load_dias_mar():
     """Carrega dados da planilha separada de Dias de Mar"""
@@ -301,10 +331,13 @@ def load_dias_mar():
     if "ANO" in df.columns:
         df["ANO"] = pd.to_numeric(df["ANO"], errors='coerce').fillna(0).astype(int)
             
-    # Conversão de datas
+    # Conversão de datas com parser customizado
     date_cols = ["DATA INÍCIO", "DATA TÉRMINO"]
     for col in date_cols:
-        if col in df.columns:
+        if col in df.columns and "ANO" in df.columns:
+            df[col] = df.apply(lambda row: parse_mar_date(row[col], row["ANO"]), axis=1)
+        elif col in df.columns:
+            # Fallback se não tiver coluna ANO
             df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce')
             
     return df
@@ -908,8 +941,9 @@ elif pagina == "Dias de Mar":
                     # Extrair Mês da Data de Início
                     if "DATA INÍCIO" in df_mar_ano.columns:
                         # Garante que DATA INÍCIO é datetime
-                        # FIX: Added dayfirst=True to ensure correct parsing
-                        df_mar_ano["DATA INÍCIO"] = pd.to_datetime(df_mar_ano["DATA INÍCIO"], dayfirst=True, errors='coerce')
+                        # (Já tratado no load_dias_mar, mas mantemos verificação de segurança se necessário, 
+                        # porém sem re-parse forçado que pode ignorar o ano customizado)
+                        # df_mar_ano["DATA INÍCIO"] = pd.to_datetime(df_mar_ano["DATA INÍCIO"], dayfirst=True, errors='coerce')
                         
                         # Agrupar por mês (ordenado por número do mês para gráfico correto)
                         df_mar_ano["Mês_Num"] = df_mar_ano["DATA INÍCIO"].dt.month
