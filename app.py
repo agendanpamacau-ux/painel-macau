@@ -1232,7 +1232,7 @@ else:
                     col_a2.metric("Média de dias de ausência por militar", f"{media_dias_por_militar:.1f}")
                     col_a3.metric("Média de dias de FÉRIAS por militar", f"{media_dias_ferias:.1f}")
                     st.markdown("---")
-                     df_motivos_dias = (df_evt.groupby("MotivoAgrupado")["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False))
+                    df_motivos_dias = (df_evt.groupby("MotivoAgrupado")["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False))
                     
                     # ECHARTS ROSE PIE
                     data_motivos = [
