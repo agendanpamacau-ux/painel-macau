@@ -27,6 +27,15 @@ st.set_page_config(
 def check_password():
     """Retorna True se o usuário logar com sucesso."""
 
+    # --- PROTEÇÃO CONTRA ERRO DE CONFIGURAÇÃO (NOVO) ---
+    # Verifica se o arquivo secrets.toml foi carregado corretamente
+    if "passwords" not in st.secrets:
+        st.error("🚫 Erro de Configuração de Segurança")
+        st.warning("O sistema não encontrou as senhas configuradas.")
+        st.info("Verifique se a pasta `.streamlit` e o arquivo `secrets.toml` foram criados corretamente no GitHub Codespaces.")
+        st.stop() # Para a execução aqui para evitar o Crash (KeyError)
+    # ---------------------------------------------------
+
     def password_entered():
         """Verifica se a senha digitada bate com a do arquivo secrets.toml"""
         if st.session_state["username"] in st.secrets["passwords"] and \
