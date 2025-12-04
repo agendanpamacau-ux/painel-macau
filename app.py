@@ -22,8 +22,12 @@ def make_echarts_donut(data_list, title):
     title: Nome da série
     """
     options = {
-        "tooltip": {"trigger": "item"},
-        "legend": {"top": "5%", "left": "center"},
+        "tooltip": {"trigger": "item", "formatter": "{b}: {c} ({d}%)"},
+        "legend": {
+            "top": "5%", 
+            "left": "center",
+            "textStyle": {"color": "#9ca3af"} # Cor cinza claro para ser legível em dark/light
+        },
         "series": [
             {
                 "name": title,
@@ -37,7 +41,12 @@ def make_echarts_donut(data_list, title):
                 },
                 "label": {"show": False, "position": "center"},
                 "emphasis": {
-                    "label": {"show": True, "fontSize": "40", "fontWeight": "bold"}
+                    "label": {
+                        "show": True, 
+                        "fontSize": "24", # Reduzido de 40
+                        "fontWeight": "bold",
+                        "formatter": "{b}\n{d}%" # Nome e Porcentagem
+                    }
                 },
                 "labelLine": {"show": False},
                 "data": data_list,
