@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.io as pio
-from datetime import datetime
+from datetime import datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -256,7 +256,7 @@ def parse_aniversario_date(val):
             
             if mes_str in meses:
                 mes = meses[mes_str]
-                ano_atual = datetime.now().year
+                ano_atual = (datetime.utcnow() - timedelta(hours=3)).year
                 return datetime(ano_atual, mes, dia)
     except:
         pass
@@ -291,7 +291,7 @@ def parse_sheet_date(val):
         # Melhor estratégia: Tentar parser com ano atual
         dt = datetime.strptime(val_str, "%d/%m")
         # Substitui pelo ano corrente ou um ano padrão (2025 neste contexto)
-        dt = dt.replace(year=datetime.now().year) 
+        dt = dt.replace(year=(datetime.utcnow() - timedelta(hours=3)).year) 
         return pd.to_datetime(dt)
     except:
         pass
@@ -706,7 +706,7 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 # 8. PARÂMETROS (SIDEBAR) + NAVEGAÇÃO
 # ============================================================
 
-st.sidebar.markdown("## Navegação")
+st.sidebar.markdown("## HOME")
 
 # Função para carregar SVG como base64
 def get_svg_as_base64(file_path):
@@ -926,7 +926,7 @@ elif pagina == "Ausentes":
                 "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
                 "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
             }
-            now = datetime.now()
+            now = (datetime.utcnow() - timedelta(hours=3))
             sel_mes_nome_aus = col_sel_m.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_aus_graf")
             sel_ano_aus = col_sel_a.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_aus_graf")
             sel_mes_aus = meses_dict[sel_mes_nome_aus]
@@ -1371,7 +1371,7 @@ else:
         st.markdown("#### Escala Diária")
         col_escala_container, _ = st.columns([1, 3])
         with col_escala_container:
-            data_ref_diaria = st.date_input("Data de Referência", value=datetime.now(), key="data_ref_escala", format="DD/MM/YYYY")
+            data_ref_diaria = st.date_input("Data de Referência", value=(datetime.utcnow() - timedelta(hours=3)), key="data_ref_escala", format="DD/MM/YYYY")
             dt_ref = pd.to_datetime(data_ref_diaria)
             col_escala = None
             possiveis = ["Escala", "Serviço", "Função", "Setor", "Divisão"]
@@ -1418,7 +1418,7 @@ else:
             "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
             "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
         }
-        now = datetime.now()
+        now = (datetime.utcnow() - timedelta(hours=3))
         sel_mes_nome = col_mes_sel.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_escala")
         sel_ano = col_ano_sel.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_escala")
         sel_mes = meses_dict[sel_mes_nome]
@@ -1527,7 +1527,7 @@ else:
                     
                     # --- VISÃO DIÁRIA ---
                     st.markdown("### Cardápio do Dia")
-                    hoje_date = datetime.now().date()
+                    hoje_date = (datetime.utcnow() - timedelta(hours=3)).date()
                     
                     # Filtra para hoje (compara apenas a data)
                     df_hoje = df_menu[df_menu["Data"].dt.date == hoje_date]
@@ -1621,7 +1621,7 @@ else:
                     st.info("Nenhum aniversariante encontrado ou erro no processamento das datas.")
                 else:
                     # Métricas
-                    hoje_dt = datetime.now()
+                    hoje_dt = (datetime.utcnow() - timedelta(hours=3))
                     mes_atual = hoje_dt.month
                     dia_atual = hoje_dt.day
                     
@@ -1662,7 +1662,7 @@ else:
                         c2.info("Não há militares aniversariando hoje.")
                     else:
                         lista_nomes = [f"{row['Posto']} {row['Nome']}" for _, row in aniversariantes_dia.iterrows()]
-                        c2.success(f"🎉 {', '.join(lista_nomes)}")
+                        c2.success(f"{', '.join(lista_nomes)}")
                     
                     c3.markdown("**Último Aniversariante**")
                     c3.info(f"{ultimo['Posto']} {ultimo['Nome']} ({ultimo['Dia']:02d}/{ultimo['Mês']:02d})")
