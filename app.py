@@ -45,6 +45,81 @@ def make_echarts_donut(data_list, title):
     return options
 
 # ============================================================
+# HELPER: ECHARTS ROSE PIE (VISÃO ANALÍTICA)
+# ============================================================
+def make_echarts_rose_pie(data_list, title):
+    """
+    Gera um gráfico de pizza estilo 'Rose' (Area Mode).
+    data_list: lista de dicts [{'value': 10, 'name': 'A'}, ...]
+    title: Nome da série
+    """
+    options = {
+        "legend": {"top": "bottom"},
+        "toolbox": {
+            "show": True,
+            "feature": {
+                "mark": {"show": True},
+                "dataView": {"show": True, "readOnly": False},
+                "restore": {"show": True},
+                "saveAsImage": {"show": True},
+            },
+        },
+        "series": [
+            {
+                "name": title,
+                "type": "pie",
+                "radius": [20, 140],
+                "center": ["50%", "50%"],
+                "roseType": "area",
+                "itemStyle": {"borderRadius": 8},
+                "data": data_list,
+            }
+        ],
+    }
+    return options
+
+# ============================================================
+# HELPER: ECHARTS LINE
+# ============================================================
+def make_echarts_line(x_data, y_data):
+    """
+    Gera um gráfico de linha simples.
+    x_data: lista de categorias
+    y_data: lista de valores
+    """
+    options = {
+        "xAxis": {
+            "type": "category",
+            "data": x_data,
+        },
+        "yAxis": {"type": "value"},
+        "series": [{"data": y_data, "type": "line"}],
+        "tooltip": {"trigger": "axis"}
+    }
+    return options
+
+# ============================================================
+# HELPER: ECHARTS BAR
+# ============================================================
+def make_echarts_bar(x_data, y_data):
+    """
+    Gera um gráfico de barras simples.
+    x_data: lista de categorias
+    y_data: lista de valores
+    """
+    options = {
+        "xAxis": {
+            "type": "category",
+            "data": x_data,
+            "axisLabel": {"interval": 0, "rotate": 30}
+        },
+        "yAxis": {"type": "value"},
+        "series": [{"data": y_data, "type": "bar"}],
+        "tooltip": {"trigger": "axis"}
+    }
+    return options
+
+# ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
 SCRIPT_VERSION = "v2.1 (Ícones Atualizados)"
@@ -1227,23 +1302,20 @@ else:
                     st.markdown("---")
                     df_motivos_dias = (df_evt.groupby("MotivoAgrupado")["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False))
                     
-                    # ECHARTS DONUT
+                    # ECHARTS ROSE PIE
                     data_motivos = [
                         {"value": row["Duracao_dias"], "name": row["MotivoAgrupado"]}
                         for _, row in df_motivos_dias.iterrows()
                     ]
-                    opt_motivos = make_echarts_donut(data_motivos, "Motivos de Ausência")
-                    st_echarts(options=opt_motivos, height="500px")
+                    opt_motivos = make_echarts_rose_pie(data_motivos, "Motivos de Ausência")
+                    st_echarts(options=opt_motivos, height="600px")
                     
                     st.markdown("---")
                     
                     df_top10 = (df_evt.groupby(["Nome", "Posto"])["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False).head(10))
-                    fig_top10 = px.bar(
-                        df_top10, x="Nome", y="Duracao_dias", color="Posto", title="Top 10 – Dias de ausência por militar",
-                        labels={"Duracao_dias": "Dias de ausência"}, color_discrete_sequence=AMEZIA_COLORS
-                    )
-                    update_fig_layout(fig_top10, title="Top 10 – Dias de ausência por militar")
-                    st.plotly_chart(fig_top10, use_container_width=True)
+                    st.markdown("##### Top 10 – Dias de ausência por militar")
+                    opt_top10 = make_echarts_bar(df_top10["Nome"].tolist(), df_top10["Duracao_dias"].tolist())
+                    st_echarts(options=opt_top10, height="500px")
                     if not df_dias.empty:
                         st.markdown("---")
                         st.subheader("Média de militares ausentes por dia (por mês)")
@@ -1252,12 +1324,11 @@ else:
                             df_diario = (df_dias_filtrado.groupby("Data")["Nome"].nunique().reset_index(name="Ausentes"))
                             df_diario["Mes"] = df_diario["Data"].dt.to_period("M").dt.to_timestamp()
                             df_mensal = (df_diario.groupby("Mes")["Ausentes"].mean().reset_index(name="Media_ausentes_dia"))
-                            fig_mensal = px.area(
-                                df_mensal, x="Mes", y="Media_ausentes_dia", markers=True,
-                                labels={"Mes": "Mês", "Media_ausentes_dia": "Média de ausentes/dia"}, color_discrete_sequence=["#4099ff"]
-                            )
-                            update_fig_layout(fig_mensal, title="Média de Ausentes por Dia – por Mês")
-                            st.plotly_chart(fig_mensal, use_container_width=True)
+                            st.markdown("##### Média de Ausentes por Dia – por Mês")
+                            # Format dates for x-axis
+                            x_dates = df_mensal["Mes"].dt.strftime("%b/%Y").tolist()
+                            opt_mensal = make_echarts_line(x_dates, df_mensal["Media_ausentes_dia"].tolist())
+                            st_echarts(options=opt_mensal, height="400px")
                         else:
                             st.info("Sem dados diários para análise mensal.")
 
@@ -1372,24 +1443,21 @@ else:
                     
                     col_fx1, col_fx2 = st.columns(2)
                     df_escala = (df_ferias.groupby("Escala")["Nome"].nunique().reset_index(name="Militares").sort_values("Militares", ascending=False))
-                    fig_escala = px.bar(
-                        df_escala, x="Escala", y="Militares",
-                        labels={"Militares": "Militares em férias (no ano)"}, color_discrete_sequence=AMEZIA_COLORS
-                    )
-                    update_fig_layout(fig_escala, title="Militares de férias por serviço")
-                    col_fx1.plotly_chart(fig_escala, use_container_width=True)
+                    with col_fx1:
+                        st.markdown("##### Militares de férias por serviço")
+                        opt_escala = make_echarts_bar(df_escala["Escala"].tolist(), df_escala["Militares"].tolist())
+                        st_echarts(options=opt_escala, height="500px")
                     
                     if not df_dias.empty:
                         df_dias_ferias = df_dias[df_dias["Tipo"] == "Férias"].copy()
                         if not df_dias_ferias.empty:
                             df_dias_ferias["Mes"] = df_dias_ferias["Data"].dt.to_period("M").dt.to_timestamp()
                             df_mes_ferias = (df_dias_ferias[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
-                            fig_mes_ferias = px.bar(
-                                df_mes_ferias, x="Mes", y="Militares",
-                                labels={"Mes": "Mês", "Militares": "Militares com férias no mês"}, color_discrete_sequence=["#ffb64d"]
-                            )
-                            update_fig_layout(fig_mes_ferias, title="Quantidade de militares de férias por mês")
-                            col_fx2.plotly_chart(fig_mes_ferias, use_container_width=True)
+                            with col_fx2:
+                                st.markdown("##### Quantidade de militares de férias por mês")
+                                x_mes_ferias = df_mes_ferias["Mes"].dt.strftime("%b/%Y").tolist()
+                                opt_mes_ferias = make_echarts_bar(x_mes_ferias, df_mes_ferias["Militares"].tolist())
+                                st_echarts(options=opt_mes_ferias, height="500px")
                         else:
                             col_fx2.info("Sem dados diários suficientes para calcular férias por mês.")
 
@@ -1446,23 +1514,20 @@ else:
                         st.markdown("---")
                         col_g1, col_g2 = st.columns(2)
                         df_cursos_freq = (realizados.groupby("Motivo")["Nome"].nunique().reset_index(name="Militares").sort_values("Militares", ascending=False))
-                        fig_cursos_freq = px.bar(
-                            df_cursos_freq, x="Motivo", y="Militares",
-                            labels={"Motivo": "Curso", "Militares": "Militares"}, color_discrete_sequence=["#4099ff"]
-                        )
-                        update_fig_layout(fig_cursos_freq, title="Cursos realizados")
-                        col_g1.plotly_chart(fig_cursos_freq, use_container_width=True)
+                        with col_g1:
+                            st.markdown("##### Cursos realizados")
+                            opt_cursos_freq = make_echarts_bar(df_cursos_freq["Motivo"].tolist(), df_cursos_freq["Militares"].tolist())
+                            st_echarts(options=opt_cursos_freq, height="500px")
                         if not df_dias.empty:
                             df_dias_cursos = df_dias[df_dias["Tipo"] == "Curso"].copy()
                             if not df_dias_cursos.empty:
                                 df_dias_cursos["Mes"] = df_dias_cursos["Data"].dt.to_period("M").dt.to_timestamp()
                                 df_curso_mes = (df_dias_cursos[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
-                                fig_curso_mes = px.area(
-                                    df_curso_mes, x="Mes", y="Militares", markers=True,
-                                    labels={"Mes": "Mês", "Militares": "Militares em curso"}, color_discrete_sequence=["#ff5370"]
-                                )
-                                update_fig_layout(fig_curso_mes, title="Militares em curso por mês")
-                                col_g2.plotly_chart(fig_curso_mes, use_container_width=True)
+                                with col_g2:
+                                    st.markdown("##### Militares em curso por mês")
+                                    x_curso_mes = df_curso_mes["Mes"].dt.strftime("%b/%Y").tolist()
+                                    opt_curso_mes = make_echarts_line(x_curso_mes, df_curso_mes["Militares"].tolist())
+                                    st_echarts(options=opt_curso_mes, height="400px")
                             else:
                                 col_g2.info("Sem dados diários suficientes para análise mensal de cursos.")
 
