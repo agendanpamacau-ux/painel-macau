@@ -1226,6 +1226,20 @@ else:
                     col_a3.metric("Média de dias de FÉRIAS por militar", f"{media_dias_ferias:.1f}")
                     st.markdown("---")
                     df_motivos_dias = (df_evt.groupby("MotivoAgrupado")["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False))
+                    
+                    # ECHARTS DONUT
+                    data_motivos = [
+                        {"value": row["Duracao_dias"], "name": row["MotivoAgrupado"]}
+                        for _, row in df_motivos_dias.iterrows()
+                    ]
+                    opt_motivos = make_echarts_donut(data_motivos, "Motivos de Ausência")
+                    st_echarts(options=opt_motivos, height="500px")
+                    
+                    st.markdown("---")
+                    
+                    df_top10 = (df_evt.groupby(["Nome", "Posto"])["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False).head(10))
+                    fig_top10 = px.bar(
+                        df_top10, x="Nome", y="Duracao_dias", color="Posto", title="Top 10 – Dias de ausência por militar",
                         labels={"Duracao_dias": "Dias de ausência"}, color_discrete_sequence=AMEZIA_COLORS
                     )
                     update_fig_layout(fig_top10, title="Top 10 – Dias de ausência por militar")
