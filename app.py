@@ -1657,7 +1657,12 @@ else:
                     c1, c2, c3, c4 = st.columns(4)
                     
                     c1.metric("Aniversariantes do Mês", len(aniversariantes_mes))
-                    c2.metric("Aniversariantes do Dia", len(aniversariantes_dia))
+                    c2.markdown("**Aniversariantes do Dia**")
+                    if aniversariantes_dia.empty:
+                        c2.info("Não há militares aniversariando hoje.")
+                    else:
+                        lista_nomes = [f"{row['Posto']} {row['Nome']}" for _, row in aniversariantes_dia.iterrows()]
+                        c2.success(f"🎉 {', '.join(lista_nomes)}")
                     
                     c3.markdown("**Último Aniversariante**")
                     c3.info(f"{ultimo['Posto']} {ultimo['Nome']} ({ultimo['Dia']:02d}/{ultimo['Mês']:02d})")
