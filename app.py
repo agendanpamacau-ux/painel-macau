@@ -596,8 +596,9 @@ def make_donut_chart(df, names, values, title, center_text_main, center_text_sub
     """
     Cria um gráfico de rosca (donut) estilizado com texto no centro.
     """
-    # Cores inspiradas na imagem de referência (Roxo, Rosa, Cinza Claro, etc.)
-    DONUT_COLORS = ["#7986cb", "#ff80ab", "#eceff1", "#90a4ae"]
+    # Cores inspiradas no tema Amezia (Admin Dashboard)
+    # Primary (Purple/Blue), Danger (Pink/Red), Light Gray, etc.
+    DONUT_COLORS = ["#5b73e8", "#f46a6a", "#eff2f7", "#f1b44c"]
     
     fig = px.pie(
         df, names=names, values=values,
@@ -607,7 +608,7 @@ def make_donut_chart(df, names, values, title, center_text_main, center_text_sub
     # Configuração do texto central com estilo melhorado
     # Main: Darker/Bold, Sub: Lighter/Smaller
     center_html = (
-        f"<span style='font-size: 26px; font-weight: bold; color: #546e7a'>{center_text_main}</span><br>"
+        f"<span style='font-size: 26px; font-weight: bold; color: #495057'>{center_text_main}</span><br>"
         f"<span style='font-size: 16px; color: #90a4ae'>{center_text_sub}</span>"
     )
     
@@ -639,7 +640,7 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 # 8. PARÂMETROS (SIDEBAR) + NAVEGAÇÃO
 # ============================================================
 
-st.sidebar.markdown("## Navegação")
+st.sidebar.markdown("## HOME")
 
 # Função para carregar SVG como base64
 def get_svg_as_base64(file_path):
@@ -651,7 +652,7 @@ def get_svg_as_base64(file_path):
 
 # ICONES ATUALIZADOS
 ICON_MAP = {
-    "Presentes": "presentes.svg",
+    "HOME": "presentes.svg",
     "Ausentes": "ausentes.svg",
     "Dias de Mar": "dias_mar.svg", 
     "Agenda do Navio": "agenda.svg",
@@ -738,7 +739,7 @@ hoje_padrao = datetime.today()
 # --------------------------------------------------------
 # PRESENTES
 # --------------------------------------------------------
-if pagina == "Presentes":
+if pagina == "HOME":
     st.subheader("Presentes a bordo")
     metrics_placeholder = st.container()
     table_placeholder = st.container()
