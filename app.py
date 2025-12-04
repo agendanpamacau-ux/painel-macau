@@ -13,11 +13,11 @@ from streamlit_echarts import st_echarts
 
 
 # ============================================================
-# HELPER: ECHARTS PRONTIDÃO DONUT
+# HELPER: ECHARTS DONUT (GENERICO)
 # ============================================================
-def make_echarts_prontidao_donut(data_list, title):
+def make_echarts_donut(data_list, title):
     """
-    Gera um gráfico de pizza estilo 'Donut' específico para Prontidão.
+    Gera um gráfico de pizza estilo 'Donut' (usado em Prontidão e Visão Analítica).
     data_list: lista de dicts [{'value': 10, 'name': 'A'}, ...]
     title: Nome da série
     """
@@ -46,39 +46,7 @@ def make_echarts_prontidao_donut(data_list, title):
     }
     return options
 
-# ============================================================
-# HELPER: ECHARTS ROSE PIE (VISÃO ANALÍTICA)
-# ============================================================
-def make_echarts_rose_pie(data_list, title):
-    """
-    Gera um gráfico de pizza estilo 'Rose' (Area Mode).
-    data_list: lista de dicts [{'value': 10, 'name': 'A'}, ...]
-    title: Nome da série
-    """
-    options = {
-        "legend": {"top": "bottom"},
-        "toolbox": {
-            "show": True,
-            "feature": {
-                "mark": {"show": True},
-                "dataView": {"show": True, "readOnly": False},
-                "restore": {"show": True},
-                "saveAsImage": {"show": True},
-            },
-        },
-        "series": [
-            {
-                "name": title,
-                "type": "pie",
-                "radius": [50, 250],
-                "center": ["50%", "50%"],
-                "roseType": "area",
-                "itemStyle": {"borderRadius": 8},
-                "data": data_list,
-            }
-        ],
-    }
-    return options
+
 
 # ============================================================
 # HELPER: ECHARTS LINE
@@ -930,7 +898,7 @@ if pagina == "Presentes":
                 {"value": presentes_filtrado, "name": "Presentes"},
                 {"value": total_filtrado - presentes_filtrado, "name": "Ausentes"}
             ]
-            opt_prontidao = make_echarts_prontidao_donut(data_prontidao, "Prontidão")
+            opt_prontidao = make_echarts_donut(data_prontidao, "Prontidão")
             st_echarts(options=opt_prontidao, height="500px")
         else:
             st.info("Não há efetivo na visão atual para calcular a prontidão.")
@@ -1243,12 +1211,12 @@ else:
                     st.markdown("---")
                     df_motivos_dias = (df_evt.groupby("MotivoAgrupado")["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False))
                     
-                    # ECHARTS ROSE PIE
+                    # ECHARTS DONUT (VISÃO ANALÍTICA)
                     data_motivos = [
                         {"value": row["Duracao_dias"], "name": row["MotivoAgrupado"]}
                         for _, row in df_motivos_dias.iterrows()
                     ]
-                    opt_motivos = make_echarts_rose_pie(data_motivos, "Motivos de Ausência")
+                    opt_motivos = make_echarts_donut(data_motivos, "Motivos de Ausência")
                     st_echarts(options=opt_motivos, height="600px")
                     
                     st.markdown("---")
