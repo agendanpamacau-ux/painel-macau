@@ -908,7 +908,8 @@ elif pagina == "Dias de Mar":
                     # Extrair Mês da Data de Início
                     if "DATA INÍCIO" in df_mar_ano.columns:
                         # Garante que DATA INÍCIO é datetime
-                        df_mar_ano["DATA INÍCIO"] = pd.to_datetime(df_mar_ano["DATA INÍCIO"], errors='coerce')
+                        # FIX: Added dayfirst=True to ensure correct parsing
+                        df_mar_ano["DATA INÍCIO"] = pd.to_datetime(df_mar_ano["DATA INÍCIO"], dayfirst=True, errors='coerce')
                         
                         # Agrupar por mês (ordenado por número do mês para gráfico correto)
                         df_mar_ano["Mês_Num"] = df_mar_ano["DATA INÍCIO"].dt.month
