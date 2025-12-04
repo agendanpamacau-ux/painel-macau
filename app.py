@@ -11,43 +11,36 @@ import os
 from streamlit_echarts import st_echarts
 
 # ============================================================
-# HELPER: ECHARTS ROSE PIE
+# HELPER: ECHARTS DONUT
 # ============================================================
-def make_echarts_rose_pie(data_list, title):
+def make_echarts_donut(data_list, title):
     """
-    Gera um gráfico de pizza estilo 'Rose' usando ECharts.
+    Gera um gráfico de pizza estilo 'Donut' com cantos arredondados.
     data_list: lista de dicts [{'value': 10, 'name': 'A'}, ...]
-    title: Título do gráfico (usado no tooltip ou legenda se necessário)
+    title: Nome da série (aparece no tooltip)
     """
     options = {
-        "legend": {"top": "bottom"},
-        "tooltip": {"trigger": "item", "formatter": "{b}: {c} ({d}%)"},
-        "toolbox": {
-            "show": True,
-            "feature": {
-                "mark": {"show": True},
-                "dataView": {"show": True, "readOnly": False},
-                "restore": {"show": True},
-                "saveAsImage": {"show": True}
-            }
-        },
+        "tooltip": {"trigger": "item"},
+        "legend": {"top": "5%", "left": "center"},
         "series": [
             {
                 "name": title,
                 "type": "pie",
-                "radius": [20, 140],
-                "center": ["50%", "50%"],
-                "roseType": "area",
+                "radius": ["40%", "70%"],
+                "avoidLabelOverlap": False,
                 "itemStyle": {
-                    "borderRadius": 8
+                    "borderRadius": 10,
+                    "borderColor": "#fff",
+                    "borderWidth": 2,
                 },
-                "label": {
-                    "show": True,
-                    "formatter": "{b}\n{d}%"
+                "label": {"show": False, "position": "center"},
+                "emphasis": {
+                    "label": {"show": True, "fontSize": "20", "fontWeight": "bold"}
                 },
-                "data": data_list
+                "labelLine": {"show": False},
+                "data": data_list,
             }
-        ]
+        ],
     }
     return options
 
@@ -1233,18 +1226,6 @@ else:
                     col_a3.metric("Média de dias de FÉRIAS por militar", f"{media_dias_ferias:.1f}")
                     st.markdown("---")
                     df_motivos_dias = (df_evt.groupby("MotivoAgrupado")["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False))
-                    
-                    # ECHARTS ROSE PIE
-                    data_motivos = [
-                        {"value": row["Duracao_dias"], "name": row["MotivoAgrupado"]}
-                        for _, row in df_motivos_dias.iterrows()
-                    ]
-                    opt_motivos = make_echarts_rose_pie(data_motivos, "Motivos de Ausência")
-                    st_echarts(options=opt_motivos, height="500px")
-                    st.markdown("---")
-                    df_top10 = (df_evt.groupby(["Nome", "Posto"])["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False).head(10))
-                    fig_top10 = px.bar(
-                        df_top10, x="Nome", y="Duracao_dias", color="Posto", title="Top 10 – Dias de ausência por militar",
                         labels={"Duracao_dias": "Dias de ausência"}, color_discrete_sequence=AMEZIA_COLORS
                     )
                     update_fig_layout(fig_top10, title="Top 10 – Dias de ausência por militar")
