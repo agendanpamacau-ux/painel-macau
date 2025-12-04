@@ -596,22 +596,32 @@ def make_donut_chart(df, names, values, title, center_text_main, center_text_sub
     """
     Cria um gráfico de rosca (donut) estilizado com texto no centro.
     """
+    # Cores inspiradas na imagem de referência (Roxo, Rosa, Cinza Claro, etc.)
+    DONUT_COLORS = ["#7986cb", "#ff80ab", "#eceff1", "#90a4ae"]
+    
     fig = px.pie(
         df, names=names, values=values,
-        hole=0.7, color_discrete_sequence=AMEZIA_COLORS
+        hole=0.6, color_discrete_sequence=DONUT_COLORS
     )
     
-    # Configuração do texto central
+    # Configuração do texto central com estilo melhorado
+    # Main: Darker/Bold, Sub: Lighter/Smaller
+    center_html = (
+        f"<span style='font-size: 26px; font-weight: bold; color: #546e7a'>{center_text_main}</span><br>"
+        f"<span style='font-size: 16px; color: #90a4ae'>{center_text_sub}</span>"
+    )
+    
     fig.update_layout(
-        annotations=[dict(text=f"<b>{center_text_main}</b><br>{center_text_sub}", x=0.5, y=0.5, font_size=20, showarrow=False)],
-        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+        annotations=[dict(text=center_html, x=0.5, y=0.5, font_size=20, showarrow=False)],
+        legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5),
+        margin=dict(t=40, b=20, l=20, r=20)
     )
     
     fig.update_traces(
         hole=0.6,
         textinfo="none",
         hovertemplate="<b>%{label}</b><br>%{value} (%{percent})<extra></extra>",
-        marker=dict(line=dict(color='#ffffff', width=2))
+        marker=dict(line=dict(color='#ffffff', width=3))
     )
     
     update_fig_layout(fig, title)
