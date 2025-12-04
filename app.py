@@ -201,6 +201,7 @@ SERVICOS_CONSIDERADOS = [
 
 # NOVA URL para Dias de Mar
 URL_DIAS_MAR = "https://docs.google.com/spreadsheets/d/1CEVh0EQsnINcuVP4-RbS3KgfAQNKXCwAszbqjDq8phU/edit?usp=sharing"
+URL_CARDAPIO = "https://docs.google.com/spreadsheets/d/1i3veE6cj4-h9toh_DIjm8vcyz4kJ0DoKpJDrA2Xn77s/edit?usp=sharing"
 
 def parse_bool(value) -> bool:
     """
@@ -340,6 +341,14 @@ def load_dias_mar():
             # Fallback se não tiver coluna ANO
             df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce')
             
+    return df
+
+@st.cache_data(ttl=3600, show_spinner="Carregando cardápio...")
+def load_cardapio():
+    """Carrega dados do cardápio semanal"""
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # Lê sem cabeçalho para pegar a estrutura exata
+    df = conn.read(spreadsheet=URL_CARDAPIO, header=None, ttl="1h")
     return df
 
 @st.cache_data(ttl=300)
@@ -662,6 +671,7 @@ ICON_MAP = {
     "Férias": "icons8-sun-50.svg",
     "Cursos": "cursos.svg",
     "Tabela de Serviço": "icons8-tick-box-50.svg",
+    "Cardápio": "icons8-menu-50.svg",
     "Log / Debug": "log.svg"
 }
 
@@ -1407,6 +1417,105 @@ else:
                     st.dataframe(people[["Posto", "Nome"]], use_container_width=True, hide_index=True)
                 else:
                     st.info(f"Ninguém cadastrado como {servico}.")
+
+    elif pagina == "Cardápio":
+        st.subheader("Cardápio Semanal")
+        
+        try:
+            df_cardapio_raw = load_cardapio()
+            
+            if df_cardapio_raw.empty:
+                st.info("Não foi possível carregar o cardápio.")
+            else:
+                # Processamento dos dados
+                # Datas estão na linha 2 (index 1), colunas B a I (index 1 a 8)
+                # Refeições estão nas linhas 4 a 7 (index 3 a 6)
+                
+                try:
+                    # Extrair datas
+                    raw_dates = df_cardapio_raw.iloc[1, 1:9].values
+                    
+                    # Extrair refeições
+                    # Linha 4: Café da Manhã
+                    # Linha 5: Almoço
+                    # Linha 6: Jantar
+                    # Linha 7: Ceia
+                    meals_data = {
+                        "Café da Manhã": df_cardapio_raw.iloc[3, 1:9].values,
+                        "Almoço": df_cardapio_raw.iloc[4, 1:9].values,
+                        "Jantar": df_cardapio_raw.iloc[5, 1:9].values,
+                        "Ceia": df_cardapio_raw.iloc[6, 1:9].values
+                    }
+                    
+                    # Construir DataFrame estruturado
+                    structured_data = []
+                    for i, date_val in enumerate(raw_dates):
+                        # Parse da data
+                        date_obj = pd.NaT
+                        if pd.notna(date_val):
+                            try:
+                                # Tenta DD/MM/YYYY
+                                date_obj = pd.to_datetime(str(date_val).strip(), dayfirst=True, errors='coerce')
+                            except:
+                                pass
+                        
+                        day_data = {"Data": date_obj, "DataStr": str(date_val)}
+                        for meal_name, meal_vals in meals_data.items():
+                            day_data[meal_name] = meal_vals[i] if i < len(meal_vals) else ""
+                        
+                        structured_data.append(day_data)
+                        
+                    df_menu = pd.DataFrame(structured_data)
+                    
+                    # --- VISÃO DIÁRIA ---
+                    st.markdown("### Cardápio do Dia")
+                    hoje_date = datetime.now().date()
+                    
+                    # Filtra para hoje (compara apenas a data)
+                    df_hoje = df_menu[df_menu["Data"].dt.date == hoje_date]
+                    
+                    if not df_hoje.empty:
+                        row = df_hoje.iloc[0]
+                        c1, c2, c3, c4 = st.columns(4)
+                        
+                        with c1:
+                            st.markdown(f"**☕ Café da Manhã**")
+                            st.info(row["Café da Manhã"] if pd.notna(row["Café da Manhã"]) else "-")
+                            
+                        with c2:
+                            st.markdown(f"**🍽️ Almoço**")
+                            st.success(row["Almoço"] if pd.notna(row["Almoço"]) else "-")
+                            
+                        with c3:
+                            st.markdown(f"**soup Jantar**")
+                            st.warning(row["Jantar"] if pd.notna(row["Jantar"]) else "-")
+                            
+                        with c4:
+                            st.markdown(f"**🌙 Ceia**")
+                            st.error(row["Ceia"] if pd.notna(row["Ceia"]) else "-")
+                    else:
+                        st.info(f"Não há cardápio cadastrado para hoje ({hoje_date.strftime('%d/%m/%Y')}).")
+                    
+                    st.markdown("---")
+                    
+                    # --- VISÃO SEMANAL ---
+                    st.markdown("### Visão Semanal")
+                    
+                    # Prepara tabela para exibição (Data como coluna ou index)
+                    df_display = df_menu.copy()
+                    # Formata data para exibição
+                    df_display["Dia"] = df_display["Data"].apply(lambda x: x.strftime("%d/%m (%a)") if pd.notna(x) else "Data Inválida")
+                    
+                    # Seleciona colunas
+                    cols_show = ["Dia", "Café da Manhã", "Almoço", "Jantar", "Ceia"]
+                    st.dataframe(df_display[cols_show], use_container_width=True, hide_index=True)
+                    
+                except Exception as e:
+                    st.error(f"Erro ao processar estrutura do cardápio: {e}")
+                    st.dataframe(df_cardapio_raw.head(10))
+
+        except Exception as e:
+            st.error(f"Erro ao carregar cardápio: {e}")
 
     elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
