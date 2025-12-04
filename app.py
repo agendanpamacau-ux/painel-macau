@@ -649,7 +649,7 @@ def grafico_pizza_motivos(df_motivos_dias, titulo):
 # 8. PARÂMETROS (SIDEBAR) + NAVEGAÇÃO
 # ============================================================
 
-st.sidebar.markdown("## HOME")
+st.sidebar.markdown("## Navegação")
 
 # Função para carregar SVG como base64
 def get_svg_as_base64(file_path):
@@ -661,8 +661,9 @@ def get_svg_as_base64(file_path):
 
 # ICONES ATUALIZADOS
 ICON_MAP = {
-    "HOME": "presentes.svg",
+    "Presentes": "presentes.svg",
     "Ausentes": "ausentes.svg",
+    "Cardápio": "cardapio.svg",
     "Dias de Mar": "dias_mar.svg", 
     "Agenda do Navio": "agenda.svg",
     "Linha do Tempo": "linha_tempo.svg",
@@ -671,7 +672,6 @@ ICON_MAP = {
     "Férias": "icons8-sun-50.svg",
     "Cursos": "cursos.svg",
     "Tabela de Serviço": "icons8-tick-box-50.svg",
-    "Cardápio": "icons8-menu-50.svg",
     "Log / Debug": "log.svg"
 }
 
@@ -749,7 +749,7 @@ hoje_padrao = datetime.today()
 # --------------------------------------------------------
 # PRESENTES
 # --------------------------------------------------------
-if pagina == "HOME":
+if pagina == "Presentes":
     st.subheader("Presentes a bordo")
     metrics_placeholder = st.container()
     table_placeholder = st.container()
@@ -1479,19 +1479,19 @@ else:
                         c1, c2, c3, c4 = st.columns(4)
                         
                         with c1:
-                            st.markdown(f"**☕ Café da Manhã**")
+                            st.markdown(f"**Café da Manhã**")
                             st.info(row["Café da Manhã"] if pd.notna(row["Café da Manhã"]) else "-")
                             
                         with c2:
-                            st.markdown(f"**🍽️ Almoço**")
+                            st.markdown(f"**Almoço**")
                             st.success(row["Almoço"] if pd.notna(row["Almoço"]) else "-")
                             
                         with c3:
-                            st.markdown(f"**soup Jantar**")
+                            st.markdown(f"**Jantar**")
                             st.warning(row["Jantar"] if pd.notna(row["Jantar"]) else "-")
                             
                         with c4:
-                            st.markdown(f"**🌙 Ceia**")
+                            st.markdown(f"**Ceia**")
                             st.error(row["Ceia"] if pd.notna(row["Ceia"]) else "-")
                     else:
                         st.info(f"Não há cardápio cadastrado para hoje ({hoje_date.strftime('%d/%m/%Y')}).")
@@ -1504,7 +1504,8 @@ else:
                     # Prepara tabela para exibição (Data como coluna ou index)
                     df_display = df_menu.copy()
                     # Formata data para exibição
-                    df_display["Dia"] = df_display["Data"].apply(lambda x: x.strftime("%d/%m (%a)") if pd.notna(x) else "Data Inválida")
+                    DIAS_PT = {0: "Seg", 1: "Ter", 2: "Qua", 3: "Qui", 4: "Sex", 5: "Sáb", 6: "Dom"}
+                    df_display["Dia"] = df_display["Data"].apply(lambda x: f"{x.day:02d}/{x.month:02d} ({DIAS_PT[x.weekday()]})" if pd.notna(x) else "Data Inválida")
                     
                     # Seleciona colunas
                     cols_show = ["Dia", "Café da Manhã", "Almoço", "Jantar", "Ceia"]
