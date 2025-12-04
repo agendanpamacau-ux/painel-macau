@@ -1226,20 +1226,96 @@ else:
                 st.write("Sem dados de férias registrados.")
             else:
                 df_ferias = df_eventos[df_eventos["Tipo"] == "Férias"].copy()
+                
+                # 1. GRÁFICO DE ROSCA (PRIMEIRA INFORMAÇÃO)
+                st.markdown("### % de férias gozadas (tripulação)")
+                if "%DG" in df_raw.columns:
+                    media_percentual = df_raw["%DG"].mean(skipna=True)
+                    if pd.notna(media_percentual):
+                        if media_percentual <= 1:
+                            perc_gozado = media_percentual * 100
+                        else:
+                            perc_gozado = media_percentual
+                        perc_nao = max(0.0, 100.0 - perc_gozado)
+                        df_pizza_ferias = pd.DataFrame({"Categoria": ["Gozado", "Não gozado"], "Valor": [perc_gozado, perc_nao]})
+                        
+                        fig_pizza_ferias = make_donut_chart(
+                            df_pizza_ferias, "Categoria", "Valor", 
+                            "Distribuição de férias gozadas x não gozadas",
+                            "Gozado", f"{perc_gozado:.1f}%"
+                        )
+                        st.plotly_chart(fig_pizza_ferias, use_container_width=True)
+                    else:
+                        st.info("Não foi possível calcular a média da coluna %DG.")
+                else:
+                    st.info("Coluna %DG não encontrada na planilha para cálculo do percentual de férias gozadas.")
+                
+                st.markdown("---")
+
                 if df_ferias.empty:
                     st.info("Nenhuma férias cadastrada.")
                 else:
-                    tabela_ferias = df_ferias[["Posto", "Nome", "Escala", "Inicio", "Fim", "Duracao_dias"]].copy()
-                    tabela_ferias["Início"] = tabela_ferias["Inicio"].dt.strftime("%d/%m/%Y")
-                    tabela_ferias["Término"] = tabela_ferias["Fim"].dt.strftime("%d/%m/%Y")
-                    tabela_ferias = tabela_ferias.drop(columns=["Inicio", "Fim"])
-                    tabela_ferias = tabela_ferias.rename(columns={"Duracao_dias": "Dias"})
-                    ordem_nomes = df_raw["Nome"].unique().tolist()
-                    tabela_ferias["Nome"] = pd.Categorical(tabela_ferias["Nome"], categories=ordem_nomes, ordered=True)
-                    tabela_ferias = tabela_ferias.sort_values(by=["Nome", "Início"])
-                    st.markdown("### Todos os períodos de férias registrados")
-                    st.dataframe(tabela_ferias, use_container_width=True, hide_index=True)
+                    # 2. CARDS DE PESQUISA
+                    c_search1, c_search2 = st.columns(2)
+                    
+                    with c_search1:
+                        st.markdown("#### Buscar por Militar")
+                        # Cria lista combinada Posto + Nome para facilitar busca
+                        # Usa df_raw para garantir que todos apareçam na lista, mesmo sem férias
+                        df_raw_temp = df_raw.copy()
+                        if "Posto" in df_raw_temp.columns and "Nome" in df_raw_temp.columns:
+                            df_raw_temp["PostoNome"] = df_raw_temp["Posto"].astype(str) + " " + df_raw_temp["Nome"].astype(str)
+                            opts_militares = sorted(df_raw_temp["PostoNome"].unique().tolist())
+                            
+                            sel_militar = st.selectbox("Selecione o Militar", ["Selecione..."] + opts_militares, key="search_mil_ferias")
+                            
+                            if sel_militar != "Selecione...":
+                                # Filtra df_ferias
+                                df_ferias["PostoNome"] = df_ferias["Posto"].astype(str) + " " + df_ferias["Nome"].astype(str)
+                                res_militar = df_ferias[df_ferias["PostoNome"] == sel_militar].copy()
+                                
+                                if not res_militar.empty:
+                                    res_militar["Início"] = res_militar["Inicio"].dt.strftime("%d/%m/%Y")
+                                    res_militar["Término"] = res_militar["Fim"].dt.strftime("%d/%m/%Y")
+                                    st.dataframe(res_militar[["Início", "Término", "Duracao_dias"]].rename(columns={"Duracao_dias": "Dias"}), use_container_width=True, hide_index=True)
+                                else:
+                                    st.info("Nenhum período de férias encontrado para este militar.")
+                        else:
+                            st.error("Colunas Posto/Nome não encontradas.")
+
+                    with c_search2:
+                        st.markdown("#### Buscar por Mês/Ano")
+                        c_m, c_a = st.columns(2)
+                        meses_dict = {
+                            "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
+                            "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
+                        }
+                        hoje_br = datetime.utcnow() - timedelta(hours=3)
+                        sel_mes_nome = c_m.selectbox("Mês", list(meses_dict.keys()), index=hoje_br.month-1, key="ferias_mes_search")
+                        sel_ano = c_a.number_input("Ano", value=hoje_br.year, min_value=2020, max_value=2030, key="ferias_ano_search")
+                        
+                        sel_mes = meses_dict[sel_mes_nome]
+                        
+                        # Lógica de sobreposição de datas
+                        import calendar
+                        last_day = calendar.monthrange(sel_ano, sel_mes)[1]
+                        start_of_month = datetime(sel_ano, sel_mes, 1)
+                        end_of_month = datetime(sel_ano, sel_mes, last_day, 23, 59, 59)
+                        
+                        # Filtro: Inicio das férias <= Fim do Mês E Fim das férias >= Inicio do Mês
+                        mask = (df_ferias["Inicio"] <= end_of_month) & (df_ferias["Fim"] >= start_of_month)
+                        res_mes = df_ferias[mask].copy()
+                        
+                        if not res_mes.empty:
+                             res_mes["Início"] = res_mes["Inicio"].dt.strftime("%d/%m/%Y")
+                             res_mes["Término"] = res_mes["Fim"].dt.strftime("%d/%m/%Y")
+                             st.dataframe(res_mes[["Posto", "Nome", "Início", "Término"]], use_container_width=True, hide_index=True)
+                        else:
+                            st.info(f"Ninguém de férias em {sel_mes_nome}/{sel_ano}.")
+
                     st.markdown("---")
+                    
+                    # 3. MÉTRICAS GERAIS E GRÁFICOS
                     col_f1m, col_f2m, col_f3m = st.columns(3)
                     total_militares_com_ferias = df_ferias["Nome"].nunique()
                     dias_totais_ferias = df_ferias["Duracao_dias"].sum()
@@ -1248,7 +1324,9 @@ else:
                     col_f1m.metric("Militares com férias", total_militares_com_ferias)
                     col_f2m.metric("Dias totais", int(dias_totais_ferias))
                     col_f3m.metric("Restam cadastrar", restam_cadastrar)
+                    
                     st.markdown("---")
+                    
                     col_fx1, col_fx2 = st.columns(2)
                     df_escala = (df_ferias.groupby("Escala")["Nome"].nunique().reset_index(name="Militares").sort_values("Militares", ascending=False))
                     fig_escala = px.bar(
@@ -1257,6 +1335,7 @@ else:
                     )
                     update_fig_layout(fig_escala, title="Militares de férias por serviço")
                     col_fx1.plotly_chart(fig_escala, use_container_width=True)
+                    
                     if not df_dias.empty:
                         df_dias_ferias = df_dias[df_dias["Tipo"] == "Férias"].copy()
                         if not df_dias_ferias.empty:
@@ -1270,28 +1349,6 @@ else:
                             col_fx2.plotly_chart(fig_mes_ferias, use_container_width=True)
                         else:
                             col_fx2.info("Sem dados diários suficientes para calcular férias por mês.")
-                    st.markdown("---")
-                    st.subheader("% de férias gozadas (tripulação)")
-                    if "%DG" in df_raw.columns:
-                        media_percentual = df_raw["%DG"].mean(skipna=True)
-                        if pd.notna(media_percentual):
-                            if media_percentual <= 1:
-                                perc_gozado = media_percentual * 100
-                            else:
-                                perc_gozado = media_percentual
-                            perc_nao = max(0.0, 100.0 - perc_gozado)
-                            df_pizza_ferias = pd.DataFrame({"Categoria": ["Gozado", "Não gozado"], "Valor": [perc_gozado, perc_nao]})
-                            
-                            fig_pizza_ferias = make_donut_chart(
-                                df_pizza_ferias, "Categoria", "Valor", 
-                                "Distribuição de férias gozadas x não gozadas",
-                                "Gozado", f"{perc_gozado:.1f}%"
-                            )
-                            st.plotly_chart(fig_pizza_ferias, use_container_width=True)
-                        else:
-                            st.info("Não foi possível calcular a média da coluna %DG.")
-                    else:
-                        st.info("Coluna %DG não encontrada na planilha para cálculo do percentual de férias gozadas.")
 
     elif pagina == "Cursos":
         st.subheader("Análises de Cursos")
