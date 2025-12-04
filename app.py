@@ -1688,7 +1688,7 @@ else:
                         # Formatar data para exibição
                         df_show["Data Aniversário"] = df_show.apply(lambda x: f"{x['Dia']:02d}/{x['Mês']:02d}", axis=1)
                         st.dataframe(
-                            df_show[["Posto", "Nome", "Data Aniversário"]].sort_values(["Mês", "Dia"]),
+                            df_show.sort_values(["Mês", "Dia"])[["Posto", "Nome", "Data Aniversário"]],
                             use_container_width=True,
                             hide_index=True
                         )
