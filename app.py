@@ -608,6 +608,7 @@ def make_donut_chart(df, names, values, title, center_text_main, center_text_sub
     )
     
     fig.update_traces(
+        hole=0.7,
         textposition="outside", textinfo="percent",
         hovertemplate="<b>%{label}</b><br>%{value} (%{percent})<extra></extra>",
         marker=dict(line=dict(color='#ffffff', width=2))
