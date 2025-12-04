@@ -10,14 +10,16 @@ import base64
 import os
 from streamlit_echarts import st_echarts
 
+
+
 # ============================================================
-# HELPER: ECHARTS DONUT
+# HELPER: ECHARTS PRONTIDÃO DONUT
 # ============================================================
-def make_echarts_donut(data_list, title):
+def make_echarts_prontidao_donut(data_list, title):
     """
-    Gera um gráfico de pizza estilo 'Donut' com cantos arredondados.
+    Gera um gráfico de pizza estilo 'Donut' específico para Prontidão.
     data_list: lista de dicts [{'value': 10, 'name': 'A'}, ...]
-    title: Nome da série (aparece no tooltip)
+    title: Nome da série
     """
     options = {
         "tooltip": {"trigger": "item"},
@@ -35,7 +37,7 @@ def make_echarts_donut(data_list, title):
                 },
                 "label": {"show": False, "position": "center"},
                 "emphasis": {
-                    "label": {"show": True, "fontSize": "20", "fontWeight": "bold"}
+                    "label": {"show": True, "fontSize": "40", "fontWeight": "bold"}
                 },
                 "labelLine": {"show": False},
                 "data": data_list,
@@ -768,48 +770,7 @@ def update_fig_layout(fig, title=None):
     fig.update_layout(**layout_args)
     return fig
 
-def make_donut_chart(df, names, values, title, center_text_main, center_text_sub):
-    """
-    Cria um gráfico de rosca (donut) estilizado com texto no centro.
-    """
-    # Cores inspiradas no tema Amezia (Admin Dashboard)
-    # Primary (Purple/Blue), Danger (Pink/Red), Light Gray, etc.
-    DONUT_COLORS = ["#5b73e8", "#f46a6a", "#eff2f7", "#f1b44c"]
-    
-    fig = px.pie(
-        df, names=names, values=values,
-        hole=0.6, color_discrete_sequence=DONUT_COLORS
-    )
-    
-    # Configuração do texto central com estilo melhorado
-    # Main: Darker/Bold, Sub: Lighter/Smaller
-    center_html = (
-        f"<span style='font-size: 26px; font-weight: bold; color: #495057'>{center_text_main}</span><br>"
-        f"<span style='font-size: 16px; color: #90a4ae'>{center_text_sub}</span>"
-    )
-    
-    fig.update_layout(
-        annotations=[dict(text=center_html, x=0.5, y=0.5, font_size=20, showarrow=False)],
-        legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5),
-        margin=dict(t=40, b=20, l=20, r=20)
-    )
-    
-    fig.update_traces(
-        hole=0.6,
-        textinfo="none",
-        hovertemplate="<b>%{label}</b><br>%{value} (%{percent})<extra></extra>",
-        marker=dict(line=dict(color='#ffffff', width=3))
-    )
-    
-    update_fig_layout(fig, title)
-    return fig
 
-def grafico_pizza_motivos(df_motivos_dias, titulo):
-    total_dias = df_motivos_dias["Duracao_dias"].sum()
-    return make_donut_chart(
-        df_motivos_dias, "MotivoAgrupado", "Duracao_dias", titulo,
-        "Total", f"{int(total_dias)} dias"
-    )
 
 
 # ============================================================
@@ -963,12 +924,14 @@ if pagina == "Presentes":
         if total_filtrado > 0:
             presentes_filtrado = len(df_presentes)
             pront_pct = presentes_filtrado / total_filtrado * 100
-            df_pr = pd.DataFrame({"Indicador": ["Prontidão"], "Percentual": [pront_pct]})
-            fig_pr = px.bar(df_pr, x="Percentual", y="Indicador", orientation="h", range_x=[0, 100], text="Percentual")
-            fig_pr.update_traces(texttemplate="%{x:.1f}%", textposition="inside", marker_color="#2ed8b6")
-            update_fig_layout(fig_pr)
-            fig_pr.update_layout(height=160, xaxis=dict(title="%"), yaxis=dict(title=""))
-            st.plotly_chart(fig_pr, use_container_width=True)
+            
+            # ECHARTS DONUT PRONTIDÃO
+            data_prontidao = [
+                {"value": presentes_filtrado, "name": "Presentes"},
+                {"value": total_filtrado - presentes_filtrado, "name": "Ausentes"}
+            ]
+            opt_prontidao = make_echarts_prontidao_donut(data_prontidao, "Prontidão")
+            st_echarts(options=opt_prontidao, height="500px")
         else:
             st.info("Não há efetivo na visão atual para calcular a prontidão.")
 
@@ -1020,12 +983,11 @@ elif pagina == "Ausentes":
             df_dias_filt["Mes"] = df_dias_filt["Data"].dt.to_period("M").dt.to_timestamp()
             df_aus_mes = (df_dias_filt[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
             
-            fig_aus_mes = px.line(
-                df_aus_mes, x="Mes", y="Militares", markers=True,
-                labels={"Mes": "Mês", "Militares": "Militares Ausentes"}, color_discrete_sequence=["#ff5370"]
-            )
-            update_fig_layout(fig_aus_mes, title="Ausentes por mês (Geral)")
-            st.plotly_chart(fig_aus_mes, use_container_width=True)
+            st.markdown("##### Ausentes por mês (Geral)")
+            # Format dates for x-axis
+            x_dates_aus = df_aus_mes["Mes"].dt.strftime("%b/%Y").tolist()
+            opt_aus_mes = make_echarts_line(x_dates_aus, df_aus_mes["Militares"].tolist())
+            st_echarts(options=opt_aus_mes, height="400px")
             
             st.markdown("---")
             
@@ -1072,13 +1034,10 @@ elif pagina == "Ausentes":
                 
                 df_aus_dia = (df_dias_mes.groupby("Data")["Nome"].nunique().reset_index(name="Militares"))
                 
-                fig_aus_dia = px.line(
-                    df_aus_dia, x="Data", y="Militares", markers=True,
-                    labels={"Data": "Dia", "Militares": "Militares Ausentes"}, color_discrete_sequence=["#ffb64d"]
-                )
-                fig_aus_dia.update_xaxes(tickformat="%d/%m")
-                update_fig_layout(fig_aus_dia, title=f"Ausências diárias em {sel_mes_nome_aus}/{sel_ano_aus}")
-                st.plotly_chart(fig_aus_dia, use_container_width=True)
+                st.markdown(f"##### Ausências diárias em {sel_mes_nome_aus}/{sel_ano_aus}")
+                x_dates_dia = df_aus_dia["Data"].dt.strftime("%d/%m").tolist()
+                opt_aus_dia = make_echarts_line(x_dates_dia, df_aus_dia["Militares"].tolist())
+                st_echarts(options=opt_aus_dia, height="400px")
         else:
              st.info("Sem dados para gerar gráficos com os filtros atuais.")
     else:
@@ -1116,20 +1075,9 @@ elif pagina == "Dias de Mar":
             st.markdown("---")
             
             # Gráfico 1: Dias de Mar por Ano (LINHA)
-            st.subheader("Evolução Anual")
-            fig_ano = px.line(
-                df_por_ano, x="ANO", y="DIAS DE MAR", 
-                text="DIAS DE MAR", 
-                title="Dias de Mar por Ano",
-                labels={"ANO": "Ano", "DIAS DE MAR": "Dias"},
-                color_discrete_sequence=["#4099ff"],
-                markers=True
-            )
-            # Força o eixo X a exibir todos os anos como categorias para não interpolar
-            fig_ano.update_xaxes(type='category')
-            fig_ano.update_traces(texttemplate='%{text:.1f}', textposition='top center')
-            update_fig_layout(fig_ano)
-            st.plotly_chart(fig_ano, use_container_width=True)
+            st.markdown("##### Dias de Mar por Ano")
+            opt_ano = make_echarts_line(df_por_ano["ANO"].astype(str).tolist(), df_por_ano["DIAS DE MAR"].tolist())
+            st_echarts(options=opt_ano, height="400px")
             
             st.markdown("---")
             
@@ -1167,16 +1115,9 @@ elif pagina == "Dias de Mar":
                         mapa_meses = {1:"Jan", 2:"Fev", 3:"Mar", 4:"Abr", 5:"Mai", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Set", 10:"Out", 11:"Nov", 12:"Dez"}
                         df_completo["Mês"] = df_completo["Mês_Num"].map(mapa_meses)
                         
-                        fig_mes_mar = px.line(
-                            df_completo, x="Mês", y="DIAS DE MAR",
-                            text="DIAS DE MAR",
-                            title=f"Dias de Mar em {ano_sel_mar} (por mês de início da comissão)",
-                            color_discrete_sequence=["#2ed8b6"],
-                            markers=True
-                        )
-                        fig_mes_mar.update_traces(texttemplate='%{text:.1f}', textposition='top center')
-                        update_fig_layout(fig_mes_mar)
-                        st.plotly_chart(fig_mes_mar, use_container_width=True)
+                        st.markdown(f"##### Dias de Mar em {ano_sel_mar} (por mês de início da comissão)")
+                        opt_mes_mar = make_echarts_line(df_completo["Mês"].tolist(), df_completo["DIAS DE MAR"].tolist())
+                        st_echarts(options=opt_mes_mar, height="400px")
                         
                         with st.expander("Ver dados brutos do ano selecionado"):
                             st.dataframe(df_mar_ano[["TERMO DE VIAGEM", "DATA INÍCIO", "DATA TÉRMINO", "DIAS DE MAR", "MILHAS NAVEGADAS"]], use_container_width=True)
