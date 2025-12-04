@@ -592,18 +592,36 @@ def update_fig_layout(fig, title=None):
     fig.update_layout(**layout_args)
     return fig
 
-def grafico_pizza_motivos(df_motivos_dias, titulo):
+def make_donut_chart(df, names, values, title, center_text_main, center_text_sub):
+    """
+    Cria um gráfico de rosca (donut) estilizado com texto no centro.
+    """
     fig = px.pie(
-        df_motivos_dias, names="MotivoAgrupado", values="Duracao_dias",
+        df, names=names, values=values,
         hole=0.7, color_discrete_sequence=AMEZIA_COLORS
     )
+    
+    # Configuração do texto central
+    fig.update_layout(
+        annotations=[dict(text=f"<b>{center_text_main}</b><br>{center_text_sub}", x=0.5, y=0.5, font_size=20, showarrow=False)],
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+    )
+    
     fig.update_traces(
-        textposition="inside", textinfo="percent+label",
-        hovertemplate="<b>%{label}</b><br>%{value} dias (%{percent})<extra></extra>",
+        textposition="outside", textinfo="percent",
+        hovertemplate="<b>%{label}</b><br>%{value} (%{percent})<extra></extra>",
         marker=dict(line=dict(color='#ffffff', width=2))
     )
-    update_fig_layout(fig, titulo)
+    
+    update_fig_layout(fig, title)
     return fig
+
+def grafico_pizza_motivos(df_motivos_dias, titulo):
+    total_dias = df_motivos_dias["Duracao_dias"].sum()
+    return make_donut_chart(
+        df_motivos_dias, "MotivoAgrupado", "Duracao_dias", titulo,
+        "Total", f"{int(total_dias)} dias"
+    )
 
 
 # ============================================================
@@ -1183,11 +1201,12 @@ else:
                                 perc_gozado = media_percentual
                             perc_nao = max(0.0, 100.0 - perc_gozado)
                             df_pizza_ferias = pd.DataFrame({"Categoria": ["Gozado", "Não gozado"], "Valor": [perc_gozado, perc_nao]})
-                            fig_pizza_ferias = px.pie(
-                                df_pizza_ferias, names="Categoria", values="Valor", hole=0.7, color_discrete_sequence=["#2ed8b6", "#ff5370"]
+                            
+                            fig_pizza_ferias = make_donut_chart(
+                                df_pizza_ferias, "Categoria", "Valor", 
+                                "Distribuição de férias gozadas x não gozadas",
+                                "Gozado", f"{perc_gozado:.1f}%"
                             )
-                            fig_pizza_ferias.update_traces(textposition="inside", textinfo="percent+label", hovertemplate="<b>%{label}</b><br>%{value:.1f}%<extra></extra>")
-                            update_fig_layout(fig_pizza_ferias, "Distribuição de férias gozadas x não gozadas")
                             st.plotly_chart(fig_pizza_ferias, use_container_width=True)
                         else:
                             st.info("Não foi possível calcular a média da coluna %DG.")
