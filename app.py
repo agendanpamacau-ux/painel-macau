@@ -10,6 +10,9 @@ import base64
 import os
 from streamlit_echarts import st_echarts
 
+st.write("DEBUG – st.secrets keys:", list(st.secrets.keys()))
+st.write("DEBUG – passwords:", st.secrets.get("passwords", {}))
+
 # ============================================================
 # 🔒 2. SISTEMA DE LOGIN (VERSÃO FINAL)
 # ============================================================
