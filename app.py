@@ -20,15 +20,46 @@ st.set_page_config(
 )
 
 # ============================================================
-# 🔒 2. SISTEMA DE LOGIN (VERSÃO FINAL)
+# 🔒 2. SISTEMA DE LOGIN (COM DIAGNÓSTICO PROFUNDO)
 # ============================================================
 def check_password():
     """Retorna True se o usuário logar com sucesso."""
 
     # Verifica se as senhas foram carregadas corretamente
     if "passwords" not in st.secrets:
-        st.error("🚫 Erro de Configuração")
-        st.warning("O arquivo de senhas (.streamlit/secrets.toml) não foi detectado ou está mal formatado.")
+        st.error("🚫 Erro de Configuração de Acesso")
+        
+        # --- BLOCO DE DIAGNÓSTICO DE ARQUIVO ---
+        st.markdown("### 🕵️ Diagnóstico do Sistema de Arquivos")
+        
+        # 1. Verifica se a pasta existe
+        if os.path.exists(".streamlit"):
+            st.success("✅ Pasta `.streamlit` encontrada.")
+            
+            # 2. Verifica se o arquivo existe
+            caminho_arquivo = os.path.join(".streamlit", "secrets.toml")
+            if os.path.exists(caminho_arquivo):
+                st.success("✅ Arquivo `secrets.toml` encontrado.")
+                
+                # 3. Lê o conteúdo do arquivo
+                with open(caminho_arquivo, "r") as f:
+                    conteudo = f.read()
+                    
+                if not conteudo.strip():
+                    st.error("❌ O arquivo `secrets.toml` existe mas está VAZIO! Cole as senhas nele.")
+                else:
+                    st.warning("⚠️ O arquivo existe e tem conteúdo, mas o Streamlit não carregou.")
+                    st.markdown("**Conteúdo lido do arquivo:**")
+                    st.code(conteudo, language="toml")
+                    st.info("DICA: Se o conteúdo acima parece correto (contém `[passwords]`), pare o servidor (Ctrl+C no terminal) e inicie novamente com `streamlit run app.py`.")
+            else:
+                st.error("❌ O arquivo `secrets.toml` NÃO está dentro da pasta `.streamlit`.")
+                st.write("Arquivos encontrados na pasta:", os.listdir(".streamlit"))
+        else:
+            st.error("❌ A pasta `.streamlit` NÃO foi encontrada na raiz do projeto.")
+            st.write(f"Pasta atual de execução: `{os.getcwd()}`")
+            st.write("Conteúdo da pasta atual:", os.listdir())
+
         st.stop()
 
     def password_entered():
@@ -36,36 +67,26 @@ def check_password():
         if st.session_state["username"] in st.secrets["passwords"] and \
            st.session_state["password"] == st.secrets["passwords"][st.session_state["username"]]:
             st.session_state["password_correct"] = True
-            # Limpa a senha da memória por segurança
             del st.session_state["password"]
             del st.session_state["username"]
         else:
             st.session_state["password_correct"] = False
 
-    # Se a senha ainda não foi verificada ou está incorreta
     if "password_correct" not in st.session_state or not st.session_state["password_correct"]:
-        # Layout centralizado para o login
         col1, col2, col3 = st.columns([1, 2, 1])
-        
         with col2:
             st.markdown("<br><br>", unsafe_allow_html=True)
             st.header("🔒 Acesso Restrito - NPa Macau")
             st.write("Identifique-se para acessar o painel.")
-            
             st.text_input("Usuário", key="username")
             st.text_input("Senha", type="password", on_change=password_entered, key="password")
-            
             if "password_correct" in st.session_state and not st.session_state["password_correct"]:
                 st.error("😕 Usuário ou senha incorretos")
-            
             st.markdown("<br>", unsafe_allow_html=True)
             st.info("Caso não possua acesso, contate o Encarregado da Divisão.")
-        
         return False
-    
     return True
 
-# O COMANDO DE PARADA:
 if not check_password():
     st.stop()
 
