@@ -1274,6 +1274,25 @@ else:
                 st.markdown("### % de férias gozadas (tripulação)")
                 if "%DG" in df_raw.columns:
                     media_percentual = df_raw["%DG"].mean(skipna=True)
+                    if pd.notna(media_percentual):
+                        if media_percentual <= 1:
+                            perc_gozado = media_percentual * 100
+                        else:
+                            perc_gozado = media_percentual
+                        perc_nao = max(0.0, 100.0 - perc_gozado)
+                        
+                        # ECHARTS DONUT
+                        data_ferias = [
+                            {"value": round(perc_gozado, 1), "name": "Gozado"},
+                            {"value": round(perc_nao, 1), "name": "Não gozado"}
+                        ]
+                        opt_ferias = make_echarts_donut(data_ferias, "Férias Gozadas")
+                        st_echarts(options=opt_ferias, height="400px")
+                    else:
+                        st.info("Não foi possível calcular a média da coluna %DG.")
+                else:
+                    st.info("Coluna %DG não encontrada na planilha para cálculo do percentual de férias gozadas.")
+                
                 st.markdown("---")
 
                 if df_ferias.empty:
