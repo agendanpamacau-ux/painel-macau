@@ -202,6 +202,7 @@ SERVICOS_CONSIDERADOS = [
 # NOVA URL para Dias de Mar
 URL_DIAS_MAR = "https://docs.google.com/spreadsheets/d/1CEVh0EQsnINcuVP4-RbS3KgfAQNKXCwAszbqjDq8phU/edit?usp=sharing"
 URL_CARDAPIO = "https://docs.google.com/spreadsheets/d/1i3veE6cj4-h9toh_DIjm8vcyz4kJ0DoKpJDrA2Xn77s/edit?usp=sharing"
+URL_ANIVERSARIOS = "https://docs.google.com/spreadsheets/d/1mcQlXU_sRYwqmBCHkL3qX1GS6bivUqIGqGVVCvZLc0U/edit?usp=sharing"
 
 def parse_bool(value) -> bool:
     """
@@ -227,6 +228,40 @@ def parse_bool(value) -> bool:
         s = s[:-2]
         
     return s in ("true", "1", "sim", "yes", "y", "x", "s", "ok", "v", "checked")
+
+def parse_aniversario_date(val):
+    """
+    Parser para datas de aniversário no formato '6nov.' ou '15jan.'
+    Retorna uma data com o ano corrente.
+    """
+    if pd.isna(val) or str(val).strip() == "":
+        return pd.NaT
+        
+    s = str(val).strip().lower().replace(".", "")
+    
+    # Mapa de meses
+    meses = {
+        "jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
+        "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12
+    }
+    
+    try:
+        # Tenta extrair dia e mês (ex: 6nov -> dia 6, mes nov)
+        # Regex simples ou split manual
+        import re
+        match = re.match(r"(\d+)([a-zç]+)", s)
+        if match:
+            dia = int(match.group(1))
+            mes_str = match.group(2)
+            
+            if mes_str in meses:
+                mes = meses[mes_str]
+                ano_atual = datetime.now().year
+                return datetime(ano_atual, mes, dia)
+    except:
+        pass
+        
+    return pd.NaT
 
 def parse_sheet_date(val):
     """
@@ -274,6 +309,28 @@ def load_data():
     if "Nome" in df.columns:
         df = df.dropna(subset=["Nome"])
     df = df.reset_index(drop=True)
+    return df
+
+@st.cache_data(ttl=3600, show_spinner="Carregando aniversariantes...")
+def load_aniversarios():
+    """Carrega dados de aniversários"""
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df = conn.read(spreadsheet=URL_ANIVERSARIOS, ttl="1h")
+    
+    # Selecionar colunas B (Posto), E (Nome), H (Aniversário)
+    # Assumindo que o header está na linha 1 (padrão)
+    # Se B é a 2ª coluna, E a 5ª, H a 8ª.
+    # Vamos tentar pegar pelo nome se possível, ou pelo índice se os nomes variarem.
+    # O usuário disse: B (Posto e graduação), E (Nome de guerra), H (Aniversários)
+    
+    # Mapeamento seguro por índice (0-based: B=1, E=4, H=7)
+    # Mas o read() retorna um DF com headers. Vamos assumir que os headers existem.
+    # Se não, teríamos que ler sem header. Vamos assumir que tem header.
+    
+    # Filtrar colunas de interesse
+    # Precisamos identificar os nomes das colunas.
+    # Vamos pegar todas e renomear/filtrar depois.
+    
     return df
 
 def parse_mar_date(val, ano):
@@ -664,7 +721,8 @@ ICON_MAP = {
     "Presentes": "presentes.svg",
     "Ausentes": "ausentes.svg",
     "Cardápio": "cardapio.svg",
-    "Dias de Mar": "dias_mar.svg", 
+    "Dias de Mar": "mar2.svg", 
+    "Aniversários": "aniversario.svg",
     "Agenda do Navio": "agenda.svg",
     "Linha do Tempo": "linha_tempo.svg",
     "Equipes Operativas": "equipe_operativa.svg",
@@ -1517,6 +1575,128 @@ else:
 
         except Exception as e:
             st.error(f"Erro ao carregar cardápio: {e}")
+
+    elif pagina == "Aniversários":
+        st.subheader("Aniversariantes")
+        
+        try:
+            df_niver_raw = load_aniversarios()
+            
+            if df_niver_raw.empty:
+                st.info("Não foi possível carregar a lista de aniversariantes.")
+            else:
+                # Processar dados
+                # Colunas esperadas: B (Posto), E (Nome), H (Aniversário)
+                # Vamos tentar identificar pelo index se os nomes não baterem, mas assumiremos nomes primeiro ou index como fallback.
+                
+                # Ajuste de índices (0-based): B=1, E=4, H=7
+                # Cria um DF limpo
+                dados_niver = []
+                
+                # Itera sobre as linhas (pulando header se necessário, mas o read já deve ter tratado)
+                for idx, row in df_niver_raw.iterrows():
+                    # Tenta pegar valores por posição para garantir (já que nomes podem mudar)
+                    try:
+                        posto = row.iloc[1]
+                        nome = row.iloc[4]
+                        data_str = row.iloc[7]
+                        
+                        if pd.notna(nome) and str(nome).strip() != "" and pd.notna(data_str):
+                            dt_niver = parse_aniversario_date(data_str)
+                            if pd.notna(dt_niver):
+                                dados_niver.append({
+                                    "Posto": posto,
+                                    "Nome": nome,
+                                    "DataOriginal": data_str,
+                                    "Data": dt_niver,
+                                    "Dia": dt_niver.day,
+                                    "Mês": dt_niver.month
+                                })
+                    except:
+                        continue
+                        
+                df_aniversarios = pd.DataFrame(dados_niver)
+                
+                if df_aniversarios.empty:
+                    st.info("Nenhum aniversariante encontrado ou erro no processamento das datas.")
+                else:
+                    # Métricas
+                    hoje_dt = datetime.now()
+                    mes_atual = hoje_dt.month
+                    dia_atual = hoje_dt.day
+                    
+                    aniversariantes_mes = df_aniversarios[df_aniversarios["Mês"] == mes_atual]
+                    aniversariantes_dia = df_aniversarios[(df_aniversarios["Mês"] == mes_atual) & (df_aniversarios["Dia"] == dia_atual)]
+                    
+                    # Próximo e Último
+                    # Cria uma coluna com a data de aniversário no ano corrente
+                    df_aniversarios["DataCorrente"] = df_aniversarios.apply(
+                        lambda x: x["Data"].replace(year=hoje_dt.year), axis=1
+                    )
+                    
+                    # Ordena por data
+                    df_aniversarios = df_aniversarios.sort_values("DataCorrente")
+                    
+                    # Próximo: data >= hoje
+                    proximos = df_aniversarios[df_aniversarios["DataCorrente"] >= hoje_dt.replace(hour=0, minute=0, second=0, microsecond=0)]
+                    if proximos.empty:
+                        # Se não tem mais este ano, pega o primeiro do ano (que será ano que vem na prática)
+                        proximo = df_aniversarios.iloc[0]
+                    else:
+                        proximo = proximos.iloc[0]
+                        
+                    # Último: data < hoje
+                    anteriores = df_aniversarios[df_aniversarios["DataCorrente"] < hoje_dt.replace(hour=0, minute=0, second=0, microsecond=0)]
+                    if anteriores.empty:
+                        # Se não tem anteriores este ano, pega o último do ano
+                        ultimo = df_aniversarios.iloc[-1]
+                    else:
+                        ultimo = anteriores.iloc[-1]
+                    
+                    # Cards
+                    c1, c2, c3, c4 = st.columns(4)
+                    
+                    c1.metric("Aniversariantes do Mês", len(aniversariantes_mes))
+                    c2.metric("Aniversariantes do Dia", len(aniversariantes_dia))
+                    
+                    c3.markdown("**Último Aniversariante**")
+                    c3.info(f"{ultimo['Posto']} {ultimo['Nome']} ({ultimo['Dia']:02d}/{ultimo['Mês']:02d})")
+                    
+                    c4.markdown("**Próximo Aniversariante**")
+                    c4.success(f"{proximo['Posto']} {proximo['Nome']} ({proximo['Dia']:02d}/{proximo['Mês']:02d})")
+                    
+                    st.markdown("---")
+                    
+                    # Filtros e Tabela
+                    st.subheader("Pesquisar Aniversariantes")
+                    
+                    meses_dict = {
+                        "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
+                        "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12,
+                        "Todos": 0
+                    }
+                    
+                    sel_mes_nome = st.selectbox("Filtrar por Mês", list(meses_dict.keys()), index=list(meses_dict.values()).index(mes_atual))
+                    sel_mes_num = meses_dict[sel_mes_nome]
+                    
+                    if sel_mes_num != 0:
+                        df_show = df_aniversarios[df_aniversarios["Mês"] == sel_mes_num].copy()
+                    else:
+                        df_show = df_aniversarios.copy()
+                        
+                    if not df_show.empty:
+                        # Formatar data para exibição
+                        df_show["Data Aniversário"] = df_show.apply(lambda x: f"{x['Dia']:02d}/{x['Mês']:02d}", axis=1)
+                        st.dataframe(
+                            df_show[["Posto", "Nome", "Data Aniversário"]].sort_values(["Mês", "Dia"]),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    else:
+                        st.info(f"Nenhum aniversariante encontrado em {sel_mes_nome}.")
+
+        except Exception as e:
+            st.error(f"Erro ao carregar aniversários: {e}")
 
     elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
