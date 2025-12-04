@@ -8,6 +8,48 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import base64
 import os
+from streamlit_echarts import st_echarts
+
+# ============================================================
+# HELPER: ECHARTS ROSE PIE
+# ============================================================
+def make_echarts_rose_pie(data_list, title):
+    """
+    Gera um gráfico de pizza estilo 'Rose' usando ECharts.
+    data_list: lista de dicts [{'value': 10, 'name': 'A'}, ...]
+    title: Título do gráfico (usado no tooltip ou legenda se necessário)
+    """
+    options = {
+        "legend": {"top": "bottom"},
+        "tooltip": {"trigger": "item", "formatter": "{b}: {c} ({d}%)"},
+        "toolbox": {
+            "show": True,
+            "feature": {
+                "mark": {"show": True},
+                "dataView": {"show": True, "readOnly": False},
+                "restore": {"show": True},
+                "saveAsImage": {"show": True}
+            }
+        },
+        "series": [
+            {
+                "name": title,
+                "type": "pie",
+                "radius": [20, 140],
+                "center": ["50%", "50%"],
+                "roseType": "area",
+                "itemStyle": {
+                    "borderRadius": 8
+                },
+                "label": {
+                    "show": True,
+                    "formatter": "{b}\n{d}%"
+                },
+                "data": data_list
+            }
+        ]
+    }
+    return options
 
 # ============================================================
 # VERSÃO DO SCRIPT
@@ -1190,9 +1232,15 @@ else:
                     col_a2.metric("Média de dias de ausência por militar", f"{media_dias_por_militar:.1f}")
                     col_a3.metric("Média de dias de FÉRIAS por militar", f"{media_dias_ferias:.1f}")
                     st.markdown("---")
-                    df_motivos_dias = (df_evt.groupby("MotivoAgrupado")["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False))
-                    fig_motivos = grafico_pizza_motivos(df_motivos_dias, "Proporção de Dias de Ausência por Motivo")
-                    st.plotly_chart(fig_motivos, use_container_width=True)
+                     df_motivos_dias = (df_evt.groupby("MotivoAgrupado")["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False))
+                    
+                    # ECHARTS ROSE PIE
+                    data_motivos = [
+                        {"value": row["Duracao_dias"], "name": row["MotivoAgrupado"]}
+                        for _, row in df_motivos_dias.iterrows()
+                    ]
+                    opt_motivos = make_echarts_rose_pie(data_motivos, "Motivos de Ausência")
+                    st_echarts(options=opt_motivos, height="500px")
                     st.markdown("---")
                     df_top10 = (df_evt.groupby(["Nome", "Posto"])["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False).head(10))
                     fig_top10 = px.bar(
@@ -1231,25 +1279,6 @@ else:
                 st.markdown("### % de férias gozadas (tripulação)")
                 if "%DG" in df_raw.columns:
                     media_percentual = df_raw["%DG"].mean(skipna=True)
-                    if pd.notna(media_percentual):
-                        if media_percentual <= 1:
-                            perc_gozado = media_percentual * 100
-                        else:
-                            perc_gozado = media_percentual
-                        perc_nao = max(0.0, 100.0 - perc_gozado)
-                        df_pizza_ferias = pd.DataFrame({"Categoria": ["Gozado", "Não gozado"], "Valor": [perc_gozado, perc_nao]})
-                        
-                        fig_pizza_ferias = make_donut_chart(
-                            df_pizza_ferias, "Categoria", "Valor", 
-                            "Distribuição de férias gozadas x não gozadas",
-                            "Gozado", f"{perc_gozado:.1f}%"
-                        )
-                        st.plotly_chart(fig_pizza_ferias, use_container_width=True)
-                    else:
-                        st.info("Não foi possível calcular a média da coluna %DG.")
-                else:
-                    st.info("Coluna %DG não encontrada na planilha para cálculo do percentual de férias gozadas.")
-                
                 st.markdown("---")
 
                 if df_ferias.empty:
