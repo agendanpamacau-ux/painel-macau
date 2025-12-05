@@ -11,48 +11,323 @@ import os
 from streamlit_echarts import st_echarts
 
 
+
 # ============================================================
-# 🔒 2. SISTEMA DE LOGIN (VERSÃO FINAL)
+# 1. CONFIGURAÇÃO DA PÁGINA (MOVIDO PARA O TOPO)
 # ============================================================
+st.set_page_config(
+    page_title="Navio-Patrulha Macau",
+    layout="wide",
+    page_icon="logo_npamacau.png"
+)
+
+# ============================================================
+# 🔒 2. SISTEMA DE LOGIN (MODERN MINIMALIST)
+# ============================================================
+
+# --- AUTH HELPERS (GLOBAL SCOPE) ---
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1DDQ1eObEd5p2kfI4uCTpQvTT54TjpQtEeWNVAwQ0400/edit?usp=sharing"
+
+def normalize_nip(nip):
+    """Remove pontos e espaços do NIP para comparação."""
+    return str(nip).replace(".", "").replace(" ", "").strip()
+
+def get_users_data():
+    """Busca os dados dos usuários na planilha."""
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        # TTL de 0 para sempre buscar dados frescos ao logar
+        return conn.read(spreadsheet=SHEET_URL, ttl=0)
+    except Exception as e:
+        st.error(f"Erro ao ler dados da planilha: {e}")
+        st.stop()
+
+def update_password(nip, new_password):
+    """Atualiza a senha do usuário na planilha."""
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df = get_users_data()
+        # Normaliza a coluna de NIP para garantir o match
+        df['NIP_NORM'] = df.iloc[:, 3].apply(normalize_nip) # Coluna D é índice 3
+        
+        # Encontra o índice da linha
+        user_idx = df[df['NIP_NORM'] == normalize_nip(nip)].index
+        
+        if not user_idx.empty:
+            # Atualiza a senha (Coluna E é índice 4)
+            df.iloc[user_idx[0], 4] = new_password
+            
+            # Remove a coluna temporária antes de salvar
+            df_to_save = df.drop(columns=['NIP_NORM'])
+            
+            conn.update(spreadsheet=SHEET_URL, data=df_to_save)
+            return True
+        return False
+    except Exception as e:
+        st.error(f"Erro ao atualizar senha: {e}")
+        return False
+
 def check_password():
     """Retorna True se o usuário logar com sucesso."""
 
-    # Verifica se as senhas foram carregadas corretamente
-    if "passwords" not in st.secrets:
-        st.error("🚫 Erro de Configuração")
-        st.warning("O arquivo de senhas (.streamlit/secrets.toml) não contém a seção [passwords].")
-        st.stop()
+    # --- 1. CONFIGURAÇÃO E CONEXÃO ---
+    # (SHEET_URL e Helpers agora estão no escopo global)
+    
+    # --- 3. LÓGICA DE LOGIN ---
 
-    def password_entered():
-        """Verifica se a senha digitada bate com a do arquivo secrets.toml"""
-        if st.session_state["username"] in st.secrets["passwords"] and \
-           st.session_state["password"] == st.secrets["passwords"][st.session_state["username"]]:
-            st.session_state["password_correct"] = True
-            # Limpa a senha da memória por segurança
-            del st.session_state["password"]
-            del st.session_state["username"]
-        else:
-            st.session_state["password_correct"] = False
+    # --- 3. LÓGICA DE LOGIN ---
+    if "password_correct" not in st.session_state:
+        st.session_state["password_correct"] = False
+    
+    if not st.session_state["password_correct"]:
+        
+        # --- CSS (MANTIDO DO DESIGN ANTERIOR) ---
+        st.markdown(
+            """
+            <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400;1,600&display=swap');
 
-    # Se a senha ainda não foi verificada ou está incorreta
-    if "password_correct" not in st.session_state or not st.session_state["password_correct"]:
-        # Layout centralizado para o login
-        col1, col2, col3 = st.columns([1, 2, 1])
+            /* Global Reset & Font */
+            * {
+                font-family: 'Inter', sans-serif;
+            }
+
+            /* App Background - Naval Dark */
+            .stApp {
+                background-color: #f1f5f9;
+                background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 80%);
+                background-attachment: fixed;
+                background-size: cover;
+            }
+
+            /* Login Card - Target the Form */
+            [data-testid="stForm"] {
+                background-color: rgba(255, 255, 255, 0.8) !important; /* 80% Translucent */
+                backdrop-filter: blur(24px);
+                -webkit-backdrop-filter: blur(24px);
+                border-radius: 20px;
+                padding: 48px;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.6);
+                text-align: center;
+            }
+
+            /* Logo Effect */
+            [data-testid="stImage"] img {
+                filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3)); /* Dark shadow */
+                transition: transform 0.3s ease;
+            }
+            [data-testid="stImage"] img:hover {
+                transform: scale(1.05);
+            }
+
+            /* Title & Text */
+            .login-title {
+                font-family: 'Inter', sans-serif;
+                font-size: 1.5rem;
+                font-weight: 700;
+                color: #0f172a;
+                margin-top: 10px;
+                margin-bottom: 2px; /* Reduced spacing */
+                letter-spacing: -0.02em;
+                text-align: center;
+            }
+            .login-motto {
+                font-family: 'Playfair Display', serif;
+                font-size: 1.1rem;
+                color: #334155; /* Slightly darker slate */
+                font-weight: 600;
+                margin-bottom: 32px;
+                text-align: center;
+                font-style: italic;
+                letter-spacing: 0.02em;
+            }
+
+            /* Inputs */
+            .stTextInput input {
+                background-color: #f8fafc !important;
+                border: 1px solid #e2e8f0 !important;
+                color: #334155 !important;
+                border-radius: 8px;
+                padding: 0 16px !important;
+                font-size: 0.95rem;
+                height: 50px !important;
+                line-height: 50px !important;
+                transition: all 0.2s;
+            }
+            .stTextInput input:focus {
+                background-color: #f8fafc !important; /* Mantém a mesma cor de fundo */
+                border-color: #e2e8f0 !important;     /* Mantém a mesma cor de borda */
+                box-shadow: none !important;
+                outline: none !important;
+                caret-color: #0f172a !important;
+            }
+            /* Target parent wrapper to override Streamlit defaults */
+            div[data-baseweb="input"]:focus-within {
+                border-color: #e2e8f0 !important;
+                box-shadow: none !important;
+                background-color: #f8fafc !important;
+            }
+            .stTextInput label {
+                color: #475569 !important;
+                font-weight: 600;
+                font-size: 0.85rem;
+                margin-bottom: 6px;
+            }
+
+            /* Button Styling - Target ONLY the Submit Button Container */
+            div[data-testid="stForm"] .stButton button {
+                background: #2563eb !important; /* Vibrant Blue */
+                color: white !important;
+                border: none;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 0.95rem;
+                letter-spacing: 0.02em;
+                transition: all 0.2s ease;
+                box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+                
+                /* Exact sizing to match inputs */
+                height: 50px !important;
+                padding: 0 !important;
+                line-height: 50px !important;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 100% !important;
+                margin-top: 8px;
+            }
+            div[data-testid="stForm"] .stButton button:hover {
+                background: #1d4ed8 !important; /* Darker Blue */
+                transform: translateY(-1px);
+                box-shadow: 0 8px 16px rgba(37, 99, 235, 0.3);
+            }
+
+            /* Hide Streamlit Elements */
+            header {visibility: hidden;}
+            footer {visibility: hidden;}
+            .block-container {padding-top: 5rem !important;}
+            
+            /* Footer/Contact */
+            .contact-info {
+                margin-top: 24px;
+                color: #94a3b8;
+                font-size: 0.75rem;
+                text-align: center;
+            }
+            </style>
+            """, 
+            unsafe_allow_html=True
+        )
+
+        # Ajuste das colunas para centralizar o card
+        # Como o layout agora é WIDE desde o início, usamos colunas laterais maiores para centralizar
+        # [3, 2, 3] -> O meio ocupa 2/8 = 25% da tela. Em 1920px ~= 480px.
+        col1, col2, col3 = st.columns([3, 2, 3])
         
         with col2:
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            st.header("🔒 Acesso Restrito - NPa Macau")
-            st.write("Identifique-se para acessar o painel.")
             
-            st.text_input("Usuário", key="username")
-            st.text_input("Senha", type="password", on_change=password_entered, key="password")
-            
-            if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-                st.error("😕 Usuário ou senha incorretos")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.info("Caso não possua acesso, contate o Encarregado da Divisão.")
-        
+            # Se estiver no fluxo de troca de senha
+            if st.session_state.get("change_password_mode"):
+                with st.form("change_password_form"):
+                    st.markdown("### 🔒 Criar Nova Senha")
+                    st.info("É seu primeiro acesso ou sua senha expirou. Crie uma nova senha.")
+                    
+                    new_pass = st.text_input("Nova Senha", type="password")
+                    confirm_pass = st.text_input("Confirmar Nova Senha", type="password")
+                    
+                    if st.form_submit_button("DEFINIR SENHA", use_container_width=True):
+                        if new_pass != confirm_pass:
+                            st.error("As senhas não coincidem.")
+                        elif len(new_pass) < 6:
+                            st.error("A senha deve ter pelo menos 6 caracteres.")
+                        elif new_pass == "mudar123":
+                            st.error("Você não pode usar a senha padrão.")
+                        else:
+                            # Tenta atualizar
+                            if update_password(st.session_state["temp_nip"], new_pass):
+                                st.success("Senha atualizada com sucesso! Faça login novamente.")
+                                st.session_state["change_password_mode"] = False
+                                del st.session_state["temp_nip"]
+                                # Rerun para voltar ao login
+                                st.rerun()
+                            else:
+                                st.error("Erro ao atualizar senha. Tente novamente.")
+
+            else:
+                # Fluxo Normal de Login
+                with st.form("login_form"):
+                    # 1. IMAGEM
+                    import os
+                    current_dir = os.path.dirname(os.path.abspath(__file__))
+                    img_path = os.path.join(current_dir, "logo_npamacau.png")
+                    
+                    c_img1, c_img2, c_img3 = st.columns([1, 2, 1])
+                    with c_img2:
+                        if os.path.exists(img_path):
+                            st.image(img_path, width=180)
+                        else:
+                            st.markdown("""<div style="text-align: center; font-size: 80px; color: #1e293b;">⚓</div>""", unsafe_allow_html=True)
+
+                    # 2. TÍTULOS
+                    st.markdown(
+                        """
+                        <div class="login-title">NAVIO-PATRULHA MACAU</div>
+                        <div class="login-motto">"O nosso repouso é a batalha"</div>
+                        """, 
+                        unsafe_allow_html=True
+                    )
+
+                    username_input = st.text_input("NIP (com ou sem pontos)", key="username_input")
+                    password_input = st.text_input("Senha", type="password", key="password_input")
+                    
+                    submit_clicked = st.form_submit_button("ENTRAR", use_container_width=True)
+                
+                if submit_clicked:
+                    df = get_users_data()
+                    
+                    # Normaliza input e coluna do banco
+                    input_nip_norm = normalize_nip(username_input)
+                    
+                    # Assume que NIP é a 4ª coluna (índice 3) e Senha a 5ª (índice 4)
+                    # Ajuste conforme a planilha real se necessário
+                    try:
+                        # Cria coluna temporária para busca
+                        df['NIP_NORM'] = df.iloc[:, 3].apply(normalize_nip)
+                        
+                        user_row = df[df['NIP_NORM'] == input_nip_norm]
+                        
+                        if not user_row.empty:
+                            stored_password = str(user_row.iloc[0, 4]).strip()
+                            
+                            if password_input == stored_password:
+                                # Verifica se é senha padrão
+                                if stored_password == "mudar123":
+                                    st.session_state["change_password_mode"] = True
+                                    st.session_state["temp_nip"] = username_input
+                                    st.rerun()
+                                else:
+                                    st.session_state["password_correct"] = True
+                                    st.session_state["username"] = username_input # Guarda o NIP logado
+                                    
+                                    # Captura Posto (col B -> index 1) e Nome (col C -> index 2) para saudação
+                                    # Ajuste os índices conforme a estrutura real da planilha se necessário
+                                    try:
+                                        st.session_state["user_posto"] = str(user_row.iloc[0, 1]).strip()
+                                        st.session_state["user_nome"] = str(user_row.iloc[0, 2]).strip()
+                                    except:
+                                        pass
+                                        
+                                    st.rerun()
+                            else:
+                                st.error("Senha incorreta.")
+                        else:
+                            st.error("NIP não encontrado.")
+                            
+                    except Exception as e:
+                        st.error(f"Erro ao processar login: {e}")
+
         return False
     
     return True
@@ -69,44 +344,63 @@ if not check_password():
 # HELPER: ECHARTS DONUT (GENERICO)
 # ============================================================
 def make_echarts_donut(data_list, title):
+    """
+    Gera um gráfico de pizza estilo 'Donut' (usado em Prontidão e Visão Analítica).
+    data_list: lista de dicts [{'value': 10, 'name': 'A'}, ...]
+    title: Nome da série
+    """
     options = {
         "tooltip": {"trigger": "item", "formatter": "{b}: {c} ({d}%)"},
         "legend": {
             "top": "5%", 
             "left": "center",
-            "textStyle": {"color": "#9ca3af"}
+            "textStyle": {"color": "#9ca3af"} # Cor cinza claro para ser legível em dark/light
         },
         "series": [
             {
                 "name": title,
                 "type": "pie",
                 "radius": ["40%", "70%"],
-                "avoidLabelOverlap": False,
+                "avoidLabelOverlap": True, # Evita sobreposição
                 "itemStyle": {
                     "borderRadius": 10,
                     "borderColor": "#fff",
                     "borderWidth": 2,
                 },
-                "label": {"show": False, "position": "center"},
+                "label": {
+                    "show": True, 
+                    "position": "outside",
+                    "formatter": "{b}: {d}%", # Nome: Porcentagem
+                    # "color": "#fff" # REMOVIDO: Deixar automático (cor da série) ou cinza
+                },
                 "emphasis": {
                     "label": {
                         "show": True, 
-                        "fontSize": "24",
-                        "fontWeight": "bold",
-                        "formatter": "{b}\n{d}%"
+                        "fontSize": "16", 
+                        "fontWeight": "bold"
                     }
                 },
-                "labelLine": {"show": False},
+                "labelLine": {
+                    "show": True,
+                    # "lineStyle": {"color": "#fff"} # REMOVIDO: Deixar automático
+                },
                 "data": data_list,
             }
         ],
     }
     return options
 
+
+
 # ============================================================
 # HELPER: ECHARTS LINE
 # ============================================================
 def make_echarts_line(x_data, y_data):
+    """
+    Gera um gráfico de linha simples.
+    x_data: lista de categorias
+    y_data: lista de valores
+    """
     options = {
         "xAxis": {
             "type": "category",
@@ -122,6 +416,11 @@ def make_echarts_line(x_data, y_data):
 # HELPER: ECHARTS BAR
 # ============================================================
 def make_echarts_bar(x_data, y_data):
+    """
+    Gera um gráfico de barras simples.
+    x_data: lista de categorias
+    y_data: lista de valores
+    """
     options = {
         "xAxis": {
             "type": "category",
@@ -137,10 +436,15 @@ def make_echarts_bar(x_data, y_data):
 # ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
-SCRIPT_VERSION = "v2.2 (Login Seguro)"
+SCRIPT_VERSION = "v2.1 (Ícones Atualizados)"
 
 # Configuração do Plotly
 pio.templates.default = "plotly_dark"
+
+# ============================================================
+# 1. CONFIGURAÇÃO DA PÁGINA (JÁ EXECUTADO NO TOPO)
+# ============================================================
+# st.set_page_config(...) -> Removido daqui
 
 # FUNÇÃO PARA CARREGAR IMAGEM EM BASE64
 def get_img_as_base64(file):
@@ -181,7 +485,7 @@ st.markdown(
         color: white !important;
         height: 3.5rem !important;
     }}
-     
+    
     /* LOGO & TITLE INJECTION */
     header[data-testid="stHeader"]::before {{
         content: "";
@@ -202,7 +506,7 @@ st.markdown(
         font-family: 'Poppins', sans-serif;
         z-index: 999; pointer-events: none;
     }}
-     
+    
     @media (max-width: 600px) {{
         header[data-testid="stHeader"]::after {{
             content: "NPa Macau"; font-size: 1rem; left: 100px;
@@ -210,7 +514,7 @@ st.markdown(
     }}
 
     header[data-testid="stHeader"] button {{ color: white !important; }}
-     
+    
     .block-container {{ padding-top: 4rem !important; }}
 
     /* Cards */
@@ -242,7 +546,7 @@ st.markdown(
         transform: translateY(-5px);
         box-shadow: 0 10px 30px -5px rgba(64, 153, 255, 0.3);
     }}
-     
+    
     /* Sidebar */
     section[data-testid="stSidebar"] {{ background-color: #202940; }}
     section[data-testid="stSidebar"] * {{ color: #aab8c5 !important; }}
@@ -263,7 +567,7 @@ st.markdown(
     }}
     section[data-testid="stSidebar"] div[role="radiogroup"] label:hover p {{ color: var(--amezia-blue) !important; }}
     section[data-testid="stSidebar"] div[role="radiogroup"] label[data-checked="true"] p {{ color: var(--amezia-blue) !important; font-weight: 700 !important; }}
-     
+    
     /* Center Metrics */
     div[data-testid="stMetric"] {{ text-align: center !important; justify-content: center !important; align-items: center !important; display: flex; flex-direction: column; }}
     div[data-testid="stMetricLabel"] {{ justify-content: center !important; width: 100%; display: flex; }}
@@ -271,7 +575,7 @@ st.markdown(
 
     /* Dataframes */
     .stDataFrame {{ border-radius: 5px; }}
-     
+    
     /* Agenda Card */
     .agenda-card {{
         padding: 15px; border-radius: 5px; margin-bottom: 15px;
@@ -293,7 +597,7 @@ st.markdown(
 )
 
 # ============================================================
-# 3. HELPERS E CONSTANTES
+# 2. HELPERS E CONSTANTES
 # ============================================================
 
 HEADER_ROW = 2  # linha 3 na planilha principal
@@ -305,6 +609,15 @@ AGENDAS_OFICIAIS = {
     "Aniversários Tripulação": "8641c7fc86973e09bbb682f8841908cc9240b25b1990f179137dfa7d2b23b2da@group.calendar.google.com",
     "Comissão": "ff1a7d8acb9ea68eed3ec9b0e279f2a91fb962e4faa9f7a3e7187fade00eb0d6@group.calendar.google.com",
     "NSD": "d7d9199712991f81e35116b9ec1ed492ac672b72b7103a3a89fb3f66ae635fb7@group.calendar.google.com"
+}
+
+AGENDA_COLORS = {
+    "Agenda Permanente": "#4099ff", # Blue
+    "Agenda Eventual": "#ff5370",   # Pink
+    "Aniversários OM": "#ffb64d",   # Orange
+    "Aniversários Tripulação": "#2ed8b6", # Green
+    "Comissão": "#a3a3a3",          # Grey
+    "NSD": "#7367f0"                # Purple
 }
 
 SERVICOS_CONSIDERADOS = [
@@ -319,6 +632,7 @@ SERVICOS_CONSIDERADOS = [
 URL_DIAS_MAR = "https://docs.google.com/spreadsheets/d/1CEVh0EQsnINcuVP4-RbS3KgfAQNKXCwAszbqjDq8phU/edit?usp=sharing"
 URL_CARDAPIO = "https://docs.google.com/spreadsheets/d/1i3veE6cj4-h9toh_DIjm8vcyz4kJ0DoKpJDrA2Xn77s/edit?usp=sharing"
 URL_ANIVERSARIOS = "https://docs.google.com/spreadsheets/d/1mcQlXU_sRYwqmBCHkL3qX1GS6bivUqIGqGVVCvZLc0U/edit?usp=sharing"
+URL_LOTACAO = "https://docs.google.com/spreadsheets/d/1c2l7-LlFsxMqzI4JkX6IDQ7I7w-v202YaSJU2gpkrx4/edit?usp=sharing"
 
 def parse_bool(value) -> bool:
     """
@@ -327,22 +641,22 @@ def parse_bool(value) -> bool:
     """
     if pd.isna(value) or value == "":
         return False
-     
+    
     # 1. Se já for booleano
     if isinstance(value, bool):
         return value
-     
+    
     # 2. Se for número (int ou float)
     if isinstance(value, (int, float)):
         return value > 0
-     
+    
     # 3. Tratamento de String (caso venha '1', '1.0', 'True')
     s = str(value).strip().lower()
-     
+    
     # Remove .0 caso venha como texto "1.0"
     if s.endswith(".0"):
         s = s[:-2]
-         
+        
     return s in ("true", "1", "sim", "yes", "y", "x", "s", "ok", "v", "checked")
 
 def parse_aniversario_date(val):
@@ -352,15 +666,15 @@ def parse_aniversario_date(val):
     """
     if pd.isna(val) or str(val).strip() == "":
         return pd.NaT
-         
+        
     s = str(val).strip().lower().replace(".", "")
-     
+    
     # Mapa de meses
     meses = {
         "jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
         "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12
     }
-     
+    
     try:
         # Tenta extrair dia e mês (ex: 6nov -> dia 6, mes nov)
         # Regex simples ou split manual
@@ -369,14 +683,14 @@ def parse_aniversario_date(val):
         if match:
             dia = int(match.group(1))
             mes_str = match.group(2)
-             
+            
             if mes_str in meses:
                 mes = meses[mes_str]
                 ano_atual = (datetime.utcnow() - timedelta(hours=3)).year
                 return datetime(ano_atual, mes, dia)
     except:
         pass
-         
+        
     return pd.NaT
 
 def parse_sheet_date(val):
@@ -386,9 +700,9 @@ def parse_sheet_date(val):
     """
     if pd.isna(val) or str(val).strip() == "":
         return pd.NaT
-     
+    
     val_str = str(val).strip()
-     
+    
     # Tenta converter direto (formato padrão do pandas/sheets)
     try:
         dt = pd.to_datetime(val_str, dayfirst=True, errors='coerce')
@@ -411,11 +725,11 @@ def parse_sheet_date(val):
         return pd.to_datetime(dt)
     except:
         pass
-         
+        
     return pd.NaT
 
 # ============================================================
-# 4. CARGA DE DADOS
+# 3. CARGA DE DADOS
 # ============================================================
 
 @st.cache_data(ttl=600, show_spinner="Carregando dados de efetivo...")
@@ -432,6 +746,21 @@ def load_aniversarios():
     """Carrega dados de aniversários"""
     conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(spreadsheet=URL_ANIVERSARIOS, ttl="1h")
+    
+    # Selecionar colunas B (Posto), E (Nome), H (Aniversário)
+    # Assumindo que o header está na linha 1 (padrão)
+    # Se B é a 2ª coluna, E a 5ª, H a 8ª.
+    # Vamos tentar pegar pelo nome se possível, ou pelo índice se os nomes variarem.
+    # O usuário disse: B (Posto e graduação), E (Nome de guerra), H (Aniversários)
+    
+    # Mapeamento seguro por índice (0-based: B=1, E=4, H=7)
+    # Mas o read() retorna um DF com headers. Vamos assumir que os headers existem.
+    # Se não, teríamos que ler sem header. Vamos assumir que tem header.
+    
+    # Filtrar colunas de interesse
+    # Precisamos identificar os nomes das colunas.
+    # Vamos pegar todas e renomear/filtrar depois.
+    
     return df
 
 def parse_mar_date(val, ano):
@@ -441,9 +770,9 @@ def parse_mar_date(val, ano):
     """
     if pd.isna(val) or str(val).strip() == "":
         return pd.NaT
-     
+    
     s_val = str(val).strip()
-     
+    
     # 1. Tenta parse direto (ex: 15/02/2024)
     try:
         dt = pd.to_datetime(s_val, dayfirst=True)
@@ -453,7 +782,7 @@ def parse_mar_date(val, ano):
         return dt
     except:
         pass
-         
+        
     # 2. Tenta concatenar com o ANO (ex: 15/02 + 2024 -> 15/02/2024)
     if pd.notna(ano) and int(ano) > 1900:
         try:
@@ -461,7 +790,7 @@ def parse_mar_date(val, ano):
             return pd.to_datetime(full_date, dayfirst=True)
         except:
             pass
-             
+            
     return pd.NaT
 
 @st.cache_data(ttl=600, show_spinner="Carregando dados de Mar...")
@@ -470,26 +799,26 @@ def load_dias_mar():
     conn = st.connection("gsheets", type=GSheetsConnection)
     # Header na linha 8 (index 7)
     df = conn.read(spreadsheet=URL_DIAS_MAR, header=7, ttl="10m")
-     
+    
     # Limpeza: Remove linhas onde "TERMO DE VIAGEM" está vazio
     if "TERMO DE VIAGEM" in df.columns:
         df = df.dropna(subset=["TERMO DE VIAGEM"])
-     
+    
     # Seleciona apenas colunas relevantes se existirem
     cols_desejadas = ["TERMO DE VIAGEM", "DATA INÍCIO", "DATA TÉRMINO", "ANO", "DIAS DE MAR", "MILHAS NAVEGADAS", "SOMA"]
     cols_existentes = [c for c in cols_desejadas if c in df.columns]
     df = df[cols_existentes]
-         
+        
     # Conversão de tipos BLINDADA
     numeric_cols = ["DIAS DE MAR", "MILHAS NAVEGADAS"]
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-             
+            
     # Conversão especial para ANO (forçar Inteiro)
     if "ANO" in df.columns:
         df["ANO"] = pd.to_numeric(df["ANO"], errors='coerce').fillna(0).astype(int)
-             
+            
     # Conversão de datas com parser customizado
     date_cols = ["DATA INÍCIO", "DATA TÉRMINO"]
     for col in date_cols:
@@ -498,7 +827,7 @@ def load_dias_mar():
         elif col in df.columns:
             # Fallback se não tiver coluna ANO
             df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce')
-             
+            
     return df
 
 @st.cache_data(ttl=3600, show_spinner="Carregando cardápio...")
@@ -509,8 +838,56 @@ def load_cardapio():
     df = conn.read(spreadsheet=URL_CARDAPIO, header=None, ttl="1h")
     return df
 
+
+
+@st.cache_data(ttl=600, show_spinner="Carregando Tabela de Lotação...")
+def load_lotacao_data():
+    """Carrega dados da Tabela de Lotação com layout fixo (hardcoded)"""
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # Lê sem header para pegar pela posição
+    df = conn.read(spreadsheet=URL_LOTACAO, header=None, ttl="10m")
+    
+    # 1. Seleção de Colunas por Posição
+    # Coluna 0 -> Especialidade
+    # Coluna -3 -> TL
+    # Coluna -2 -> EF
+    # Coluna -1 -> D
+    try:
+        df_selected = df.iloc[:, [0, -3, -2, -1]].copy()
+        df_selected.columns = ["Especialidade", "TL", "EF", "D"]
+        
+        # 2. Filtragem de Linhas
+        # Remove linhas onde Especialidade é nula ou contém "Total" (case insensitive)
+        df_selected = df_selected.dropna(subset=["Especialidade"])
+        df_selected = df_selected[~df_selected["Especialidade"].astype(str).str.contains("Total", case=False, na=False)]
+        
+        # Remove cabeçalhos perdidos (ex: se a linha tiver o texto 'Especialidade' ou 'TL')
+        df_selected = df_selected[df_selected["Especialidade"] != "Especialidade"]
+        
+        # Opcional: Filtrar linhas vazias ou irrelevantes que possam ter sobrado
+        df_selected = df_selected[df_selected["Especialidade"].astype(str).str.strip() != ""]
+
+        # 3. Conversão de Tipos
+        numeric_cols = ["TL", "EF", "D"]
+        for col in numeric_cols:
+            df_selected[col] = pd.to_numeric(df_selected[col], errors='coerce').fillna(0).astype(int)
+            
+        # 4. Cálculo de Status (Recalculado para garantir)
+        def get_status(d):
+            if d < 0: return "Déficit"
+            elif d > 0: return "Excesso"
+            return "Completo"
+        df_selected["Status"] = df_selected["D"].apply(get_status)
+        
+        return df_selected
+        
+    except Exception as e:
+        st.error(f"Erro ao processar estrutura da planilha: {e}")
+        return pd.DataFrame()
+
+
 @st.cache_data(ttl=300)
-def load_calendar_events(calendar_id: str) -> pd.DataFrame:
+def load_calendar_events(calendar_id: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
     try:
         creds_dict = dict(st.secrets["connections"]["gsheets"])
         creds = service_account.Credentials.from_service_account_info(
@@ -518,25 +895,116 @@ def load_calendar_events(calendar_id: str) -> pd.DataFrame:
             scopes=["https://www.googleapis.com/auth/calendar.readonly"]
         )
         service = build("calendar", "v3", credentials=creds)
-        now = datetime.utcnow().isoformat() + "Z"
-        events_result = service.events().list(
-            calendarId=calendar_id, timeMin=now, maxResults=30, singleEvents=True, orderBy="startTime"
-        ).execute()
+        
+        if not start_date:
+            start_date = datetime.utcnow().isoformat() + "Z"
+            
+        # Parâmetros da query
+        query_params = {
+            "calendarId": calendar_id,
+            "timeMin": start_date,
+            "singleEvents": True,
+            "orderBy": "startTime"
+        }
+        
+        if end_date:
+            query_params["timeMax"] = end_date
+        else:
+            query_params["maxResults"] = 30 # Limite padrão se não houver data fim
+            
+        events_result = service.events().list(**query_params).execute()
         events = events_result.get("items", [])
         data = []
         for event in events:
             start = event["start"].get("dateTime", event["start"].get("date"))
             summary = event.get("summary", "Sem título")
+            description = event.get("description", "")
             try:
                 dt_obj = pd.to_datetime(start)
                 fmt = "%d/%m %H:%M" if "T" in start else "%d/%m"
+                # Ajuste fuso visual se tiver hora
+                if "T" in start:
+                    dt_obj = dt_obj - timedelta(hours=3)
                 data_fmt = dt_obj.strftime(fmt)
             except Exception:
                 data_fmt = start
-            data.append({"Data": data_fmt, "Evento": summary})
+            data.append({"Data": data_fmt, "Evento": summary, "Descricao": description})
         return pd.DataFrame(data)
     except Exception:
         return pd.DataFrame()
+
+@st.cache_data(ttl=300)
+def get_events_today_all_calendars():
+    """Busca eventos de HOJE em todas as agendas configuradas."""
+    all_events = []
+    
+    try:
+        creds_dict = dict(st.secrets["connections"]["gsheets"])
+        creds = service_account.Credentials.from_service_account_info(
+            creds_dict,
+            scopes=["https://www.googleapis.com/auth/calendar.readonly"]
+        )
+        service = build("calendar", "v3", credentials=creds)
+        
+        # Intervalo de HOJE (00:00 até 23:59:59)
+        # Ajuste de fuso horário pode ser necessário dependendo do servidor, 
+        # mas UTC costuma funcionar bem se o calendário tiver timezone configurado.
+        # Vamos pegar o dia corrente UTC.
+        now = datetime.utcnow()
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat() + "Z"
+        end_of_day = now.replace(hour=23, minute=59, second=59, microsecond=0).isoformat() + "Z"
+        
+        for nome_agenda, cal_id in AGENDAS_OFICIAIS.items():
+            try:
+                events_result = service.events().list(
+                    calendarId=cal_id, 
+                    timeMin=start_of_day, 
+                    timeMax=end_of_day,
+                    singleEvents=True, 
+                    orderBy="startTime"
+                ).execute()
+                
+                items = events_result.get("items", [])
+                color = AGENDA_COLORS.get(nome_agenda, "#999999")
+                
+                for item in items:
+                    start = item["start"].get("dateTime", item["start"].get("date"))
+                    summary = item.get("summary", "Sem título")
+                    description = item.get("description", "")
+                    
+                    # Formatação de hora
+                    try:
+                        dt_obj = pd.to_datetime(start)
+                        # Se tiver T, é datetime (tem hora). Se não, é dia inteiro.
+                        if "T" in start:
+                            # Ajuste fuso -3h para exibição (gambiarra visual simples)
+                            dt_obj = dt_obj - timedelta(hours=3)
+                            time_str = dt_obj.strftime("%H:%M")
+                        else:
+                            time_str = ""
+                    except:
+                        time_str = ""
+                        
+                    all_events.append({
+                        "Agenda": nome_agenda,
+                        "Evento": summary,
+                        "Descricao": description,
+                        "Hora": time_str,
+                        "Cor": color,
+                        "StartRaw": start
+                    })
+            except Exception as e:
+                print(f"Erro ao ler agenda {nome_agenda}: {e}")
+                continue
+                
+        # Ordenar por horário
+        all_events.sort(key=lambda x: x["StartRaw"])
+        
+    except Exception as e:
+        st.error(f"Erro ao conectar API Calendar: {e}")
+        return []
+        
+    return all_events
 
 try:
     df_raw = load_data()
@@ -547,7 +1015,7 @@ except Exception as e:
 
 
 # ============================================================
-# 5. DESCOBRIR BLOCOS DE DATAS
+# 4. DESCOBRIR BLOCOS DE DATAS
 # ============================================================
 
 def descobrir_blocos_datas(df: pd.DataFrame):
@@ -587,7 +1055,7 @@ def descobrir_blocos_datas(df: pd.DataFrame):
 BLOCOS_DATAS = descobrir_blocos_datas(df_raw)
 
 # ============================================================
-# 6. TRANSFORMAÇÃO EM EVENTOS (WIDE → LONG)
+# 5. TRANSFORMAÇÃO EM EVENTOS (WIDE → LONG)
 # ============================================================
 
 @st.cache_data(ttl=600)
@@ -597,10 +1065,10 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
         posto  = row.get("Posto", "")
         nome   = row.get("Nome", "")
         escala = row.get("Serviço", "")
-         
+        
         eqman_val = row.get("EqMan", "")
         eqman = str(eqman_val) if pd.notna(eqman_val) and str(eqman_val) != "-" else "Não"
-         
+        
         gvi = parse_bool(row.get("Gvi/GP", ""))
         insp = parse_bool(row.get("IN", ""))
 
@@ -619,10 +1087,10 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
 
             if pd.isna(ini) or pd.isna(fim):
                 continue
-             
+            
             if fim < ini:
                 ini, fim = fim, ini
-                 
+                
             dur = (fim - ini).days + 1
             if dur < 1 or dur > 365 * 2:
                 continue
@@ -661,7 +1129,7 @@ df_eventos = construir_eventos(df_raw, BLOCOS_DATAS)
 
 
 # ============================================================
-# 7. EXPANSÃO POR DIA
+# 6. EXPANSÃO POR DIA
 # ============================================================
 
 @st.cache_data(ttl=600)
@@ -699,20 +1167,20 @@ def get_status_em_data(row, data_ref, blocos_cols):
     for col_ini, col_fim, col_mot, tipo_base in blocos_cols:
         ini = parse_sheet_date(row.get(col_ini))
         fim = parse_sheet_date(row.get(col_fim))
-         
+        
         if pd.isna(ini) or pd.isna(fim): continue
-         
+        
         if ini <= data_ref <= fim:
             motivo = tipo_base
             if col_mot and col_mot in row.index and not pd.isna(row[col_mot]):
                 motivo = str(row[col_mot])
             return motivo
-             
+            
     return "Presente"
 
 
 # ============================================================
-# 8. FUNÇÕES DE FILTRO E GRÁFICOS
+# 7. FUNÇÕES DE FILTRO E GRÁFICOS
 # ============================================================
 
 def filtrar_tripulacao(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
@@ -760,11 +1228,18 @@ def update_fig_layout(fig, title=None):
     return fig
 
 
+
+
 # ============================================================
-# 9. PARÂMETROS (SIDEBAR) + NAVEGAÇÃO
+# 8. PARÂMETROS (SIDEBAR) + NAVEGAÇÃO
 # ============================================================
 
 st.sidebar.markdown("## HOME")
+if "user_nome" in st.session_state:
+    # Exibe saudação: Olá, CT Klismann
+    posto = st.session_state.get("user_posto", "")
+    nome = st.session_state.get("user_nome", "")
+    st.sidebar.markdown(f"<div style='margin-bottom: 20px; color: #aab8c5; font-size: 0.9rem;'>Olá, <b>{posto} {nome}</b></div>", unsafe_allow_html=True)
 
 # Função para carregar SVG como base64
 def get_svg_as_base64(file_path):
@@ -788,7 +1263,10 @@ ICON_MAP = {
     "Férias": "icons8-sun-50.svg",
     "Cursos": "cursos.svg",
     "Tabela de Serviço": "icons8-tick-box-50.svg",
-    "Log / Debug": "log.svg"
+    "Tabela de Lotação": "icons8-directory-50.svg",
+    "Trocar Senha": "icons8-lock-50.svg",
+    "Log / Debug": "log.svg",
+    "Sair": "icons8-external-link-50.svg"
 }
 
 css_icons = ""
@@ -800,7 +1278,7 @@ for i, option in enumerate(options):
     # Assume que o usuário salvará os arquivos como .svg se não tiverem extensão no dicionário
     if not icon_filename.endswith(".svg"):
         icon_filename += ".svg"
-         
+        
     full_path = os.path.join(folder_path, icon_filename)
     b64 = get_svg_as_base64(full_path)
     if b64:
@@ -831,8 +1309,15 @@ with st.sidebar.container():
         key="pagina_radio"
     )
 
+    st.markdown("---")
+    
+    # Lógica de Logout via Menu
+    if pagina == "Sair":
+        st.session_state.clear()
+        st.rerun()
+
 # ============================================================
-# 10. MÉTRICAS GLOBAIS
+# 9. MÉTRICAS GLOBAIS
 # ============================================================
 
 def exibir_metricas_globais(data_referencia):
@@ -857,7 +1342,7 @@ def exibir_metricas_globais(data_referencia):
 
 
 # ============================================================
-# 11. PÁGINAS
+# 10. PÁGINAS
 # ============================================================
 
 hoje_padrao = datetime.today()
@@ -911,7 +1396,7 @@ if pagina == "Presentes":
         if total_filtrado > 0:
             presentes_filtrado = len(df_presentes)
             pront_pct = presentes_filtrado / total_filtrado * 100
-             
+            
             # ECHARTS DONUT PRONTIDÃO
             data_prontidao = [
                 {"value": presentes_filtrado, "name": "Presentes"},
@@ -961,25 +1446,25 @@ elif pagina == "Ausentes":
                 st.dataframe(show_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
-     
+    
     if not df_dias.empty:
         df_dias_filt = filtrar_dias(df_dias, apenas_eqman, apenas_in, apenas_gvi)
-         
+        
         if not df_dias_filt.empty:
             st.subheader("Quantidade de militares ausentes por mês")
             df_dias_filt["Mes"] = df_dias_filt["Data"].dt.to_period("M").dt.to_timestamp()
             df_aus_mes = (df_dias_filt[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
-             
+            
             st.markdown("##### Ausentes por mês (Geral)")
             # Format dates for x-axis
             x_dates_aus = df_aus_mes["Mes"].dt.strftime("%b/%Y").tolist()
             opt_aus_mes = make_echarts_line(x_dates_aus, df_aus_mes["Militares"].tolist())
             st_echarts(options=opt_aus_mes, height="400px")
-             
+            
             st.markdown("---")
-             
+            
             st.subheader("Militares ausentes por dia (Mês Específico)")
-             
+            
             col_sel_m, col_sel_a, _ = st.columns([1, 1, 2])
             meses_dict = {
                 "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
@@ -989,18 +1474,18 @@ elif pagina == "Ausentes":
             sel_mes_nome_aus = col_sel_m.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_aus_graf")
             sel_ano_aus = col_sel_a.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_aus_graf")
             sel_mes_aus = meses_dict[sel_mes_nome_aus]
-             
+            
             start_date = datetime(sel_ano_aus, sel_mes_aus, 1)
             if sel_mes_aus == 12:
                 end_date = datetime(sel_ano_aus + 1, 1, 1)
             else:
                 end_date = datetime(sel_ano_aus, sel_mes_aus + 1, 1)
-                 
+                
             df_dias_mes = df_dias_filt[
                 (df_dias_filt["Data"] >= start_date) & 
                 (df_dias_filt["Data"] < end_date)
             ].copy()
-             
+            
             if df_dias_mes.empty:
                 st.info(f"Sem registros de ausência para {sel_mes_nome_aus}/{sel_ano_aus}.")
             else:
@@ -1008,9 +1493,9 @@ elif pagina == "Ausentes":
                     (df_eventos["Inicio"] < end_date) &
                     (df_eventos["Fim"] >= start_date)
                 ].copy()
-                 
+                
                 ausentes_mes_evt = filtrar_eventos(ausentes_mes_evt, apenas_eqman, apenas_in, apenas_gvi)
-                 
+                
                 if not ausentes_mes_evt.empty:
                     tabela_mes = ausentes_mes_evt[["Posto", "Nome", "MotivoAgrupado", "Inicio", "Fim"]].copy()
                     tabela_mes["Início"] = tabela_mes["Inicio"].dt.strftime("%d/%m")
@@ -1018,9 +1503,9 @@ elif pagina == "Ausentes":
                     tabela_mes = tabela_mes.drop(columns=["Inicio", "Fim"])
                     tabela_mes = tabela_mes.sort_values(by=["Nome"])
                     st.dataframe(tabela_mes, use_container_width=True, hide_index=True)
-                 
+                
                 df_aus_dia = (df_dias_mes.groupby("Data")["Nome"].nunique().reset_index(name="Militares"))
-                 
+                
                 st.markdown(f"##### Ausências diárias em {sel_mes_nome_aus}/{sel_ano_aus}")
                 x_dates_dia = df_aus_dia["Data"].dt.strftime("%d/%m").tolist()
                 opt_aus_dia = make_echarts_line(x_dates_dia, df_aus_dia["Militares"].tolist())
@@ -1035,17 +1520,17 @@ elif pagina == "Ausentes":
 # --------------------------------------------------------
 elif pagina == "Dias de Mar":
     st.subheader("Dias de Mar e Milhas Navegadas")
-     
+    
     try:
         df_mar = load_dias_mar()
-         
+        
         if df_mar.empty:
             st.info("Planilha de Dias de Mar vazia ou não encontrada.")
         else:
             # Cálculos Gerais
             total_dias_mar = df_mar["DIAS DE MAR"].sum()
             total_milhas = df_mar["MILHAS NAVEGADAS"].sum()
-             
+            
             # Médias por Ano
             # Agrupa por ANO e soma, depois tira a média dos anos
             df_por_ano = df_mar.groupby("ANO")[["DIAS DE MAR", "MILHAS NAVEGADAS"]].sum().reset_index()
@@ -1058,28 +1543,28 @@ elif pagina == "Dias de Mar":
             c2.metric("Total Milhas", f"{total_milhas:,.0f}")
             c3.metric("Média Dias/Ano", f"{media_dias_ano:,.1f}")
             c4.metric("Média Milhas/Ano", f"{media_milhas_ano:,.0f}")
-             
+            
             st.markdown("---")
-             
+            
             # Gráfico 1: Dias de Mar por Ano (LINHA)
             st.markdown("##### Dias de Mar por Ano")
             opt_ano = make_echarts_line(df_por_ano["ANO"].astype(str).tolist(), df_por_ano["DIAS DE MAR"].tolist())
             st_echarts(options=opt_ano, height="400px")
-             
+            
             st.markdown("---")
-             
+            
             # Gráfico 2: Detalhamento Mensal (LINHA)
             st.subheader("Detalhamento Mensal")
-             
+            
             # Seletor de Ano
             # Ordena os anos e converte para int para exibir bonito no selectbox
             anos_disponiveis = sorted(df_mar["ANO"].unique().astype(int), reverse=True)
             if anos_disponiveis:
                 ano_sel_mar = st.selectbox("Selecione o Ano", anos_disponiveis)
-                 
+                
                 # Filtrar dados do ano
                 df_mar_ano = df_mar[df_mar["ANO"] == ano_sel_mar].copy()
-                 
+                
                 if not df_mar_ano.empty:
                     # Extrair Mês da Data de Início
                     if "DATA INÍCIO" in df_mar_ano.columns:
@@ -1087,25 +1572,25 @@ elif pagina == "Dias de Mar":
                         # (Já tratado no load_dias_mar, mas mantemos verificação de segurança se necessário, 
                         # porém sem re-parse forçado que pode ignorar o ano customizado)
                         # df_mar_ano["DATA INÍCIO"] = pd.to_datetime(df_mar_ano["DATA INÍCIO"], dayfirst=True, errors='coerce')
-                         
+                        
                         # Agrupar por mês (ordenado por número do mês para gráfico correto)
                         df_mar_ano["Mês_Num"] = df_mar_ano["DATA INÍCIO"].dt.month
-                         
+                        
                         # Agrupamento e soma
                         df_mensal_mar = df_mar_ano.groupby("Mês_Num")["DIAS DE MAR"].sum().reset_index()
-                         
+                        
                         # --- CRIA O DATAFRAME COM TODOS OS 12 MESES ---
                         todos_meses = pd.DataFrame({'Mês_Num': range(1, 13)})
                         df_completo = pd.merge(todos_meses, df_mensal_mar, on='Mês_Num', how='left').fillna(0)
-                         
+                        
                         # Mapear número para nome para o eixo X
                         mapa_meses = {1:"Jan", 2:"Fev", 3:"Mar", 4:"Abr", 5:"Mai", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Set", 10:"Out", 11:"Nov", 12:"Dez"}
                         df_completo["Mês"] = df_completo["Mês_Num"].map(mapa_meses)
-                         
+                        
                         st.markdown(f"##### Dias de Mar em {ano_sel_mar} (por mês de início da comissão)")
                         opt_mes_mar = make_echarts_line(df_completo["Mês"].tolist(), df_completo["DIAS DE MAR"].tolist())
                         st_echarts(options=opt_mes_mar, height="400px")
-                         
+                        
                         with st.expander("Ver dados brutos do ano selecionado"):
                             st.dataframe(df_mar_ano[["TERMO DE VIAGEM", "DATA INÍCIO", "DATA TÉRMINO", "DIAS DE MAR", "MILHAS NAVEGADAS"]], use_container_width=True)
                     else:
@@ -1117,33 +1602,212 @@ elif pagina == "Dias de Mar":
         st.error(f"Erro ao processar Dias de Mar: {e}")
 
 
+
+# --------------------------------------------------------
+# NOVO: TROCAR SENHA
+# --------------------------------------------------------
+elif pagina == "Trocar Senha":
+    st.subheader("Trocar Senha")
+    
+    # Verifica se o usuário está logado (deve estar, mas por segurança)
+    current_user_nip = st.session_state.get("username")
+    
+    if not current_user_nip:
+        st.error("Você precisa estar logado para trocar a senha.")
+    else:
+        with st.form("change_own_password_form"):
+            st.info(f"Alterando senha para o NIP: {current_user_nip}")
+            
+            current_pass_input = st.text_input("Senha Atual", type="password")
+            new_pass = st.text_input("Nova Senha", type="password")
+            confirm_pass = st.text_input("Confirmar Nova Senha", type="password")
+            
+            if st.form_submit_button("ATUALIZAR SENHA", use_container_width=True):
+                # 1. Validar senha atual
+                df = get_users_data()
+                df['NIP_NORM'] = df.iloc[:, 3].apply(normalize_nip)
+                user_row = df[df['NIP_NORM'] == normalize_nip(current_user_nip)]
+                
+                if user_row.empty:
+                    st.error("Erro: Usuário não encontrado na base.")
+                else:
+                    stored_password = str(user_row.iloc[0, 4]).strip()
+                    
+                    if current_pass_input != stored_password:
+                        st.error("A senha atual está incorreta.")
+                    elif new_pass != confirm_pass:
+                        st.error("As novas senhas não coincidem.")
+                    elif len(new_pass) < 6:
+                        st.error("A nova senha deve ter pelo menos 6 caracteres.")
+                    elif new_pass == "mudar123":
+                        st.error("Você não pode usar a senha padrão.")
+                    else:
+                        # Tudo ok, atualizar
+                        if update_password(current_user_nip, new_pass):
+                            st.success("Senha atualizada com sucesso! Você será deslogado em instantes.")
+                            import time
+                            time.sleep(2)
+                            st.session_state.clear()
+                            st.rerun()
+                        else:
+                            st.error("Erro ao atualizar senha no banco de dados.")
+
 # --------------------------------------------------------
 # OUTRAS PÁGINAS (Usam Data Padrão Hoje)
 # --------------------------------------------------------
 else:
     hoje = pd.to_datetime(hoje_padrao)
-     
+    
     if pagina == "Agenda do Navio":
         st.subheader("Agenda do Navio (Google Calendar)")
-        col_sel, col_btn = st.columns([3, 1])
+        
+        # --- SEÇÃO DE EVENTOS DE HOJE ---
+        st.markdown("##### Eventos de Hoje")
+        events_today = get_events_today_all_calendars()
+        
+        if not events_today:
+            st.info("Nenhum evento programado para hoje.")
+        else:
+            for ev in events_today:
+                # Lógica de display do horário: se vazio, display:none
+                time_display_style = "display: block;" if ev['Hora'] else "display: none;"
+                
+                st.markdown(
+                    f"""
+                    <details style="
+                        margin-bottom: 10px; 
+                        background-color: rgba(255,255,255,0.05); 
+                        border-radius: 6px;
+                        border-left: 5px solid {ev['Cor']};
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    ">
+                        <summary style="
+                            padding: 12px 15px; 
+                            cursor: pointer;
+                            display: flex; 
+                            align-items: center;
+                            list-style: none; /* Remove triângulo padrão */
+                        ">
+                            <div style="
+                                font-weight: bold; 
+                                font-family: monospace; 
+                                margin-right: 8px; 
+                                color: {ev['Cor']};
+                                min-width: 55px;
+                                {time_display_style}
+                            ">{ev['Hora']}</div>
+                            <div style="font-weight: 500; font-size: 1rem;">
+                                {ev['Evento']}
+                                <div style="font-size: 0.75rem; color: #888; margin-top: 2px;">{ev['Agenda']}</div>
+                            </div>
+                        </summary>
+                        <div style="
+                            padding: 10px 15px; 
+                            border-top: 1px solid rgba(255,255,255,0.1);
+                            font-size: 0.9rem;
+                            color: #ccc;
+                            white-space: pre-wrap;
+                        ">
+                            {ev['Descricao'] if ev['Descricao'] else '<i>Sem descrição.</i>'}
+                        </div>
+                    </details>
+                    """,
+                    unsafe_allow_html=True
+                )
+        
+        st.markdown("---")
+        
+        col_sel, col_btn = st.columns([2, 2])
         with col_sel:
             nome_agenda = st.selectbox("Selecione a Agenda:", list(AGENDAS_OFICIAIS.keys()))
             selected_id = AGENDAS_OFICIAIS[nome_agenda]
+        
         with col_btn:
-            st.write("")
-            st.write("")
-            if st.button("Atualizar eventos"):
-                load_calendar_events.clear()
-                st.rerun()
+            # Seletores de Mês e Ano
+            c_mes, c_ano = st.columns([1.5, 1])
+            meses_dict = {
+                "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
+                "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
+            }
+            now = datetime.now()
+            with c_mes:
+                sel_mes_nome = st.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="ag_mes")
+            with c_ano:
+                sel_ano = st.number_input("Ano", value=now.year, min_value=2024, max_value=2030, key="ag_ano")
+            
+            # Botão de atualização manual (opcional, mas bom para forçar refresh)
+            # st.button("Atualizar") -> O cache cuida disso, ou podemos por um botão se quiser.
+
         if selected_id:
-            df_cal = load_calendar_events(selected_id)
+            # Calcular start e end dates para o filtro
+            sel_mes = meses_dict[sel_mes_nome]
+            dt_start = datetime(sel_ano, sel_mes, 1)
+            if sel_mes == 12:
+                dt_end = datetime(sel_ano + 1, 1, 1)
+            else:
+                dt_end = datetime(sel_ano, sel_mes + 1, 1)
+            
+            # Converter para ISO format UTC (aproximado)
+            # Adicionando Z para indicar UTC
+            start_str = dt_start.isoformat() + "Z"
+            end_str = dt_end.isoformat() + "Z"
+
+            df_cal = load_calendar_events(selected_id, start_date=start_str, end_date=end_str)
+            
             if df_cal.empty:
-                st.info(f"Nenhum evento futuro encontrado na agenda **{nome_agenda}**.")
+                st.info(f"Nenhum evento encontrado em **{nome_agenda}** para {sel_mes_nome}/{sel_ano}.")
             else:
                 st.markdown("---")
+                cal_color = AGENDA_COLORS.get(nome_agenda, "#999999")
+                
                 for _, row in df_cal.iterrows():
+                    # Extrair hora se houver (formato DD/MM HH:MM)
+                    hora_display = ""
+                    data_display = row['Data']
+                    descricao = row.get('Descricao', '')
+                    
+                    # Tenta separar hora da data se possível, ou exibe data completa
+                    # O helper load_calendar_events retorna 'Data' já formatada.
+                    # Vamos manter simples: Data na esquerda (onde ficava a hora)
+                    
                     st.markdown(
-                        f"""<div class="agenda-card"><div style="font-weight: 600; font-size: 1.05rem;">{row['Evento']}</div><div class="agenda-date">{row['Data']}</div></div>""",
+                        f"""
+                        <details style="
+                            margin-bottom: 10px; 
+                            background-color: rgba(255,255,255,0.05); 
+                            border-radius: 6px;
+                            border-left: 5px solid {cal_color};
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        ">
+                            <summary style="
+                                padding: 12px 15px; 
+                                cursor: pointer;
+                                display: flex; 
+                                align-items: center;
+                                list-style: none;
+                            ">
+                                <div style="
+                                    font-weight: bold; 
+                                    font-family: monospace; 
+                                    margin-right: 8px; 
+                                    color: {cal_color};
+                                    min-width: 70px;
+                                ">{data_display}</div>
+                                <div style="font-weight: 500; font-size: 1rem;">
+                                    {row['Evento']}
+                                </div>
+                            </summary>
+                            <div style="
+                                padding: 10px 15px; 
+                                border-top: 1px solid rgba(255,255,255,0.1);
+                                font-size: 0.9rem;
+                                color: #ccc;
+                                white-space: pre-wrap;
+                            ">
+                                {descricao if descricao else '<i>Sem descrição.</i>'}
+                            </div>
+                        </details>
+                        """,
                         unsafe_allow_html=True
                     )
 
@@ -1229,7 +1893,7 @@ else:
                     col_a3.metric("Média de dias de FÉRIAS por militar", f"{media_dias_ferias:.1f}")
                     st.markdown("---")
                     df_motivos_dias = (df_evt.groupby("MotivoAgrupado")["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False))
-                     
+                    
                     # ECHARTS DONUT (VISÃO ANALÍTICA)
                     data_motivos = [
                         {"value": row["Duracao_dias"], "name": row["MotivoAgrupado"]}
@@ -1237,9 +1901,9 @@ else:
                     ]
                     opt_motivos = make_echarts_donut(data_motivos, "Motivos de Ausência")
                     st_echarts(options=opt_motivos, height="600px")
-                     
+                    
                     st.markdown("---")
-                     
+                    
                     df_top10 = (df_evt.groupby(["Nome", "Posto"])["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False).head(10))
                     st.markdown("##### Top 10 – Dias de ausência por militar")
                     opt_top10 = make_echarts_bar(df_top10["Nome"].tolist(), df_top10["Duracao_dias"].tolist())
@@ -1268,7 +1932,7 @@ else:
                 st.write("Sem dados de férias registrados.")
             else:
                 df_ferias = df_eventos[df_eventos["Tipo"] == "Férias"].copy()
-                 
+                
                 # 1. GRÁFICO DE ROSCA (PRIMEIRA INFORMAÇÃO)
                 st.markdown("### % de férias gozadas (tripulação)")
                 if "%DG" in df_raw.columns:
@@ -1279,7 +1943,7 @@ else:
                         else:
                             perc_gozado = media_percentual
                         perc_nao = max(0.0, 100.0 - perc_gozado)
-                         
+                        
                         # ECHARTS DONUT
                         data_ferias = [
                             {"value": round(perc_gozado, 1), "name": "Gozado"},
@@ -1291,7 +1955,7 @@ else:
                         st.info("Não foi possível calcular a média da coluna %DG.")
                 else:
                     st.info("Coluna %DG não encontrada na planilha para cálculo do percentual de férias gozadas.")
-                 
+                
                 st.markdown("---")
 
                 if df_ferias.empty:
@@ -1299,7 +1963,7 @@ else:
                 else:
                     # 2. CARDS DE PESQUISA
                     c_search1, c_search2 = st.columns(2)
-                     
+                    
                     with c_search1:
                         st.markdown("#### Buscar por Militar")
                         # Cria lista combinada Posto + Nome para facilitar busca
@@ -1308,14 +1972,14 @@ else:
                         if "Posto" in df_raw_temp.columns and "Nome" in df_raw_temp.columns:
                             df_raw_temp["PostoNome"] = df_raw_temp["Posto"].astype(str) + " " + df_raw_temp["Nome"].astype(str)
                             opts_militares = sorted(df_raw_temp["PostoNome"].unique().tolist())
-                             
+                            
                             sel_militar = st.selectbox("Selecione o Militar", ["Selecione..."] + opts_militares, key="search_mil_ferias")
-                             
+                            
                             if sel_militar != "Selecione...":
                                 # Filtra df_ferias
                                 df_ferias["PostoNome"] = df_ferias["Posto"].astype(str) + " " + df_ferias["Nome"].astype(str)
                                 res_militar = df_ferias[df_ferias["PostoNome"] == sel_militar].copy()
-                                 
+                                
                                 if not res_militar.empty:
                                     res_militar["Início"] = res_militar["Inicio"].dt.strftime("%d/%m/%Y")
                                     res_militar["Término"] = res_militar["Fim"].dt.strftime("%d/%m/%Y")
@@ -1335,19 +1999,19 @@ else:
                         hoje_br = datetime.utcnow() - timedelta(hours=3)
                         sel_mes_nome = c_m.selectbox("Mês", list(meses_dict.keys()), index=hoje_br.month-1, key="ferias_mes_search")
                         sel_ano = c_a.number_input("Ano", value=hoje_br.year, min_value=2020, max_value=2030, key="ferias_ano_search")
-                         
+                        
                         sel_mes = meses_dict[sel_mes_nome]
-                         
+                        
                         # Lógica de sobreposição de datas
                         import calendar
                         last_day = calendar.monthrange(sel_ano, sel_mes)[1]
                         start_of_month = datetime(sel_ano, sel_mes, 1)
                         end_of_month = datetime(sel_ano, sel_mes, last_day, 23, 59, 59)
-                         
+                        
                         # Filtro: Inicio das férias <= Fim do Mês E Fim das férias >= Inicio do Mês
                         mask = (df_ferias["Inicio"] <= end_of_month) & (df_ferias["Fim"] >= start_of_month)
                         res_mes = df_ferias[mask].copy()
-                         
+                        
                         if not res_mes.empty:
                              res_mes["Início"] = res_mes["Inicio"].dt.strftime("%d/%m/%Y")
                              res_mes["Término"] = res_mes["Fim"].dt.strftime("%d/%m/%Y")
@@ -1356,7 +2020,7 @@ else:
                             st.info(f"Ninguém de férias em {sel_mes_nome}/{sel_ano}.")
 
                     st.markdown("---")
-                     
+                    
                     # 3. MÉTRICAS GERAIS E GRÁFICOS
                     col_f1m, col_f2m, col_f3m = st.columns(3)
                     total_militares_com_ferias = df_ferias["Nome"].nunique()
@@ -1366,16 +2030,16 @@ else:
                     col_f1m.metric("Militares com férias", total_militares_com_ferias)
                     col_f2m.metric("Dias totais", int(dias_totais_ferias))
                     col_f3m.metric("Restam cadastrar", restam_cadastrar)
-                     
+                    
                     st.markdown("---")
-                     
+                    
                     col_fx1, col_fx2 = st.columns(2)
                     df_escala = (df_ferias.groupby("Escala")["Nome"].nunique().reset_index(name="Militares").sort_values("Militares", ascending=False))
                     with col_fx1:
                         st.markdown("##### Militares de férias por serviço")
                         opt_escala = make_echarts_bar(df_escala["Escala"].tolist(), df_escala["Militares"].tolist())
                         st_echarts(options=opt_escala, height="500px")
-                     
+                    
                     if not df_dias.empty:
                         df_dias_ferias = df_dias[df_dias["Tipo"] == "Férias"].copy()
                         if not df_dias_ferias.empty:
@@ -1480,7 +2144,7 @@ else:
                 for servico in SERVICOS_CONSIDERADOS:
                     people_in_service = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
                     if people_in_service.empty:
-                          people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
+                         people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
                     total = len(people_in_service)
                     absent = 0
                     for _, person in people_in_service.iterrows():
@@ -1571,21 +2235,21 @@ else:
 
     elif pagina == "Cardápio":
         st.subheader("Cardápio Semanal")
-         
+        
         try:
             df_cardapio_raw = load_cardapio()
-             
+            
             if df_cardapio_raw.empty:
                 st.info("Não foi possível carregar o cardápio.")
             else:
                 # Processamento dos dados
                 # Datas estão na linha 2 (index 1), colunas B a I (index 1 a 8)
                 # Refeições estão nas linhas 4 a 7 (index 3 a 6)
-                 
+                
                 try:
                     # Extrair datas
                     raw_dates = df_cardapio_raw.iloc[1, 1:9].values
-                     
+                    
                     # Extrair refeições
                     # Linha 4: Café da Manhã
                     # Linha 5: Almoço
@@ -1597,7 +2261,7 @@ else:
                         "Jantar": df_cardapio_raw.iloc[5, 1:9].values,
                         "Ceia": df_cardapio_raw.iloc[6, 1:9].values
                     }
-                     
+                    
                     # Construir DataFrame estruturado
                     structured_data = []
                     for i, date_val in enumerate(raw_dates):
@@ -1609,59 +2273,59 @@ else:
                                 date_obj = pd.to_datetime(str(date_val).strip(), dayfirst=True, errors='coerce')
                             except:
                                 pass
-                         
+                        
                         day_data = {"Data": date_obj, "DataStr": str(date_val)}
                         for meal_name, meal_vals in meals_data.items():
                             day_data[meal_name] = meal_vals[i] if i < len(meal_vals) else ""
-                         
+                        
                         structured_data.append(day_data)
-                         
+                        
                     df_menu = pd.DataFrame(structured_data)
-                     
+                    
                     # --- VISÃO DIÁRIA ---
                     st.markdown("### Cardápio do Dia")
                     hoje_date = (datetime.utcnow() - timedelta(hours=3)).date()
-                     
+                    
                     # Filtra para hoje (compara apenas a data)
                     df_hoje = df_menu[df_menu["Data"].dt.date == hoje_date]
-                     
+                    
                     if not df_hoje.empty:
                         row = df_hoje.iloc[0]
                         c1, c2, c3, c4 = st.columns(4)
-                         
+                        
                         with c1:
                             st.markdown(f"**Café da Manhã**")
                             st.info(row["Café da Manhã"] if pd.notna(row["Café da Manhã"]) else "-")
-                         
+                            
                         with c2:
                             st.markdown(f"**Almoço**")
                             st.success(row["Almoço"] if pd.notna(row["Almoço"]) else "-")
-                         
+                            
                         with c3:
                             st.markdown(f"**Jantar**")
                             st.warning(row["Jantar"] if pd.notna(row["Jantar"]) else "-")
-                         
+                            
                         with c4:
                             st.markdown(f"**Ceia**")
                             st.error(row["Ceia"] if pd.notna(row["Ceia"]) else "-")
                     else:
                         st.info(f"Não há cardápio cadastrado para hoje ({hoje_date.strftime('%d/%m/%Y')}).")
-                     
+                    
                     st.markdown("---")
-                     
+                    
                     # --- VISÃO SEMANAL ---
                     st.markdown("### Visão Semanal")
-                     
+                    
                     # Prepara tabela para exibição (Data como coluna ou index)
                     df_display = df_menu.copy()
                     # Formata data para exibição
                     DIAS_PT = {0: "Seg", 1: "Ter", 2: "Qua", 3: "Qui", 4: "Sex", 5: "Sáb", 6: "Dom"}
                     df_display["Dia"] = df_display["Data"].apply(lambda x: f"{x.day:02d}/{x.month:02d} ({DIAS_PT[x.weekday()]})" if pd.notna(x) else "Data Inválida")
-                     
+                    
                     # Seleciona colunas
                     cols_show = ["Dia", "Café da Manhã", "Almoço", "Jantar", "Ceia"]
                     st.dataframe(df_display[cols_show], use_container_width=True, hide_index=True)
-                     
+                    
                 except Exception as e:
                     st.error(f"Erro ao processar estrutura do cardápio: {e}")
                     st.dataframe(df_cardapio_raw.head(10))
@@ -1671,21 +2335,21 @@ else:
 
     elif pagina == "Aniversários":
         st.subheader("Aniversariantes")
-         
+        
         try:
             df_niver_raw = load_aniversarios()
-             
+            
             if df_niver_raw.empty:
                 st.info("Não foi possível carregar a lista de aniversariantes.")
             else:
                 # Processar dados
                 # Colunas esperadas: B (Posto), E (Nome), H (Aniversário)
                 # Vamos tentar identificar pelo index se os nomes não baterem, mas assumiremos nomes primeiro ou index como fallback.
-                 
+                
                 # Ajuste de índices (0-based): B=1, E=4, H=7
                 # Cria um DF limpo
                 dados_niver = []
-                 
+                
                 # Itera sobre as linhas (pulando header se necessário, mas o read já deve ter tratado)
                 for idx, row in df_niver_raw.iterrows():
                     # Tenta pegar valores por posição para garantir (já que nomes podem mudar)
@@ -1693,7 +2357,7 @@ else:
                         posto = row.iloc[1]
                         nome = row.iloc[4]
                         data_str = row.iloc[7]
-                         
+                        
                         if pd.notna(nome) and str(nome).strip() != "" and pd.notna(data_str):
                             dt_niver = parse_aniversario_date(data_str)
                             if pd.notna(dt_niver):
@@ -1707,9 +2371,9 @@ else:
                                 })
                     except:
                         continue
-                         
+                        
                 df_aniversarios = pd.DataFrame(dados_niver)
-                 
+                
                 if df_aniversarios.empty:
                     st.info("Nenhum aniversariante encontrado ou erro no processamento das datas.")
                 else:
@@ -1717,19 +2381,19 @@ else:
                     hoje_dt = (datetime.utcnow() - timedelta(hours=3))
                     mes_atual = hoje_dt.month
                     dia_atual = hoje_dt.day
-                     
+                    
                     aniversariantes_mes = df_aniversarios[df_aniversarios["Mês"] == mes_atual]
                     aniversariantes_dia = df_aniversarios[(df_aniversarios["Mês"] == mes_atual) & (df_aniversarios["Dia"] == dia_atual)]
-                     
+                    
                     # Próximo e Último
                     # Cria uma coluna com a data de aniversário no ano corrente
                     df_aniversarios["DataCorrente"] = df_aniversarios.apply(
                         lambda x: x["Data"].replace(year=hoje_dt.year), axis=1
                     )
-                     
+                    
                     # Ordena por data
                     df_aniversarios = df_aniversarios.sort_values("DataCorrente")
-                     
+                    
                     # Próximo: data >= hoje
                     proximos = df_aniversarios[df_aniversarios["DataCorrente"] >= hoje_dt.replace(hour=0, minute=0, second=0, microsecond=0)]
                     if proximos.empty:
@@ -1737,7 +2401,7 @@ else:
                         proximo = df_aniversarios.iloc[0]
                     else:
                         proximo = proximos.iloc[0]
-                         
+                        
                     # Último: data < hoje
                     anteriores = df_aniversarios[df_aniversarios["DataCorrente"] < hoje_dt.replace(hour=0, minute=0, second=0, microsecond=0)]
                     if anteriores.empty:
@@ -1745,10 +2409,10 @@ else:
                         ultimo = df_aniversarios.iloc[-1]
                     else:
                         ultimo = anteriores.iloc[-1]
-                     
+                    
                     # Cards
                     c1, c2, c3, c4 = st.columns(4)
-                     
+                    
                     c1.metric("Aniversariantes do Mês", len(aniversariantes_mes))
                     c2.markdown("**Aniversariantes do Dia**")
                     if aniversariantes_dia.empty:
@@ -1756,32 +2420,32 @@ else:
                     else:
                         lista_nomes = [f"{row['Posto']} {row['Nome']}" for _, row in aniversariantes_dia.iterrows()]
                         c2.success(f"{', '.join(lista_nomes)}")
-                     
+                    
                     c3.markdown("**Último Aniversariante**")
                     c3.info(f"{ultimo['Posto']} {ultimo['Nome']} ({ultimo['Dia']:02d}/{ultimo['Mês']:02d})")
-                     
+                    
                     c4.markdown("**Próximo Aniversariante**")
                     c4.success(f"{proximo['Posto']} {proximo['Nome']} ({proximo['Dia']:02d}/{proximo['Mês']:02d})")
-                     
+                    
                     st.markdown("---")
-                     
+                    
                     # Filtros e Tabela
                     st.subheader("Pesquisar Aniversariantes")
-                     
+                    
                     meses_dict = {
                         "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
                         "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12,
                         "Todos": 0
                     }
-                     
+                    
                     sel_mes_nome = st.selectbox("Filtrar por Mês", list(meses_dict.keys()), index=list(meses_dict.values()).index(mes_atual))
                     sel_mes_num = meses_dict[sel_mes_nome]
-                     
+                    
                     if sel_mes_num != 0:
                         df_show = df_aniversarios[df_aniversarios["Mês"] == sel_mes_num].copy()
                     else:
                         df_show = df_aniversarios.copy()
-                         
+                        
                     if not df_show.empty:
                         # Formatar data para exibição
                         df_show["Data Aniversário"] = df_show.apply(lambda x: f"{x['Dia']:02d}/{x['Mês']:02d}", axis=1)
@@ -1796,23 +2460,191 @@ else:
         except Exception as e:
             st.error(f"Erro ao carregar aniversários: {e}")
 
+    elif pagina == "Tabela de Lotação":
+        st.subheader("Tabela de Lotação")
+        
+        try:
+            df_lotacao = load_lotacao_data()
+            
+            if df_lotacao.empty:
+                st.info("Não foi possível carregar a Tabela de Lotação.")
+            else:
+                # 1. KPIs
+                tl_total = df_lotacao["TL"].sum()
+                ef_total = df_lotacao["EF"].sum()
+                d_total = df_lotacao["D"].sum()
+                
+                col_k1, col_k2, col_k3 = st.columns(3)
+                col_k1.metric("Lotação Total (TL)", int(tl_total))
+                col_k2.metric("Efetivo Atual (EF)", int(ef_total))
+                col_k3.metric("Balanço Geral", int(d_total), delta=int(d_total), delta_color="normal")
+                
+                st.markdown("---")
+                
+                # 2. Listas de Faltas e Excessos
+                col_list1, col_list2 = st.columns(2)
+                
+                with col_list1:
+                    st.markdown("##### Faltas (Déficit)")
+                    df_deficit = df_lotacao[df_lotacao["D"] < 0].sort_values("D")
+                    if df_deficit.empty:
+                        st.success("Nenhuma falta registrada.")
+                    else:
+                        # Mostra como tabela limpa
+                        st.dataframe(
+                            df_deficit[["Especialidade", "D"]], 
+                            use_container_width=True, 
+                            hide_index=True
+                        )
+                        
+                with col_list2:
+                    st.markdown("##### Excessos")
+                    df_excess = df_lotacao[df_lotacao["D"] > 0].sort_values("D", ascending=False)
+                    if df_excess.empty:
+                        st.info("Nenhum excesso registrado.")
+                    else:
+                        st.dataframe(
+                            df_excess[["Especialidade", "D"]], 
+                            use_container_width=True, 
+                            hide_index=True
+                        )
+                
+                st.markdown("---")
+                
+                # 3. Gráficos Donut (ECharts)
+                st.markdown("### Análise Gráfica")
+                col_g1, col_g2 = st.columns(2)
+                
+                with col_g1:
+                    st.markdown("##### Panorama das Especialidades")
+                    # Conta quantos estão em cada status
+                    status_counts = df_lotacao["Status"].value_counts().reset_index()
+                    status_counts.columns = ["Status", "Count"]
+                    
+                    # Prepara dados para o Donut
+                    data_status = []
+                    for _, row in status_counts.iterrows():
+                        data_status.append({"value": int(row["Count"]), "name": row["Status"]})
+                        
+                    opt_status = make_echarts_donut(data_status, "Status")
+                    st_echarts(options=opt_status, height="400px")
+                    
+                with col_g2:
+                    st.markdown("##### Taxa de Ocupação Global")
+                    # TL vs EF Global
+                    # Se EF > TL, ocupação é > 100% (Excesso Global)
+                    # Vamos mostrar: Ocupado vs Vago (se houver vaga)
+                    
+                    vagas_aberto = max(0, tl_total - ef_total)
+                    ocupado = min(ef_total, tl_total) # O que cabe na lotação
+                    excesso_global = max(0, ef_total - tl_total) # O que transborda
+                    
+                    data_ocupacao = [
+                        {"value": int(ocupado), "name": "Ocupado"},
+                        {"value": int(vagas_aberto), "name": "Vago"}
+                    ]
+                    
+                    if excesso_global > 0:
+                        data_ocupacao.append({"value": int(excesso_global), "name": "Excesso Global"})
+                        
+                    opt_ocupacao = make_echarts_donut(data_ocupacao, "Ocupação")
+                    st_echarts(options=opt_ocupacao, height="400px")
+
+                st.markdown("---")
+                
+                # 4. Gráfico de Barras (ECharts)
+                st.markdown("### Detalhamento por Especialidade")
+                
+                if "Especialidade" in df_lotacao.columns:
+                    df_grouped = df_lotacao.groupby("Especialidade")[["TL", "EF", "D"]].sum().reset_index()
+                    df_chart = df_grouped.sort_values("D", ascending=True)
+                    
+                    # Preparar dados para ECharts
+                    x_data = df_chart["Especialidade"].tolist()
+                    y_data = []
+                    
+                    for val in df_chart["D"].tolist():
+                        val_int = int(val)
+                        color = "#a3a3a3"
+                        if val_int < 0: color = "#ff5370"
+                        elif val_int > 0: color = "#2ed8b6"
+                        
+                        y_data.append({
+                            "value": val_int,
+                            "itemStyle": {"color": color},
+                            "label": {
+                                "show": True, 
+                                "position": "top" if val_int >= 0 else "bottom",
+                                "formatter": "{c}"
+                            }
+                        })
+                    
+                    options = {
+                        "tooltip": {
+                            "trigger": "axis",
+                            "axisPointer": {"type": "shadow"}
+                        },
+                        "xAxis": {
+                            "type": "category",
+                            "data": x_data,
+                            "axisLabel": {"interval": 0, "rotate": 45}
+                        },
+                        "yAxis": {"type": "value"},
+                        "series": [
+                            {
+                                "data": y_data, 
+                                "type": "bar",
+                                "name": "Diferença"
+                            }
+                        ],
+                        "grid": {
+                            "left": "3%",
+                            "right": "4%",
+                            "bottom": "15%", # Espaço para labels rotacionados
+                            "containLabel": True
+                        }
+                    }
+                    
+                    st_echarts(options=options, height="500px")
+                
+                st.markdown("---")
+                
+                # 5. Tabela Completa
+                st.markdown("### Tabela Completa")
+                
+                # Styling
+                def style_d(v):
+                    if isinstance(v, (int, float)):
+                        if v < 0: return "color: #ff5370; font-weight: bold;"
+                        elif v > 0: return "color: #2ed8b6; font-weight: bold;"
+                    return "color: #a3a3a3;"
+                
+                st.dataframe(
+                    df_lotacao.style.map(style_d, subset=["D"]),
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+        except Exception as e:
+            st.error(f"Erro ao processar Tabela de Lotação: {e}")
+
     elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
-         
+        
         # --- NEW DEBUG SECTION FOR CHECKBOXES ---
         st.markdown("### 🔍 Diagnóstico de Colunas GVI e IN")
         st.info("Use esta seção para verificar como o Python está lendo os valores das checkboxes.")
-         
+        
         cols_debug = []
         if "Gvi/GP" in df_raw.columns: cols_debug.append("Gvi/GP")
         if "IN" in df_raw.columns: cols_debug.append("IN")
-         
+        
         if cols_debug:
             st.write("Valores únicos encontrados nas colunas:")
             for col in cols_debug:
                 unique_vals = df_raw[col].unique()
                 st.write(f"**{col}:** {unique_vals}")
-                 
+                
             st.markdown("##### Teste da função `parse_bool`:")
             test_val = st.text_input("Digite um valor para testar se é True/False (ex: 'Sim', 'TRUE', 'x'):")
             if test_val:
@@ -1820,7 +2652,7 @@ else:
                 st.write(f"O valor '{test_val}' é considerado: **{res}**")
         else:
             st.error("Colunas Gvi/GP ou IN não encontradas na planilha.")
-             
+            
         st.markdown("---")
         st.markdown("### df_raw (dados brutos do Google Sheets)")
         st.write(f"Total de linhas em df_raw: **{len(df_raw)}**")
