@@ -1082,6 +1082,51 @@ except Exception as e:
 
 
 # ============================================================
+# HELPER: SUNSET CALCULATION (NOAA)
+# ============================================================
+def calculate_sunset(date_obj, lat=-5.79448, lng=-35.211):
+    """
+    Calcula o horário do pôr do sol para uma data e coordenadas (Natal, RN).
+    Retorna string "HH:MM".
+    Algoritmo simplificado baseado no NOAA.
+    """
+    try:
+        import math
+        
+        # Dia do ano
+        day_of_year = date_obj.timetuple().tm_yday
+        
+        # Conversão para radianos
+        rad = math.pi / 180.0
+        
+        # Declinação do sol
+        gamma = (2 * math.pi / 365) * (day_of_year - 1 + (12 - 12) / 24)
+        eqtime = 229.18 * (0.000075 + 0.001868 * math.cos(gamma) - 0.032077 * math.sin(gamma) \
+                 - 0.014615 * math.cos(2 * gamma) - 0.040849 * math.sin(2 * gamma))
+        decl = 0.006918 - 0.399912 * math.cos(gamma) + 0.070257 * math.sin(gamma) \
+               - 0.006758 * math.cos(2 * gamma) + 0.000907 * math.sin(2 * gamma) \
+               - 0.002697 * math.cos(3 * gamma) + 0.00148 * math.sin(3 * gamma)
+        
+        # Hora do ângulo horário
+        ha = math.acos(math.cos(90.833 * rad) / (math.cos(lat * rad) * math.cos(decl)) \
+             - math.tan(lat * rad) * math.tan(decl))
+        
+        # Hora UTC do pôr do sol (em minutos)
+        sunset_utc = 720 - 4 * lng - eqtime + (ha / rad) * 4
+        
+        # Ajuste para UTC-3 (Brasília)
+        sunset_local = sunset_utc / 60 - 3
+        
+        # Formatação
+        hour = int(sunset_local)
+        minute = int((sunset_local - hour) * 60)
+        
+        return f"{hour:02d}:{minute:02d}"
+    except Exception as e:
+        print(f"Erro ao calcular pôr do sol: {e}")
+        return "17:30" # Fallback seguro
+
+# ============================================================
 # 4. DESCOBRIR BLOCOS DE DATAS
 # ============================================================
 
@@ -2282,6 +2327,11 @@ else:
                                 try:
                                     rotina = str(df.iloc[d_idx, 3]).strip()         # Col D
                                     por_do_sol = str(df.iloc[d_idx, 4]).strip()     # Col E
+                                    
+                                    # Sanitize Pôr do Sol error from Sheets
+                                    if "ERROR" in por_do_sol or "Exception" in por_do_sol or por_do_sol == "-" or por_do_sol == "":
+                                        # Calculate locally
+                                        por_do_sol = calculate_sunset(hoje)
                                 except:
                                     pass
                                 
