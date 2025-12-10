@@ -28,6 +28,11 @@ st.set_page_config(
 # --- AUTH HELPERS (GLOBAL SCOPE) ---
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1DDQ1eObEd5p2kfI4uCTpQvTT54TjpQtEeWNVAwQ0400/edit?usp=sharing"
 
+def get_img_as_base64(file):
+    with open(file, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
 def normalize_nip(nip):
     """Remove pontos e espaços do NIP para comparação."""
     return str(nip).replace(".", "").replace(" ", "").strip()
@@ -263,12 +268,23 @@ def check_password():
                     current_dir = os.path.dirname(os.path.abspath(__file__))
                     img_path = os.path.join(current_dir, "logo_npamacau.png")
                     
-                    c_img1, c_img2, c_img3 = st.columns([1, 2, 1])
-                    with c_img2:
-                        if os.path.exists(img_path):
-                            st.image(img_path, width=180)
-                        else:
-                            st.markdown("""<div style="text-align: center; font-size: 80px; color: #1e293b;">⚓</div>""", unsafe_allow_html=True)
+                    # 1. IMAGEM (Centralizada Mobile-First)
+                    import os
+                    current_dir = os.path.dirname(os.path.abspath(__file__))
+                    img_path = os.path.join(current_dir, "logo_npamacau.png")
+                    
+                    # Usa container flex para centralizar
+                    if os.path.exists(img_path):
+                        st.markdown(
+                            f"""
+                            <div style="display: flex; justify-content: center; margin-bottom: 1rem;">
+                                <img src="data:image/png;base64,{get_img_as_base64(img_path)}" width="160" style="max-width: 100%; height: auto;">
+                            </div>
+                            """, 
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.markdown("""<div style="text-align: center; font-size: 80px; color: #1e293b;">⚓</div>""", unsafe_allow_html=True)
 
                     # 2. TÍTULOS
                     st.markdown(
@@ -350,7 +366,13 @@ def make_echarts_donut(data_list, title):
     title: Nome da série
     """
     options = {
-        "tooltip": {"trigger": "item", "formatter": "{b}: {c} ({d}%)"},
+        "tooltip": {
+            "trigger": "item", 
+            "formatter": "{b}: {c} ({d}%)",
+            "backgroundColor": "rgba(50, 50, 50, 0.9)",
+            "borderColor": "#777",
+            "textStyle": {"color": "#fff"}
+        },
         "legend": {
             "top": "5%", 
             "left": "center",
@@ -407,8 +429,22 @@ def make_echarts_line(x_data, y_data):
             "data": x_data,
         },
         "yAxis": {"type": "value"},
-        "series": [{"data": y_data, "type": "line"}],
-        "tooltip": {"trigger": "axis"}
+        "series": [{
+            "data": y_data, 
+            "type": "line",
+            "label": {
+                "show": True, 
+                "position": "top",
+                "color": "inherit", # Garante que use a cor da série ou texto legível
+                "fontSize": 12
+            }
+        }],
+        "tooltip": {
+            "trigger": "axis",
+            "backgroundColor": "rgba(50, 50, 50, 0.9)",
+            "borderColor": "#777",
+            "textStyle": {"color": "#fff"}
+        }
     }
     return options
 
@@ -428,8 +464,22 @@ def make_echarts_bar(x_data, y_data):
             "axisLabel": {"interval": 0, "rotate": 30}
         },
         "yAxis": {"type": "value"},
-        "series": [{"data": y_data, "type": "bar"}],
-        "tooltip": {"trigger": "axis"}
+        "series": [{
+            "data": y_data, 
+            "type": "bar",
+            "label": {
+                "show": True, 
+                "position": "top",
+                "color": "inherit",
+                "fontSize": 12
+            }
+        }],
+        "tooltip": {
+            "trigger": "axis",
+            "backgroundColor": "rgba(50, 50, 50, 0.9)",
+            "borderColor": "#777",
+            "textStyle": {"color": "#fff"}
+        }
     }
     return options
 
@@ -633,6 +683,7 @@ URL_DIAS_MAR = "https://docs.google.com/spreadsheets/d/1CEVh0EQsnINcuVP4-RbS3Kgf
 URL_CARDAPIO = "https://docs.google.com/spreadsheets/d/1i3veE6cj4-h9toh_DIjm8vcyz4kJ0DoKpJDrA2Xn77s/edit?usp=sharing"
 URL_ANIVERSARIOS = "https://docs.google.com/spreadsheets/d/1mcQlXU_sRYwqmBCHkL3qX1GS6bivUqIGqGVVCvZLc0U/edit?usp=sharing"
 URL_LOTACAO = "https://docs.google.com/spreadsheets/d/1c2l7-LlFsxMqzI4JkX6IDQ7I7w-v202YaSJU2gpkrx4/edit?usp=sharing"
+URL_TABELA_SERVICO = "https://docs.google.com/spreadsheets/d/1xWS42Q4WjKB5ERd8kXBXShzWzVa8fUtgo1bFdhTxE7E/edit?usp=sharing"
 
 def parse_bool(value) -> bool:
     """
@@ -805,17 +856,15 @@ def load_dias_mar():
         df = df.dropna(subset=["TERMO DE VIAGEM"])
     
     # Seleciona apenas colunas relevantes se existirem
-    cols_desejadas = ["TERMO DE VIAGEM", "DATA INÍCIO", "DATA TÉRMINO", "ANO", "DIAS DE MAR", "MILHAS NAVEGADAS", "SOMA"]
-    cols_existentes = [c for c in cols_desejadas if c in df.columns]
-    df = df[cols_existentes]
-        
-    # Conversão de tipos BLINDADA
-    numeric_cols = ["DIAS DE MAR", "MILHAS NAVEGADAS"]
-    for col in numeric_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            
-    # Conversão especial para ANO (forçar Inteiro)
+    cols_keep = ["TERMO DE VIAGEM", "DATA INÍCIO", "DATA TÉRMINO", "DIAS DE MAR", "MILHAS NAVEGADAS", "ANO"]
+    existing_cols = [c for c in cols_keep if c in df.columns]
+    df = df[existing_cols]
+    
+    # Conversão de numéricos
+    if "DIAS DE MAR" in df.columns:
+        df["DIAS DE MAR"] = pd.to_numeric(df["DIAS DE MAR"], errors='coerce').fillna(0)
+    if "MILHAS NAVEGADAS" in df.columns:
+        df["MILHAS NAVEGADAS"] = pd.to_numeric(df["MILHAS NAVEGADAS"], errors='coerce').fillna(0)
     if "ANO" in df.columns:
         df["ANO"] = pd.to_numeric(df["ANO"], errors='coerce').fillna(0).astype(int)
             
@@ -829,6 +878,24 @@ def load_dias_mar():
             df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce')
             
     return df
+
+@st.cache_data(ttl=0, show_spinner="Carregando Tabela do Dia...")
+def load_tabela_servico_dia():
+    """Carrega as abas TABELA 1, 2 e 3 para encontrar a escala do dia."""
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    sheets = ["TABELA 1", "TABELA 2", "TABELA 3"]
+    data = {}
+    for sheet in sheets:
+        try:
+            # Lê sem header para pegar posições exatas (A1 é 0,0)
+            df = conn.read(spreadsheet=URL_TABELA_SERVICO, worksheet=sheet, header=None, ttl=0)
+            data[sheet] = df
+        except Exception as e:
+            print(f"Erro ao ler {sheet}: {e}")
+    return data
+
+
+
 
 @st.cache_data(ttl=3600, show_spinner="Carregando cardápio...")
 def load_cardapio():
@@ -1411,39 +1478,62 @@ if pagina == "Presentes":
 # AUSENTES
 # --------------------------------------------------------
 elif pagina == "Ausentes":
-    st.subheader("Ausentes por dia")
-    col_d1, _ = st.columns([2, 4])
-    data_ref = col_d1.date_input("Data de Referência", hoje_padrao, key="data_aus_tab", format="DD/MM/YYYY")
-    hoje = pd.to_datetime(data_ref)
-    table_placeholder = st.empty()
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.subheader("Ausentes")
+    
+    # --- SEÇÃO 1: AUSENTES HOJE (FIXO) ---
+    st.markdown("### Ausentes Hoje")
+    
+    # Data de hoje fixa
+    hoje = datetime.today()
+    st.markdown(f"**Data de Referência:** {hoje.strftime('%d/%m/%Y')}")
+    
     col_f_spacer1, col_f_content, col_f_spacer2 = st.columns([1, 4, 1])
     with col_f_content:
         c_f1, c_f2, c_f3 = st.columns(3)
-        apenas_eqman = c_f1.checkbox("Apenas EqMan", key="aus_eqman_tab")
-        apenas_in    = c_f2.checkbox("Apenas IN", key="aus_in_tab")
-        apenas_gvi   = c_f3.checkbox("Apenas GVI/GP", key="aus_gvi_tab")
+        apenas_eqman = c_f1.checkbox("Apenas EqMan", key="aus_eqman_hoje")
+        apenas_in    = c_f2.checkbox("Apenas IN", key="aus_in_hoje")
+        apenas_gvi   = c_f3.checkbox("Apenas GVI/GP", key="aus_gvi_hoje")
 
-    if df_eventos.empty:
-        table_placeholder.info("Sem eventos de ausência registrados.")
-    else:
+    if not df_eventos.empty:
         ausentes_hoje = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
         ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
-        with table_placeholder.container():
-            if ausentes_hoje.empty:
-                st.success("Todo o efetivo está a bordo para os filtros atuais.")
-            else:
-                temp = ausentes_hoje.copy()
-                temp["MotivoExib"] = temp.apply(
-                    lambda r: "Férias" if r["Tipo"] == "Férias"
-                    else ("Curso" if r["Tipo"] == "Curso" else str(r["Motivo"])),
-                    axis=1
-                )
-                show_df = temp[["Posto", "Nome", "MotivoExib", "Fim"]].copy()
-                show_df["Retorno"] = show_df["Fim"].dt.strftime("%d/%m/%Y")
-                show_df = show_df.drop(columns=["Fim"])
-                show_df = show_df.rename(columns={"MotivoExib": "Motivo"})
-                st.dataframe(show_df, use_container_width=True, hide_index=True)
+        
+        if not ausentes_hoje.empty:
+            df_show = ausentes_hoje[["Posto", "Nome", "Motivo", "Inicio", "Fim", "Duracao_dias"]].copy()
+            df_show["Inicio"] = df_show["Inicio"].dt.strftime("%d/%m/%Y")
+            df_show["Fim"] = df_show["Fim"].dt.strftime("%d/%m/%Y")
+            st.dataframe(df_show, use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhum ausente hoje (com os filtros selecionados).")
+    else:
+        st.info("Não há dados de eventos processados.")
+
+    st.markdown("---")
+
+    # --- SEÇÃO 2: AUSENTES POR PERÍODO ---
+    st.markdown("### Ausentes por Período")
+    col_p1, col_p2 = st.columns(2)
+    data_ini_p = col_p1.date_input("Início do Período", hoje_padrao, key="data_aus_ini", format="DD/MM/YYYY")
+    data_fim_p = col_p2.date_input("Fim do Período", hoje_padrao + timedelta(days=30), key="data_aus_fim", format="DD/MM/YYYY")
+    
+    dt_ini = pd.to_datetime(data_ini_p)
+    dt_fim = pd.to_datetime(data_fim_p)
+
+    if not df_eventos.empty:
+        # Filtra eventos que têm intersecção com o período selecionado
+        mask_periodo = (df_eventos["Inicio"] <= dt_fim) & (df_eventos["Fim"] >= dt_ini)
+        ausentes_periodo = df_eventos[mask_periodo]
+        ausentes_periodo = filtrar_eventos(ausentes_periodo, apenas_eqman, apenas_in, apenas_gvi)
+
+        if not ausentes_periodo.empty:
+            df_show_p = ausentes_periodo[["Posto", "Nome", "Motivo", "Inicio", "Fim", "Duracao_dias"]].copy()
+            df_show_p["Inicio"] = df_show_p["Inicio"].dt.strftime("%d/%m/%Y")
+            df_show_p["Fim"] = df_show_p["Fim"].dt.strftime("%d/%m/%Y")
+            st.dataframe(df_show_p, use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhum ausente neste período (com os filtros selecionados).")
+    else:
+        st.info("Não há dados de eventos processados.")
 
     st.markdown("---")
     
@@ -1904,10 +1994,10 @@ else:
                     
                     st.markdown("---")
                     
-                    df_top10 = (df_evt.groupby(["Nome", "Posto"])["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False).head(10))
-                    st.markdown("##### Top 10 – Dias de ausência por militar")
-                    opt_top10 = make_echarts_bar(df_top10["Nome"].tolist(), df_top10["Duracao_dias"].tolist())
-                    st_echarts(options=opt_top10, height="500px")
+                    # df_top10 = (df_evt.groupby(["Nome", "Posto"])["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False).head(10))
+                    # st.markdown("##### Top 10 – Dias de ausência por militar")
+                    # opt_top10 = make_echarts_bar(df_top10["Nome"].tolist(), df_top10["Duracao_dias"].tolist())
+                    # st_echarts(options=opt_top10, height="500px")
                     if not df_dias.empty:
                         st.markdown("---")
                         st.subheader("Média de militares ausentes por dia (por mês)")
@@ -2124,114 +2214,381 @@ else:
                                 col_g2.info("Sem dados diários suficientes para análise mensal de cursos.")
 
     elif pagina == "Tabela de Serviço":
-        st.subheader("Tabela de Serviço - Análise de Escalas")
-        st.markdown("#### Escala Diária")
-        col_escala_container, _ = st.columns([1, 3])
-        with col_escala_container:
-            data_ref_diaria = st.date_input("Data de Referência", value=(datetime.utcnow() - timedelta(hours=3)), key="data_ref_escala", format="DD/MM/YYYY")
-            dt_ref = pd.to_datetime(data_ref_diaria)
-            col_escala = None
-            possiveis = ["Escala", "Serviço", "Função", "Setor", "Divisão"]
-            for c in possiveis:
-                if c in df_raw.columns:
-                    col_escala = c
-                    break
-            target_col = col_escala if col_escala else "Posto/Grad"
-            if not col_escala and "Posto/Grad" not in df_raw.columns:
-                st.error("Não foi possível identificar a coluna de Escala/Serviço para cálculo.")
+        st.subheader("Tabela de Serviço")
+        
+        tab_dia, tab_analise = st.tabs(["Tabela do Dia", "Análise"])
+        
+        with tab_dia:
+            st.markdown("### Escala do Dia")
+            
+            # Carregar dados
+            data_sheets = load_tabela_servico_dia()
+            
+            # Data de hoje (UTC-3)
+            hoje = (datetime.utcnow() - timedelta(hours=3)).date()
+            # hoje = datetime(2025, 12, 11).date() # DEBUG
+            
+            found_matches = []
+            
+            if data_sheets:
+                for sheet_name, df in data_sheets.items():
+                    # Layout CONFIRMED by debug:
+                    # Block 1: Date at Row 5 (Index 4), Col B (Index 1). Daily Service: Rows 7-10 (Indices 6-9), Col C (Index 2). Room: Row 14 (Index 13).
+                    # Block 2: Date at Row 16 (Index 15), Col B (Index 1). Daily Service: Rows 18-21 (Indices 17-20), Col C (Index 2). Room: Row 25 (Index 24).
+                    # Block 3: Date at Row 27 (Index 26), Col B (Index 1). Daily Service: Rows 29-32 (Indices 28-31), Col C (Index 2). Room: Row 36 (Index 35).
+                    
+                    blocks = [
+                        {"date_idx": 4,  "daily_start": 6,  "daily_end": 10, "room_idx": 13},
+                        {"date_idx": 15, "daily_start": 17, "daily_end": 21, "room_idx": 24},
+                        {"date_idx": 26, "daily_start": 28, "daily_end": 32, "room_idx": 35}
+                    ]
+                    
+                    for block in blocks:
+                        d_idx = block["date_idx"]
+                        
+                        if d_idx < len(df):
+                            # Date is in Column B (index 1)
+                            val = df.iloc[d_idx, 1] if df.shape[1] > 1 else None
+                            
+                            # Parse date
+                            dt_val = None
+                            try:
+                                if isinstance(val, str):
+                                    val_clean = val.strip()
+                                    dt_val = pd.to_datetime(val_clean, dayfirst=True, errors='coerce').date()
+                                elif isinstance(val, (datetime, pd.Timestamp)):
+                                    dt_val = val.date()
+                            except:
+                                pass
+                            
+                            if dt_val == hoje:
+                                # Found a match! Extract data.
+                                match_data = {}
+                                match_data["sheet_name"] = sheet_name
+                                
+                                # Extract Header Info
+                                dia_semana = ""
+                                regime = ""
+                                rotina = ""
+                                por_do_sol = ""
+                                
+                                if d_idx > 0:
+                                    try:
+                                        dia_semana = str(df.iloc[d_idx - 1, 1]).strip() # Col B
+                                        regime = str(df.iloc[d_idx - 1, 3]).strip()     # Col D
+                                    except:
+                                        pass
+                                
+                                try:
+                                    rotina = str(df.iloc[d_idx, 3]).strip()         # Col D
+                                    por_do_sol = str(df.iloc[d_idx, 4]).strip()     # Col E
+                                except:
+                                    pass
+                                
+                                match_data["header"] = {
+                                    "dia_semana": dia_semana,
+                                    "regime": regime,
+                                    "rotina": rotina,
+                                    "por_do_sol": por_do_sol
+                                }
+
+                                # Extract Daily Service
+                                s_start = block["daily_start"]
+                                s_end = block["daily_end"]
+                                servico_diario = []
+                                if s_end <= len(df) and df.shape[1] > 2:
+                                    servico_diario = df.iloc[s_start : s_end, 2].tolist()
+                                match_data["servico_diario"] = servico_diario
+                                
+                                # Extract Room Service
+                                r_idx = block["room_idx"]
+                                servico_quarto = []
+                                if r_idx < len(df) and df.shape[1] > 4:
+                                    servico_quarto = df.iloc[r_idx, 2:5].tolist()
+                                match_data["servico_quarto"] = servico_quarto
+                                
+                                found_matches.append(match_data)
+                
+                # Logic to handle matches
+                if len(found_matches) > 1:
+                    st.warning(f"Há mais de uma tabela com a data cadastrada ({hoje.strftime('%d/%m/%Y')}). Por favor, verifique a planilha.")
+                elif len(found_matches) == 1:
+                    match = found_matches[0]
+                    
+                    # CSS for Cards (Dark Gray in Dark Mode, White in Light Mode)
+                    st.markdown("""
+                    <style>
+                        /* Base Card Style */
+                        .service-card, .service-card-room, .header-info-card {
+                            /* 
+                               Use a semi-transparent white background.
+                               - In Dark Mode (Dark BG): Renders as Dark Gray (Lightens the background).
+                               - In Light Mode (White BG): Renders as White (Invisible change).
+                            */
+                            background-color: rgba(255, 255, 255, 0.07); 
+                            color: var(--text-color);
+                            border-radius: 5px;
+                            padding: 15px;
+                            margin-bottom: 10px;
+                            transition: transform 0.2s;
+                            border: 1px solid rgba(128, 128, 128, 0.2);
+                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                        }
+                        
+                        /* Specific Stripes */
+                        .service-card { border-left: 5px solid #3b82f6; } /* Blue */
+                        .service-card-room { border-left: 5px solid #10b981; } /* Green */
+                        .header-info-card { border-left: 5px solid #f59e0b; text-align: center; } /* Amber */
+
+                        /* Text Styles */
+                        .service-title, .header-label {
+                            color: var(--text-color);
+                            opacity: 0.8;
+                            font-size: 0.85rem;
+                            text-transform: uppercase;
+                            letter-spacing: 0.05em;
+                            font-weight: 600;
+                            margin-bottom: 5px;
+                        }
+                        .service-value, .header-val {
+                            color: var(--text-color);
+                            font-size: 1.1rem;
+                            font-weight: 500;
+                        }
+                        .service-time, .service-time-inline {
+                            color: var(--text-color);
+                            opacity: 0.7;
+                            font-size: 0.8rem;
+                        }
+                        .service-header-inline {
+                            display: flex;
+                            align-items: baseline;
+                            gap: 10px;
+                            margin-bottom: 5px;
+                        }
+                    </style>
+                    """, unsafe_allow_html=True)
+
+                    st.markdown(f"### Escala de Hoje ({hoje.strftime('%d/%m/%Y')})")
+                    st.caption(f"Fonte: {match['sheet_name']}")
+                    
+                    # --- HEADER INFO ---
+                    h = match["header"]
+                    c_h1, c_h2, c_h3, c_h4 = st.columns(4)
+                    with c_h1:
+                        st.markdown(f"""
+                        <div class="header-info-card">
+                            <div class="header-label">Dia da Semana</div>
+                            <div class="header-val">{h['dia_semana']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with c_h2:
+                        st.markdown(f"""
+                        <div class="header-info-card">
+                            <div class="header-label">Regime</div>
+                            <div class="header-val">{h['regime']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with c_h3:
+                        st.markdown(f"""
+                        <div class="header-info-card">
+                            <div class="header-label">Rotina</div>
+                            <div class="header-val">{h['rotina']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with c_h4:
+                        st.markdown(f"""
+                        <div class="header-info-card">
+                            <div class="header-label">Pôr do Sol</div>
+                            <div class="header-val">{h['por_do_sol']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("---")
+
+                    # --- SERVIÇO DIÁRIO ---
+                    st.markdown("#### Serviço Diário")
+                    labels_diario = ["Oficial / Sup", "Fiel de Cav", "Conferente", "Rancheiro"]
+                    servico_diario = match["servico_diario"]
+                    
+                    cd1, cd2 = st.columns(2)
+                    
+                    for i, item in enumerate(servico_diario):
+                        label = labels_diario[i] if i < len(labels_diario) else "Outro"
+                        if pd.notna(item) and str(item).strip() != "":
+                            col_to_use = cd1 if i % 2 == 0 else cd2
+                            with col_to_use:
+                                    # Format Name and CPF
+                                    name_part = str(item)
+                                    cpf_part = ""
+                                    if "CPF:" in name_part:
+                                        parts = name_part.split("CPF:")
+                                        name_part = parts[0].strip()
+                                        cpf_part = "CPF: " + parts[1].strip()
+                                    
+                                    st.markdown(f"""
+                                    <div class="service-card">
+                                        <div class="service-title">{label}</div>
+                                        <div class="service-value">
+                                            <div style="font-weight: bold;">{name_part}</div>
+                                            <div style="font-size: 0.85em; opacity: 0.7; margin-top: 2px;">{cpf_part}</div>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                    st.markdown("---")
+                    
+                    # --- SERVIÇO DE QUARTO ---
+                    st.markdown("#### Serviço de Quarto")
+                    labels_quarto = [
+                        ("1º QUARTO", "08:00 - 12:00 / 20:00 - 24:00"),
+                        ("2º QUARTO", "12:00 - 16:00 / 00:00 - 04:00"),
+                        ("3º QUARTO", "16:00 - 20:00 / 04:00 - 08:00")
+                    ]
+                    servico_quarto = match["servico_quarto"]
+                    
+                    for i, item in enumerate(servico_quarto):
+                        label_info = labels_quarto[i] if i < len(labels_quarto) else ("Outro", "")
+                        label_title = label_info[0]
+                        label_time = label_info[1]
+                        
+                        if pd.notna(item) and str(item).strip() != "":
+                            # Format Name and CPF
+                            name_part = str(item)
+                            cpf_part = ""
+                            if "CPF:" in name_part:
+                                parts = name_part.split("CPF:")
+                                name_part = parts[0].strip()
+                                cpf_part = "CPF: " + parts[1].strip()
+
+                            st.markdown(f"""
+                            <div class="service-card-room">
+                                <div class="service-header-inline">
+                                    <div class="service-title">{label_title}</div>
+                                    <div class="service-time-inline">{label_time}</div>
+                                </div>
+                                <div class="service-value">
+                                    <div style="font-weight: bold;">{name_part}</div>
+                                    <div style="font-size: 0.85em; opacity: 0.7; margin-top: 2px;">{cpf_part}</div>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                
+                else:
+                    # No matches found
+                    st.info(f"Nenhuma escala encontrada para a data de hoje ({hoje.strftime('%d/%m/%Y')}) nas abas verificadas.")
             else:
-                daily_data = []
+                st.error("Erro ao carregar dados da Tabela de Serviço.")
+
+        with tab_analise:
+            st.markdown("### Análise de Escalas")
+            st.markdown("#### Escala Diária")
+            col_escala_container, _ = st.columns([1, 3])
+            with col_escala_container:
+                data_ref_diaria = st.date_input("Data de Referência", value=(datetime.utcnow() - timedelta(hours=3)), key="data_ref_escala", format="DD/MM/YYYY")
+                dt_ref = pd.to_datetime(data_ref_diaria)
+                col_escala = None
+                possiveis = ["Escala", "Serviço", "Função", "Setor", "Divisão"]
+                for c in possiveis:
+                    if c in df_raw.columns:
+                        col_escala = c
+                        break
+                target_col = col_escala if col_escala else "Posto/Grad"
+                if not col_escala and "Posto/Grad" not in df_raw.columns:
+                    st.error("Não foi possível identificar a coluna de Escala/Serviço para cálculo.")
+                else:
+                    daily_data = []
+                    for servico in SERVICOS_CONSIDERADOS:
+                        people_in_service = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
+                        if people_in_service.empty:
+                             people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
+                        total = len(people_in_service)
+                        absent = 0
+                        for _, person in people_in_service.iterrows():
+                            status = get_status_em_data(person, dt_ref, BLOCOS_DATAS)
+                            if status != "Presente":
+                                absent += 1
+                        available = max(0, total - absent)
+                        scale_val = max(0, available - 1)
+                        daily_data.append({
+                            "Serviço": servico,
+                            "Escala": f"{scale_val}x1"
+                        })
+                    df_daily = pd.DataFrame(daily_data)
+                    def color_scale_daily(val):
+                        if isinstance(val, str):
+                            if "0x1" in val or "1x1" in val:
+                                return "color: #ff5370; font-weight: bold"
+                            elif "2x1" in val:
+                                return "color: #ffb64d; font-weight: bold"
+                            elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
+                                 return "color: #2ed8b6; font-weight: bold"
+                        return ""
+                    st.dataframe(df_daily.style.map(color_scale_daily, subset=["Escala"]), use_container_width=True, hide_index=True)
+                    st.markdown("---")
+            st.markdown("#### Escala Mensal")
+            col_mes_sel, col_ano_sel = st.columns(2)
+            meses_dict = {
+                "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
+                "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
+            }
+            now = (datetime.utcnow() - timedelta(hours=3))
+            sel_mes_nome = col_mes_sel.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_escala")
+            sel_ano = col_ano_sel.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_escala")
+            sel_mes = meses_dict[sel_mes_nome]
+            days_in_month = pd.Period(f"{sel_ano}-{sel_mes}-01").days_in_month
+            dates = [datetime(sel_ano, sel_mes, d) for d in range(1, days_in_month+1)]
+            data_matrix = []
+            for d in dates:
+                row_data = {"Dia": d.strftime("%d/%m")}
                 for servico in SERVICOS_CONSIDERADOS:
                     people_in_service = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
                     if people_in_service.empty:
-                         people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
+                            people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
                     total = len(people_in_service)
                     absent = 0
                     for _, person in people_in_service.iterrows():
-                        status = get_status_em_data(person, dt_ref, BLOCOS_DATAS)
+                        status = get_status_em_data(person, d, BLOCOS_DATAS)
                         if status != "Presente":
                             absent += 1
                     available = max(0, total - absent)
                     scale_val = max(0, available - 1)
-                    daily_data.append({
-                        "Serviço": servico,
-                        "Escala": f"{scale_val}x1"
-                    })
-                df_daily = pd.DataFrame(daily_data)
-                def color_scale_daily(val):
-                    if isinstance(val, str):
-                        if "0x1" in val or "1x1" in val:
-                            return "color: #ff5370; font-weight: bold"
-                        elif "2x1" in val:
-                            return "color: #ffb64d; font-weight: bold"
-                        elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
-                             return "color: #2ed8b6; font-weight: bold"
-                    return ""
-                st.dataframe(df_daily.style.map(color_scale_daily, subset=["Escala"]), use_container_width=True, hide_index=True)
-                st.markdown("---")
-        st.markdown("#### Escala Mensal")
-        col_mes_sel, col_ano_sel = st.columns(2)
-        meses_dict = {
-            "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
-            "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
-        }
-        now = (datetime.utcnow() - timedelta(hours=3))
-        sel_mes_nome = col_mes_sel.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_escala")
-        sel_ano = col_ano_sel.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_escala")
-        sel_mes = meses_dict[sel_mes_nome]
-        days_in_month = pd.Period(f"{sel_ano}-{sel_mes}-01").days_in_month
-        dates = [datetime(sel_ano, sel_mes, d) for d in range(1, days_in_month+1)]
-        data_matrix = []
-        for d in dates:
-            row_data = {"Dia": d.strftime("%d/%m")}
-            for servico in SERVICOS_CONSIDERADOS:
-                people_in_service = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
-                if people_in_service.empty:
-                        people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
-                total = len(people_in_service)
-                absent = 0
-                for _, person in people_in_service.iterrows():
-                    status = get_status_em_data(person, d, BLOCOS_DATAS)
-                    if status != "Presente":
-                        absent += 1
-                available = max(0, total - absent)
-                scale_val = max(0, available - 1)
-                row_data[servico] = f"{scale_val}x1"
-            data_matrix.append(row_data)
-        df_tabela = pd.DataFrame(data_matrix)
-        def color_scale_monthly(val):
-            if isinstance(val, str):
-                if "0x1" in val or "1x1" in val:
-                    return "color: #ff5370; font-weight: bold"
-                elif "2x1" in val:
-                    return "color: #ffb64d; font-weight: bold"
-                elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
-                        return "color: #2ed8b6; font-weight: bold"
-            return ""
-        st.dataframe(df_tabela.style.map(color_scale_monthly), use_container_width=True, hide_index=True)
-        st.markdown("---")
-        st.markdown("#### Militares fora da escala")
-        df_fora_escala = df_raw[df_raw[target_col].astype(str).str.contains("não concorre", case=False, na=False)].copy()
-        if df_fora_escala.empty:
-            st.info("Todos os militares estão alocados em alguma escala considerada.")
-        else:
-            st.write(f"Total de militares que não concorrem à escala: **{len(df_fora_escala)}**")
-            st.dataframe(df_fora_escala[["Posto", "Nome", target_col]], use_container_width=True, hide_index=True)
+                    row_data[servico] = f"{scale_val}x1"
+                data_matrix.append(row_data)
+            df_tabela = pd.DataFrame(data_matrix)
+            def color_scale_monthly(val):
+                if isinstance(val, str):
+                    if "0x1" in val or "1x1" in val:
+                        return "color: #ff5370; font-weight: bold"
+                    elif "2x1" in val:
+                        return "color: #ffb64d; font-weight: bold"
+                    elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
+                            return "color: #2ed8b6; font-weight: bold"
+                return ""
+            st.dataframe(df_tabela.style.map(color_scale_monthly), use_container_width=True, hide_index=True)
+            st.markdown("---")
+            st.markdown("#### Militares fora da escala")
+            df_fora_escala = df_raw[df_raw[target_col].astype(str).str.contains("não concorre", case=False, na=False)].copy()
+            if df_fora_escala.empty:
+                st.info("Todos os militares estão alocados em alguma escala considerada.")
+            else:
+                st.write(f"Total de militares que não concorrem à escala: **{len(df_fora_escala)}**")
+                st.dataframe(df_fora_escala[["Posto", "Nome", target_col]], use_container_width=True, hide_index=True)
 
-        st.markdown("---")
-        st.markdown("#### Componentes das Escalas")
-        cols_srv = st.columns(len(SERVICOS_CONSIDERADOS))
-        tabs_escalas = st.tabs(SERVICOS_CONSIDERADOS)
-        for i, servico in enumerate(SERVICOS_CONSIDERADOS):
-            with tabs_escalas[i]:
-                people = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
-                if people.empty:
-                    people = df_raw[df_raw[target_col].astype(str) == servico]
-                if not people.empty:
-                    st.write(f"**Total:** {len(people)}")
-                    st.dataframe(people[["Posto", "Nome"]], use_container_width=True, hide_index=True)
-                else:
-                    st.info(f"Ninguém cadastrado como {servico}.")
+            st.markdown("---")
+            st.markdown("#### Componentes das Escalas")
+            cols_srv = st.columns(len(SERVICOS_CONSIDERADOS))
+            tabs_escalas = st.tabs(SERVICOS_CONSIDERADOS)
+            for i, servico in enumerate(SERVICOS_CONSIDERADOS):
+                with tabs_escalas[i]:
+                    people = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
+                    if people.empty:
+                        people = df_raw[df_raw[target_col].astype(str) == servico]
+                    if not people.empty:
+                        st.write(f"**Total:** {len(people)}")
+                        st.dataframe(people[["Posto", "Nome"]], use_container_width=True, hide_index=True)
+                    else:
+                        st.info(f"Ninguém cadastrado como {servico}.")
 
     elif pagina == "Cardápio":
         st.subheader("Cardápio Semanal")
@@ -2293,21 +2650,72 @@ else:
                         row = df_hoje.iloc[0]
                         c1, c2, c3, c4 = st.columns(4)
                         
+                        # CSS for Cardápio Cards
+                        st.markdown("""
+                        <style>
+                            .card-menu {
+                                background-color: rgba(255, 255, 255, 0.07);
+                                color: var(--text-color);
+                                border-radius: 5px;
+                                padding: 15px;
+                                margin-bottom: 10px;
+                                transition: transform 0.2s;
+                                border: 1px solid rgba(128, 128, 128, 0.2);
+                                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                                border-left: 5px solid #f97316; /* Orange */
+                            }
+                            .card-title {
+                                color: var(--text-color);
+                                opacity: 0.8;
+                                font-size: 0.85rem;
+                                text-transform: uppercase;
+                                letter-spacing: 0.05em;
+                                font-weight: 600;
+                                margin-bottom: 5px;
+                            }
+                            .card-value {
+                                color: var(--text-color);
+                                font-size: 1.1rem;
+                                font-weight: 500;
+                            }
+                        </style>
+                        """, unsafe_allow_html=True)
+
                         with c1:
-                            st.markdown(f"**Café da Manhã**")
-                            st.info(row["Café da Manhã"] if pd.notna(row["Café da Manhã"]) else "-")
+                            val = row["Café da Manhã"] if pd.notna(row["Café da Manhã"]) else "-"
+                            st.markdown(f"""
+                            <div class="card-menu">
+                                <div class="card-title">Café da Manhã</div>
+                                <div class="card-value">{val}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
                             
                         with c2:
-                            st.markdown(f"**Almoço**")
-                            st.success(row["Almoço"] if pd.notna(row["Almoço"]) else "-")
+                            val = row["Almoço"] if pd.notna(row["Almoço"]) else "-"
+                            st.markdown(f"""
+                            <div class="card-menu">
+                                <div class="card-title">Almoço</div>
+                                <div class="card-value">{val}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
                             
                         with c3:
-                            st.markdown(f"**Jantar**")
-                            st.warning(row["Jantar"] if pd.notna(row["Jantar"]) else "-")
+                            val = row["Jantar"] if pd.notna(row["Jantar"]) else "-"
+                            st.markdown(f"""
+                            <div class="card-menu">
+                                <div class="card-title">Jantar</div>
+                                <div class="card-value">{val}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
                             
                         with c4:
-                            st.markdown(f"**Ceia**")
-                            st.error(row["Ceia"] if pd.notna(row["Ceia"]) else "-")
+                            val = row["Ceia"] if pd.notna(row["Ceia"]) else "-"
+                            st.markdown(f"""
+                            <div class="card-menu">
+                                <div class="card-title">Ceia</div>
+                                <div class="card-value">{val}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
                     else:
                         st.info(f"Não há cardápio cadastrado para hoje ({hoje_date.strftime('%d/%m/%Y')}).")
                     
@@ -2414,18 +2822,69 @@ else:
                     c1, c2, c3, c4 = st.columns(4)
                     
                     c1.metric("Aniversariantes do Mês", len(aniversariantes_mes))
-                    c2.markdown("**Aniversariantes do Dia**")
-                    if aniversariantes_dia.empty:
-                        c2.info("Não há militares aniversariando hoje.")
-                    else:
-                        lista_nomes = [f"{row['Posto']} {row['Nome']}" for _, row in aniversariantes_dia.iterrows()]
-                        c2.success(f"{', '.join(lista_nomes)}")
+                    # CSS for Aniversários Cards
+                    st.markdown("""
+                    <style>
+                        .card-niver {
+                            background-color: rgba(255, 255, 255, 0.07);
+                            color: var(--text-color);
+                            border-radius: 5px;
+                            padding: 15px;
+                            margin-bottom: 10px;
+                            transition: transform 0.2s;
+                            border: 1px solid rgba(128, 128, 128, 0.2);
+                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                            border-left: 5px solid #ec4899; /* Pink */
+                        }
+                        /* Reuse .card-title and .card-value if already defined, but define here to be safe if tabs are separate */
+                        .card-title {
+                            color: var(--text-color);
+                            opacity: 0.8;
+                            font-size: 0.85rem;
+                            text-transform: uppercase;
+                            letter-spacing: 0.05em;
+                            font-weight: 600;
+                            margin-bottom: 5px;
+                        }
+                        .card-value {
+                            color: var(--text-color);
+                            font-size: 1.1rem;
+                            font-weight: 500;
+                        }
+                    </style>
+                    """, unsafe_allow_html=True)
+
+                    with c2:
+                        if aniversariantes_dia.empty:
+                            val = "Ninguém hoje"
+                        else:
+                            lista_nomes = [f"{row['Posto']} {row['Nome']}" for _, row in aniversariantes_dia.iterrows()]
+                            val = ", ".join(lista_nomes)
+                        
+                        st.markdown(f"""
+                        <div class="card-niver">
+                            <div class="card-title">Aniversariantes do Dia</div>
+                            <div class="card-value">{val}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
                     
-                    c3.markdown("**Último Aniversariante**")
-                    c3.info(f"{ultimo['Posto']} {ultimo['Nome']} ({ultimo['Dia']:02d}/{ultimo['Mês']:02d})")
+                    with c3:
+                        val = f"{ultimo['Posto']} {ultimo['Nome']} ({ultimo['Dia']:02d}/{ultimo['Mês']:02d})"
+                        st.markdown(f"""
+                        <div class="card-niver">
+                            <div class="card-title">Último Aniversariante</div>
+                            <div class="card-value">{val}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
                     
-                    c4.markdown("**Próximo Aniversariante**")
-                    c4.success(f"{proximo['Posto']} {proximo['Nome']} ({proximo['Dia']:02d}/{proximo['Mês']:02d})")
+                    with c4:
+                        val = f"{proximo['Posto']} {proximo['Nome']} ({proximo['Dia']:02d}/{proximo['Mês']:02d})"
+                        st.markdown(f"""
+                        <div class="card-niver">
+                            <div class="card-title">Próximo Aniversariante</div>
+                            <div class="card-value">{val}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
                     
                     st.markdown("---")
                     
@@ -2582,7 +3041,10 @@ else:
                     options = {
                         "tooltip": {
                             "trigger": "axis",
-                            "axisPointer": {"type": "shadow"}
+                            "axisPointer": {"type": "shadow"},
+                            "backgroundColor": "rgba(50, 50, 50, 0.9)",
+                            "borderColor": "#777",
+                            "textStyle": {"color": "#fff"}
                         },
                         "xAxis": {
                             "type": "category",
