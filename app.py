@@ -786,6 +786,8 @@ def parse_grupos(val):
     Pode conter múltiplos grupos (ex: listbox com separador).
     Retorna uma lista de strings normalizadas.
     """
+    if isinstance(val, list):
+        return val
     if pd.isna(val) or str(val).strip() == "":
         return []
     
