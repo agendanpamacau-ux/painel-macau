@@ -435,15 +435,17 @@ def make_echarts_line(x_data, y_data):
             "label": {
                 "show": True, 
                 "position": "top",
-                "color": "inherit", # Garante que use a cor da série ou texto legível
-                "fontSize": 12
+                "color": "inherit", 
+                "fontSize": 12,
+                "formatter": "{c}" # Usa o valor cru, mas podemos tratar no data ou aqui
             }
         }],
         "tooltip": {
             "trigger": "axis",
             "backgroundColor": "rgba(50, 50, 50, 0.9)",
             "borderColor": "#777",
-            "textStyle": {"color": "#fff"}
+            "textStyle": {"color": "#fff"},
+            "valueFormatter": "(value) => value.toFixed(1)" # Formata tooltip para 1 casa
         }
     }
     return options
@@ -1324,20 +1326,20 @@ def detectar_conflitos(df_eventos):
                 if p1["Nome"] == p2["Nome"]:
                     continue
                     
-                # Checa overlap
-                # Overlap: Inicio1 <= Fim2 AND Inicio2 <= Fim1
+                # Overlap Check
                 if (p1["Inicio"] <= p2["Fim"]) and (p2["Inicio"] <= p1["Fim"]):
                     # Calcula dias de sobreposição
                     start_overlap = max(p1["Inicio"], p2["Inicio"])
                     end_overlap = min(p1["Fim"], p2["Fim"])
                     days_overlap = (end_overlap - start_overlap).days + 1
                     
+                    periodo_conflito = f"{start_overlap.strftime('%d/%m')} - {end_overlap.strftime('%d/%m')}"
+                    
                     conflict_data.append({
                         "Grupo": grupo,
                         "Militar 1": f"{p1['Posto']} {p1['Nome']}",
-                        "Período 1": f"{p1['Inicio'].strftime('%d/%m')} a {p1['Fim'].strftime('%d/%m')}",
                         "Militar 2": f"{p2['Posto']} {p2['Nome']}",
-                        "Período 2": f"{p2['Inicio'].strftime('%d/%m')} a {p2['Fim'].strftime('%d/%m')}",
+                        "Período Conflito": periodo_conflito,
                         "Dias Conflito": days_overlap
                     })
 
@@ -2309,37 +2311,14 @@ else:
                             df_conflitos,
                             column_config={
                                 "Grupo": st.column_config.TextColumn("Grupo de Conflito"),
-                                "Dias Conflito": st.column_config.NumberColumn("Dias coincid.", format="%d dias"),
+                                "Período Conflito": st.column_config.TextColumn("Período Coincidente"),
+                                "Dias Conflito": st.column_config.NumberColumn("Dias", format="%d"),
                             },
                             use_container_width=True,
                             hide_index=True
                         )
                     else:
                         st.info("Não foram detectados conflitos de ausência entre militares do mesmo grupo.")
-
-
-
-                    # DEBUG AREA (Temporário para análise)
-                    with st.expander("🛠️ DEBUG: Análise de Dados e Conflitos", expanded=False):
-                        st.write("### 1. Colunas encontradas na planilha")
-                        st.write(list(df_raw.columns))
-                        
-                        st.write("### 2. Verificação da Coluna de Grupos")
-                        # Tenta mostrar o que foi lido nos eventos
-                        if not df_eventos.empty:
-                            sample_groups = df_eventos[["Nome", "Grupos"]].head(20)
-                            st.dataframe(sample_groups)
-                            
-                            st.write("### 3. Estatísticas de Eventos")
-                            metric_cols = st.columns(3)
-                            metric_cols[0].metric("Total Eventos", len(df_eventos))
-                            metric_cols[1].metric("Eventos c/ Grupo", df_eventos["Grupos"].apply(lambda x: len(x) > 0).sum())
-                            
-                            st.write("### 4. Raw Conflict Data")
-                            st.dataframe(df_conflitos)
-                        
-                        st.write("### 5. Exemplo de Dados Brutos (Primeiras 5 linhas)")
-                        st.dataframe(df_raw.head())
 
     elif pagina == "Cursos":
         st.subheader("Análises de Cursos")
