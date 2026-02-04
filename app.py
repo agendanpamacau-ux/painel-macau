@@ -768,13 +768,21 @@ def parse_sheet_date(val):
 
     # Tenta formato DD/MM explicitamente
     try:
-        # Adiciona o ano atual se for apenas DD/MM
-        # Assume ano 2025 para este painel específico (Afastamento 2026 tem dados de 25 e 26)
-        # Melhor estratégia: Tentar parser com ano atual
+        # Tenta parsear como dia/mês (sem ano)
+        # Se funcionar, substituir pelo ano corrente
         dt = datetime.strptime(val_str, "%d/%m")
-        # Substitui pelo ano corrente ou um ano padrão (2025 neste contexto)
         dt = dt.replace(year=(datetime.utcnow() - timedelta(hours=3)).year) 
         return pd.to_datetime(dt)
+    except:
+        pass
+        
+    # Tenta concatenar o ano corrente e parsear
+    try:
+        current_year = (datetime.utcnow() - timedelta(hours=3)).year
+        val_with_year = f"{val_str}/{current_year}"
+        dt = pd.to_datetime(val_with_year, dayfirst=True, errors='coerce')
+        if pd.notna(dt):
+            return dt
     except:
         pass
         
@@ -1204,13 +1212,16 @@ def descobrir_blocos_datas(df: pd.DataFrame):
     cols = list(df.columns)
     blocos = []
     for i, nome_col in enumerate(cols):
-        n = str(nome_col).strip()
-        if not (n.startswith("Início") or n.startswith("Inicio")):
+        n = str(nome_col).strip().lower()
+        # Verifica se contem "inicio" ou "início" (mais robusto que startswith)
+        if not ("início" in n or "inicio" in n):
             continue
         j = None
         for idx2 in range(i + 1, len(cols)):
-            n2 = str(cols[idx2])
-            if n2.startswith("Fim") or n2.startswith("FIm"):
+            n2 = str(cols[idx2]).strip().lower()
+            # Verifica se contem "fim" e se está próximo (dentro de um range razoável, ex: +1 ou +2 colunas)
+            # Mas a lógica original buscava qualquer fim subsequente. Vamos manter, mas checar "fim"
+            if "fim" in n2 or "término" in n2 or "termino" in n2:
                 j = idx2
                 break
         if j is None:
