@@ -684,6 +684,7 @@ URL_CARDAPIO = "https://docs.google.com/spreadsheets/d/1i3veE6cj4-h9toh_DIjm8vcy
 URL_ANIVERSARIOS = "https://docs.google.com/spreadsheets/d/1mcQlXU_sRYwqmBCHkL3qX1GS6bivUqIGqGVVCvZLc0U/edit?usp=sharing"
 URL_LOTACAO = "https://docs.google.com/spreadsheets/d/1c2l7-LlFsxMqzI4JkX6IDQ7I7w-v202YaSJU2gpkrx4/edit?usp=sharing"
 URL_TABELA_SERVICO = "https://docs.google.com/spreadsheets/d/1xWS42Q4WjKB5ERd8kXBXShzWzVa8fUtgo1bFdhTxE7E/edit?usp=sharing"
+URL_AFASTAMENTO = "https://docs.google.com/spreadsheets/d/1BLBVdAUfJ4sYH2qLRTXs122L89HGCTrPPuxM8KK7_sU"
 
 def parse_bool(value) -> bool:
     """
@@ -784,13 +785,78 @@ def parse_sheet_date(val):
 # ============================================================
 
 @st.cache_data(ttl=600, show_spinner="Carregando dados de efetivo...")
-def load_data():
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(worksheet="Afastamento 2026", header=HEADER_ROW, ttl="10m")
-    if "Nome" in df.columns:
-        df = df.dropna(subset=["Nome"])
-    df = df.reset_index(drop=True)
-    return df
+def load_efetivo_data():
+    try:
+        # Extrai ID da planilha
+        sheet_id = "1BLBVdAUfJ4sYH2qLRTXs122L89HGCTrPPuxM8KK7_sU"
+        sheet_name = "Afastamento%202026"
+        url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+        
+        # Lê sem header para procurar a linha correta
+        df_raw = pd.read_csv(url, header=None)
+        
+        # Procura a linha que contém "Nome" e "Posto" (Header)
+        header_idx = -1
+        for i, row in df_raw.head(10).iterrows():
+            row_str = row.astype(str).values
+            if "Nome" in row_str and "Posto" in row_str:
+                header_idx = i
+                break
+        
+        if header_idx != -1:
+            # Define essa linha como header
+            df_raw.columns = df_raw.iloc[header_idx]
+            # Pega os dados da linha seguinte em diante
+            df = df_raw.iloc[header_idx + 1:].copy()
+        else:
+            # Fallback: Tenta usar a linha HEADER_ROW definida (2)
+            # Mas se não achou nos primeiros 10, algo está estranho.
+            # Vamos assumir que se não achou, o formato está muito diferente, mas tentamos o padrão.
+            df_raw = pd.read_csv(url, header=HEADER_ROW)
+            df = df_raw
+            
+# Limpar nomes das colunas (strip whitespace)
+        cols = df.columns.astype(str).str.strip().tolist()
+        
+        # Deduplicar nomes das colunas (ex: Início, Início.1, etc)
+        seen = {}
+        new_cols = []
+        for c in cols:
+            if c in seen:
+                seen[c] += 1
+                new_cols.append(f"{c}.{seen[c]}")
+            else:
+                seen[c] = 0
+                new_cols.append(c)
+        df.columns = new_cols
+        
+        if "Nome" in df.columns:
+            df = df.dropna(subset=["Nome"])
+        
+        # Tenta identificar coluna JM (Grupos)
+        # JM é a coluna 273 (índice 272 0-based).
+        # Tenta primeiro ver se já existe uma coluna chamada "JM" ou "Grupos" (pode ter vindo no header)
+        if "JM" in df.columns:
+            df["Grupos"] = df["JM"]
+        elif "Grupos" in df.columns:
+             # Já existe, nada a fazer
+             pass
+        else:
+            try:
+                if df.shape[1] > 272:
+                    # Pega coluna 272 pelo iloc para garantir
+                    df["Grupos"] = df.iloc[:, 272]
+                else:
+                    df["Grupos"] = ""
+            except:
+                df["Grupos"] = ""
+            
+        df = df.reset_index(drop=True)
+        return df
+        
+    except Exception as e:
+        st.error(f"Erro crítico ao carregar dados: {e}")
+        return pd.DataFrame() # Retorna vazio para não quebrar tudo de vez
 
 @st.cache_data(ttl=3600, show_spinner="Carregando aniversariantes...")
 def load_aniversarios():
@@ -1074,7 +1140,7 @@ def get_events_today_all_calendars():
     return all_events
 
 try:
-    df_raw = load_data()
+    df_raw = load_efetivo_data()
     # Carregamento dos dados de mar é feito sob demanda na aba para economizar recurso inicial
 except Exception as e:
     st.error(f"Erro de conexão principal: {e}")
@@ -1191,6 +1257,7 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
             "EqMan": eqman,
             "GVI": gvi,
             "IN": insp,
+            "Grupos": str(row.get("Grupos", "")) # Captura os grupos (string)
         }
 
         for col_ini, col_fim, col_mot, tipo_base in blocos:
@@ -1233,7 +1300,8 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
                 "Duracao_dias": dur,
                 "Motivo": motivo_real,
                 "MotivoAgrupado": motivo_agr,
-                "Tipo": tipo_final
+                "Tipo": tipo_final,
+                "Grupos": militar_info["Grupos"]
             })
     return pd.DataFrame(eventos)
 
@@ -1265,7 +1333,8 @@ def expandir_eventos_por_dia(df_eventos: pd.DataFrame) -> pd.DataFrame:
                 "IN": ev["IN"],
                 "Motivo": ev["Motivo"],
                 "MotivoAgrupado": ev["MotivoAgrupado"],
-                "Tipo": ev["Tipo"]
+                "Tipo": ev["Tipo"],
+                "Grupos": ev["Grupos"]
             })
     return pd.DataFrame(linhas)
 
@@ -1451,6 +1520,97 @@ def exibir_metricas_globais(data_referencia):
     col2.metric("A Bordo (global)", total_presentes_global)
     col3.metric("Ausentes (global)", total_ausentes_global, delta_color="inverse")
     col4.metric("Prontidão (global)", f"{percentual_global:.1f}%")
+
+
+# ============================================================
+# 9.1 DETECÇÃO DE CONFLITOS (GRUPOS)
+# ============================================================
+def get_conflitos_grupos(df_eventos_filtrado):
+    """
+    Identifica conflitos de ausência baseados em grupos.
+    df_eventos_filtrado: DataFrame de eventos (já explodido por dia ou eventos brutos?)
+    Melhor usar df_dias (explodido) para achar sobreposição exata de datas.
+    """
+    if df_eventos_filtrado.empty:
+        return []
+
+    # Expande a coluna "Grupos" (pode ter múltiplos grupos separados por vírgula ou ponto e vírgula)
+    # Vamos assumir separador vírgula, mas tratar possível ponto e vírgula
+    # Cria uma lista de registros (Data, Nome, Grupo)
+    registros = []
+    
+    for _, row in df_eventos_filtrado.iterrows():
+        grupos_str = str(row.get("Grupos", "")).strip()
+        if not grupos_str or grupos_str.lower() == "nan":
+            continue
+            
+        # Normaliza separadores
+        grupos_str = grupos_str.replace(";", ",")
+        lista_grupos = [g.strip() for g in grupos_str.split(",") if g.strip()]
+        
+        for g in lista_grupos:
+            registros.append({
+                "Data": row["Data"],
+                "Nome": row["Nome"],
+                "Grupo": g,
+                "Motivo": row["Motivo"],
+                "Posto": row["Posto"]
+            })
+            
+    if not registros:
+        return []
+        
+    df_expandido = pd.DataFrame(registros)
+    
+    # Agrupa por Data + Grupo e conta quantos militares distintos estão ausentes
+    df_counts = df_expandido.groupby(["Data", "Grupo"])["Nome"].nunique().reset_index(name="Qtd")
+    
+    # Filtra onde Qtd >= 2 (Conflito!)
+    df_conflitos = df_counts[df_counts["Qtd"] >= 2].copy()
+    
+    if df_conflitos.empty:
+        return []
+        
+    # Agora precisamos consolidar as datas para exibir bonitinho ("De X até Y")
+    # Para cada Grupo, pegamos as datas de conflito
+    resultados = []
+    
+    grupos_afetados = df_conflitos["Grupo"].unique()
+    
+    for grp in grupos_afetados:
+        # Pega as datas desse grupo
+        dates = sorted(df_conflitos[df_conflitos["Grupo"] == grp]["Data"].unique())
+        if not dates: continue
+        
+        # Agrupa datas consecutivas
+        from itertools import groupby
+        from datetime import timedelta
+
+        for k, g in groupby(enumerate(dates), lambda ix: ix[0] - ix[1].toordinal()):
+            chunk_dates = list(map(lambda ix: ix[1], g))
+            dt_ini = min(chunk_dates)
+            dt_fim = max(chunk_dates)
+            
+            # Identifica quem são os militares envolvidos NESTE período de conflito (ou nessa data específica)
+            # Pode variar dia a dia, mas vamos pegar a união dos militares nesse range que estão nesse grupo
+            mask_periodo = (df_expandido["Grupo"] == grp) & (df_expandido["Data"] >= dt_ini) & (df_expandido["Data"] <= dt_fim)
+            envolvidos = df_expandido[mask_periodo]["Nome"].unique().tolist()
+            
+            # Formata lista de nomes
+            nomes_str = ", ".join(envolvidos)
+            
+            resultados.append({
+                "Grupo": grp,
+                "Inicio": dt_ini,
+                "Fim": dt_fim,
+                "Militares": nomes_str,
+                "Qtd": len(envolvidos)
+            })
+            
+    # Ordena por data de início
+    resultados.sort(key=lambda x: x["Inicio"])
+    
+    return resultados
 
 
 # ============================================================
@@ -2068,6 +2228,25 @@ else:
             else:
                 df_ferias = df_eventos[df_eventos["Tipo"] == "Férias"].copy()
                 
+                # --- 0. CONFLITOS DE AUSÊNCIA (PRIORIDADE) ---
+                if not df_dias.empty:
+                    conflitos = get_conflitos_grupos(df_dias)
+                    if conflitos:
+                        st.error(f"⚠️ **ATENÇÃO:** Foram detectados {len(conflitos)} conflitos de ausência em grupos funcionais!")
+                        
+                        dados_conflito = []
+                        for c in conflitos:
+                            dados_conflito.append({
+                                "Grupo": c["Grupo"],
+                                "Início": c["Inicio"].strftime("%d/%m/%Y"),
+                                "Fim": c["Fim"].strftime("%d/%m/%Y"),
+                                "Envolvidos": c["Militares"]
+                            })
+                        
+                        df_conf_show = pd.DataFrame(dados_conflito)
+                        st.dataframe(df_conf_show, use_container_width=True, hide_index=True)
+                        st.markdown("---")
+
                 # 1. GRÁFICO DE ROSCA (PRIMEIRA INFORMAÇÃO)
                 st.markdown("### % de férias gozadas (tripulação)")
                 if "%DG" in df_raw.columns:
@@ -2187,6 +2366,9 @@ else:
                                 st_echarts(options=opt_mes_ferias, height="500px")
                         else:
                             col_fx2.info("Sem dados diários suficientes para calcular férias por mês.")
+
+                    # 4. ANÁLISE DE CONFLITOS DE GRUPOS (MOVIDO PARA O FINAL)
+
 
     elif pagina == "Cursos":
         st.subheader("Análises de Cursos")
