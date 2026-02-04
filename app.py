@@ -797,9 +797,13 @@ def load_efetivo_data():
         
         # Procura a linha que contém "Nome" e "Posto" (Header)
         header_idx = -1
-        for i, row in df_raw.head(10).iterrows():
-            row_str = row.astype(str).values
-            if "Nome" in row_str and "Posto" in row_str:
+        for i, row in df_raw.head(30).iterrows():
+            row_str_lower = [str(v).lower().strip() for v in row.values]
+            # Verifica se alguma célula contem "nome" e alguma contem "posto"
+            has_nome = any("nome" == x for x in row_str_lower) # Match exato no nome é mais seguro
+            has_posto = any("posto" in x for x in row_str_lower) # Posto pode ser "Posto/Grad"
+            
+            if has_nome and has_posto:
                 header_idx = i
                 break
         
@@ -1200,7 +1204,7 @@ def descobrir_blocos_datas(df: pd.DataFrame):
     cols = list(df.columns)
     blocos = []
     for i, nome_col in enumerate(cols):
-        n = str(nome_col)
+        n = str(nome_col).strip()
         if not (n.startswith("Início") or n.startswith("Inicio")):
             continue
         j = None
