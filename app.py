@@ -768,21 +768,10 @@ def parse_sheet_date(val):
 
     # Tenta formato DD/MM explicitamente
     try:
-        # Tenta parsear como dia/mês (sem ano)
-        # Se funcionar, substituir pelo ano corrente
         dt = datetime.strptime(val_str, "%d/%m")
+        # Substitui pelo ano corrente ou um ano padrão (2025 neste contexto)
         dt = dt.replace(year=(datetime.utcnow() - timedelta(hours=3)).year) 
         return pd.to_datetime(dt)
-    except:
-        pass
-        
-    # Tenta concatenar o ano corrente e parsear
-    try:
-        current_year = (datetime.utcnow() - timedelta(hours=3)).year
-        val_with_year = f"{val_str}/{current_year}"
-        dt = pd.to_datetime(val_with_year, dayfirst=True, errors='coerce')
-        if pd.notna(dt):
-            return dt
     except:
         pass
         
@@ -805,13 +794,9 @@ def load_efetivo_data():
         
         # Procura a linha que contém "Nome" e "Posto" (Header)
         header_idx = -1
-        for i, row in df_raw.head(30).iterrows():
-            row_str_lower = [str(v).lower().strip() for v in row.values]
-            # Verifica se alguma célula contem "nome" e alguma contem "posto"
-            has_nome = any("nome" == x for x in row_str_lower) # Match exato no nome é mais seguro
-            has_posto = any("posto" in x for x in row_str_lower) # Posto pode ser "Posto/Grad"
-            
-            if has_nome and has_posto:
+        for i, row in df_raw.head(10).iterrows():
+            row_str = row.astype(str).values
+            if "Nome" in row_str and "Posto" in row_str:
                 header_idx = i
                 break
         
@@ -1212,16 +1197,13 @@ def descobrir_blocos_datas(df: pd.DataFrame):
     cols = list(df.columns)
     blocos = []
     for i, nome_col in enumerate(cols):
-        n = str(nome_col).strip().lower()
-        # Verifica se contem "inicio" ou "início" (mais robusto que startswith)
-        if not ("início" in n or "inicio" in n):
+        n = str(nome_col)
+        if not (n.startswith("Início") or n.startswith("Inicio")):
             continue
         j = None
         for idx2 in range(i + 1, len(cols)):
-            n2 = str(cols[idx2]).strip().lower()
-            # Verifica se contem "fim" e se está próximo (dentro de um range razoável, ex: +1 ou +2 colunas)
-            # Mas a lógica original buscava qualquer fim subsequente. Vamos manter, mas checar "fim"
-            if "fim" in n2 or "término" in n2 or "termino" in n2:
+            n2 = str(cols[idx2])
+            if n2.startswith("Fim") or n2.startswith("FIm"):
                 j = idx2
                 break
         if j is None:
