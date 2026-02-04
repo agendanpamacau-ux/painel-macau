@@ -789,6 +789,28 @@ def load_data():
     df = conn.read(worksheet="Afastamento 2026", header=HEADER_ROW, ttl="10m")
     if "Nome" in df.columns:
         df = df.dropna(subset=["Nome"])
+        
+    # --- LOGICA GRUPOS DE CONFLITO ---
+    col_jm = None
+    for c in df.columns:
+        if any(x in str(c).lower() for x in ["grupo", "conflito", "jm", "j.m."]):
+             col_jm = c
+             break
+    
+    if col_jm:
+        df = df.rename(columns={col_jm: "ConflictGroup"})
+        # Parse content: "Gp A, Gp B" -> ["Gp A", "Gp B"]
+        def parse_groups(val):
+            if pd.isna(val) or str(val).strip() == "":
+                return []
+            # Split por virgula ou ponto virgula
+            s = str(val).replace(";", ",")
+            parts = [p.strip() for p in s.split(",") if p.strip()]
+            return parts
+        df["ConflictGroup"] = df["ConflictGroup"].apply(parse_groups)
+    else:
+        df["ConflictGroup"] = df.apply(lambda x: [], axis=1)
+
     df = df.reset_index(drop=True)
     return df
 
@@ -1183,6 +1205,11 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
         
         gvi = parse_bool(row.get("Gvi/GP", ""))
         insp = parse_bool(row.get("IN", ""))
+        
+        # Capture conflict groups
+        c_groups = row.get("ConflictGroup", [])
+        if not isinstance(c_groups, list):
+             c_groups = []
 
         militar_info = {
             "Posto": posto,
@@ -1191,6 +1218,7 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
             "EqMan": eqman,
             "GVI": gvi,
             "IN": insp,
+            "ConflictGroup": c_groups
         }
 
         for col_ini, col_fim, col_mot, tipo_base in blocos:
@@ -1239,6 +1267,74 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
 
 df_eventos = construir_eventos(df_raw, BLOCOS_DATAS)
 
+# ============================================================
+# 5.1 DETECÇÃO DE CONFLITOS DE GRUPO (NOVO)
+# ============================================================
+
+def detect_conflicts(df_evt):
+    """
+    Detecta conflitos onde militares do mesmo 'ConflictGroup'
+    estão ausentes simultaneamente.
+    Retorna lista de conflitos.
+    """
+    if df_evt.empty:
+        return []
+        
+    # Explodir ConflictGroup para analisar por grupo
+    # Copia para não alterar o original
+    df_exp = df_evt.copy()
+    
+    # Se ConflictGroup não existir ou não for lista, garantir
+    if "ConflictGroup" not in df_exp.columns:
+        return []
+
+    # Explode
+    df_exploded = df_exp.explode("ConflictGroup")
+    # Remover nulos ou vazios no grupo
+    df_exploded = df_exploded[df_exploded["ConflictGroup"].notna() & (df_exploded["ConflictGroup"] != "")]
+    
+    conflicts = []
+    
+    # Agrupar por ConflictGroup
+    for group_name, group_df in df_exploded.groupby("ConflictGroup"):
+        # Se tiver menos de 2 pessoas nesse grupo com ausência, não tem conflito interno
+        if len(group_df) < 2:
+            continue
+            
+        # Comparar pares
+        # Ordenar por data
+        group_df = group_df.sort_values("Inicio")
+        
+        # Iterar para achar interseções
+        # Como é N^2 no pior caso do grupo, e o grupo é pequeno, ok.
+        records = group_df.to_dict('records')
+        for i in range(len(records)):
+            for j in range(i + 1, len(records)):
+                p1 = records[i]
+                p2 = records[j]
+                
+                # Se for a mesma pessoa (caso ela tenha 2 ausências), ignorar ou marcar?
+                # Regra: conflito entre militares diferentes
+                if p1["Nome"] == p2["Nome"]:
+                    continue
+                
+                # Checar overlap
+                # Overlap se start1 <= end2 AND start2 <= end1
+                if p1["Inicio"] <= p2["Fim"] and p2["Inicio"] <= p1["Fim"]:
+                    # Achou overlap
+                    overlap_start = max(p1["Inicio"], p2["Inicio"])
+                    overlap_end = min(p1["Fim"], p2["Fim"])
+                    
+                    conflicts.append({
+                        "Group": group_name,
+                        "Person1": p1,
+                        "Person2": p2,
+                        "OverlapStart": overlap_start,
+                        "OverlapEnd": overlap_end
+                    })
+                    
+    return conflicts
+
 
 # ============================================================
 # 6. EXPANSÃO POR DIA
@@ -1265,7 +1361,8 @@ def expandir_eventos_por_dia(df_eventos: pd.DataFrame) -> pd.DataFrame:
                 "IN": ev["IN"],
                 "Motivo": ev["Motivo"],
                 "MotivoAgrupado": ev["MotivoAgrupado"],
-                "Tipo": ev["Tipo"]
+                "Tipo": ev["Tipo"],
+                "ConflictGroup": ev.get("ConflictGroup", [])
             })
     return pd.DataFrame(linhas)
 
@@ -1338,9 +1435,6 @@ def update_fig_layout(fig, title=None):
     if title: layout_args["title"] = title
     fig.update_layout(**layout_args)
     return fig
-
-
-
 
 # ============================================================
 # 8. PARÂMETROS (SIDEBAR) + NAVEGAÇÃO
@@ -1518,7 +1612,6 @@ if pagina == "Presentes":
             st_echarts(options=opt_prontidao, height="500px")
         else:
             st.info("Não há efetivo na visão atual para calcular a prontidão.")
-
 # --------------------------------------------------------
 # AUSENTES
 # --------------------------------------------------------
@@ -2005,8 +2098,6 @@ else:
                 st.info("Nenhum militar na EqMan.")
             else:
                 st.dataframe(df_eqman[["Posto", "Nome", "EqMan"]], use_container_width=True, hide_index=True)
-                st.markdown(f"**Total:** {len(df_eqman)}")
-
     elif pagina == "Estatísticas & Análises":
         st.subheader("Visão Analítica de Ausências")
         content_container = st.container()
@@ -2061,6 +2152,38 @@ else:
 
     elif pagina == "Férias":
         st.subheader("Férias cadastradas")
+        
+        # --- CONFLITOS DE GRUPO (NOVO) ---
+        conflicts_found = detect_conflicts(df_eventos)
+        if conflicts_found:
+            with st.expander(f"⚠️ CONFLITOS DE GRUPO DETECTADOS ({len(conflicts_found)})", expanded=True):
+                st.write("Atenção: Os seguintes militares do mesmo grupo de conflito possuem ausências coincidentes.")
+                for c in conflicts_found:
+                    p1 = c['Person1']
+                    p2 = c['Person2']
+                    # Validar se timestamps validos
+                    try:
+                        d_start = c['OverlapStart'].strftime('%d/%m/%Y')
+                        d_end = c['OverlapEnd'].strftime('%d/%m/%Y')
+                    except:
+                        d_start = str(c['OverlapStart'])
+                        d_end = str(c['OverlapEnd'])
+                    
+                    st.markdown(
+                        f"""
+                        <div style="
+                            padding: 10px; border: 1px solid #ff4b4b; border-radius: 5px; 
+                            background-color: rgba(255, 75, 75, 0.1); margin-bottom: 10px;
+                        ">
+                            <span style="color: #ff4b4b; font-weight: bold;">🔴 Grupo {c['Group']}</span><br>
+                            <b>{p1['Posto']} {p1['Nome']}</b> <i>({p1['Tipo']})</i> ⚡ 
+                            <b>{p2['Posto']} {p2['Nome']}</b> <i>({p2['Tipo']})</i><br>
+                            📅 <b>Período de Coincidência:</b> {d_start} a {d_end}
+                        </div>
+                        """, 
+                        unsafe_allow_html=True
+                    )
+        # ---------------------------------
         content_container = st.container()
         with content_container:
             if df_eventos.empty:
@@ -2257,952 +2380,479 @@ else:
                                     st_echarts(options=opt_curso_mes, height="400px")
                             else:
                                 col_g2.info("Sem dados diários suficientes para análise mensal de cursos.")
-
+    
     elif pagina == "Tabela de Serviço":
         st.subheader("Tabela de Serviço")
         
-        tab_dia, tab_analise = st.tabs(["Tabela do Dia", "Análise"])
+        tab_serv_ops = st.tabs(["Análise", "Tabela do Dia"])
         
-        with tab_dia:
-            st.markdown("### Escala do Dia")
+        # --- SUB-ABA 1: ANÁLISE (EXISTENTE) ---
+        with tab_serv_ops[0]:
+            content_container = st.container()
+            with content_container:
+                if df_eventos.empty:
+                    st.write("Sem registros para análise de serviço.")
+                else:
+                    st.markdown("##### Visão Geral de Escalas")
+                    # Remove vazios
+                    df_escala_limpa = df_raw[df_raw["Serviço"] != ""].copy()
+                    
+                    if df_escala_limpa.empty:
+                        st.info("Nenhuma escala definida na coluna 'Serviço'.")
+                    else:
+                        escala_counts = df_escala_limpa["Serviço"].value_counts().reset_index()
+                        escala_counts.columns = ["Escala", "Qtd"]
+                        
+                        col_s1, col_s2, col_s3 = st.columns(3)
+                        total_em_escala = escala_counts["Qtd"].sum()
+                        tipos_escala = len(escala_counts)
+                        
+                        # Calcula "Não Concorre"
+                        # Considera que quem não tem escala definida ou está explicitamente marcado
+                        total_efetivo = len(df_raw)
+                        # Assumindo que quem tem "Serviço" preenchido concorre
+                        nao_concorre_count = total_efetivo - total_em_escala
+                        
+                        # Listar quem não concorre
+                        df_nao_concorre = df_raw[
+                            (df_raw["Serviço"].isna()) | 
+                            (df_raw["Serviço"] == "") | 
+                            (df_raw["Serviço"] == "-")
+                        ]
+                        # Re-calcula count baseado no filtro explícito para ser preciso
+                        nao_concorre_real_count = len(df_nao_concorre)
+                        
+                        col_s1.metric("Total em escala", total_em_escala)
+                        col_s2.metric("Tipos de escala", tipos_escala)
+                        col_s3.metric("Não concorre", nao_concorre_real_count)
+                        
+                        st.markdown("---")
+                        
+                        c_esc_graf, c_nao_conc = st.columns([2, 1])
+                        
+                        with c_esc_graf:
+                            st.markdown("##### Distribuição por Escala")
+                            opt_escala_dist = make_echarts_bar(escala_counts["Escala"].tolist(), escala_counts["Qtd"].tolist())
+                            st_echarts(options=opt_escala_dist, height="400px")
+                            
+                        with c_nao_conc:
+                            st.markdown("##### Quem não concorre")
+                            if df_nao_concorre.empty:
+                                st.info("Todos concorrem.")
+                            else:
+                                st.dataframe(df_nao_concorre[["Posto", "Nome"]], use_container_width=True, hide_index=True)
+
+        # --- SUB-ABA 2: TABELA DO DIA (NOVA) ---
+        with tab_serv_ops[1]:
+            st.markdown("### Serviço Diário")
             
-            # Carregar dados
+            # 1. Carregar dados
             data_sheets = load_tabela_servico_dia()
             
-            # Data de hoje (UTC-3)
-            hoje = (datetime.utcnow() - timedelta(hours=3)).date()
-            # hoje = datetime(2025, 12, 11).date() # DEBUG
-            
-            found_matches = []
-            
-            if data_sheets:
-                for sheet_name, df in data_sheets.items():
-                    # Layout CONFIRMED by debug:
-                    # Block 1: Date at Row 5 (Index 4), Col B (Index 1). Daily Service: Rows 7-10 (Indices 6-9), Col C (Index 2). Room: Row 14 (Index 13).
-                    # Block 2: Date at Row 16 (Index 15), Col B (Index 1). Daily Service: Rows 18-21 (Indices 17-20), Col C (Index 2). Room: Row 25 (Index 24).
-                    # Block 3: Date at Row 27 (Index 26), Col B (Index 1). Daily Service: Rows 29-32 (Indices 28-31), Col C (Index 2). Room: Row 36 (Index 35).
-                    
-                    blocks = [
-                        {"date_idx": 4,  "daily_start": 6,  "daily_end": 10, "room_idx": 13},
-                        {"date_idx": 15, "daily_start": 17, "daily_end": 21, "room_idx": 24},
-                        {"date_idx": 26, "daily_start": 28, "daily_end": 32, "room_idx": 35}
-                    ]
-                    
-                    for block in blocks:
-                        d_idx = block["date_idx"]
-                        
-                        if d_idx < len(df):
-                            # Date is in Column B (index 1)
-                            val = df.iloc[d_idx, 1] if df.shape[1] > 1 else None
-                            
-                            # Parse date
-                            dt_val = None
-                            try:
-                                if isinstance(val, str):
-                                    val_clean = val.strip()
-                                    dt_val = pd.to_datetime(val_clean, dayfirst=True, errors='coerce').date()
-                                elif isinstance(val, (datetime, pd.Timestamp)):
-                                    dt_val = val.date()
-                            except:
-                                pass
-                            
-                            if dt_val == hoje:
-                                # Found a match! Extract data.
-                                match_data = {}
-                                match_data["sheet_name"] = sheet_name
-                                
-                                # Extract Header Info
-                                dia_semana = ""
-                                regime = ""
-                                rotina = ""
-                                por_do_sol = ""
-                                
-                                if d_idx > 0:
-                                    try:
-                                        dia_semana = str(df.iloc[d_idx - 1, 1]).strip() # Col B
-                                        regime = str(df.iloc[d_idx - 1, 3]).strip()     # Col D
-                                    except:
-                                        pass
-                                
-                                try:
-                                    rotina = str(df.iloc[d_idx, 3]).strip()         # Col D
-                                    por_do_sol = str(df.iloc[d_idx, 4]).strip()     # Col E
-                                    
-                                    # Sanitize Pôr do Sol error from Sheets
-                                    if "ERROR" in por_do_sol or "Exception" in por_do_sol or por_do_sol == "-" or por_do_sol == "":
-                                        # Calculate locally
-                                        por_do_sol = calculate_sunset(hoje)
-                                except:
-                                    pass
-                                
-                                match_data["header"] = {
-                                    "dia_semana": dia_semana,
-                                    "regime": regime,
-                                    "rotina": rotina,
-                                    "por_do_sol": por_do_sol
-                                }
-
-                                # Extract Daily Service
-                                s_start = block["daily_start"]
-                                s_end = block["daily_end"]
-                                servico_diario = []
-                                if s_end <= len(df) and df.shape[1] > 2:
-                                    servico_diario = df.iloc[s_start : s_end, 2].tolist()
-                                match_data["servico_diario"] = servico_diario
-                                
-                                # Extract Room Service
-                                r_idx = block["room_idx"]
-                                servico_quarto = []
-                                if r_idx < len(df) and df.shape[1] > 4:
-                                    servico_quarto = df.iloc[r_idx, 2:5].tolist()
-                                match_data["servico_quarto"] = servico_quarto
-                                
-                                found_matches.append(match_data)
+            if not data_sheets:
+                st.error("Não foi possível carregar as tabelas de serviço.")
+            else:
+                # 2. Identificar qual tabela é de HOJE (dia da semana)
+                # Mapeamento Dia Semana (0=Seg, 6=Dom) -> Nome na Planilha ou Lógica
+                # Observando a estrutura, parece que TABELA 1 = Seg-Qui (Rotina 1) ??
+                # Ou a planilha tem dias específicos.
+                # O requisito diz: "identificar o dia de hoje e carregar a tabela correspondente"
+                # Vamos procurar a data de hoje nas células C3 (linha 2, col 2) de cada aba, conforme inspeção anterior?
+                # Ajuste: O usuário mencionou que a data está na C3.
                 
-                # Logic to handle matches
-                if len(found_matches) > 1:
-                    st.warning(f"Há mais de uma tabela com a data cadastrada ({hoje.strftime('%d/%m/%Y')}). Por favor, verifique a planilha.")
-                elif len(found_matches) == 1:
-                    match = found_matches[0]
+                hoje_dia = datetime.now().date()
+                tabela_hoje = None
+                nome_aba_hoje = ""
+                
+                # Procura nas 3 tabelas
+                found = False
+                for sheet_name, df_sheet in data_sheets.items():
+                    # Tenta ler C3 (row 2, col 2)
+                    try:
+                        val_c3 = df_sheet.iloc[2, 2] # C3
+                        # Tenta converter para data
+                        if isinstance(val_c3, datetime):
+                            date_val = val_c3.date()
+                        else:
+                            # Tentar parse string
+                            date_val = pd.to_datetime(val_c3, dayfirst=True, errors='coerce').date()
+                        
+                        if date_val == hoje_dia:
+                            tabela_hoje = df_sheet
+                            nome_aba_hoje = sheet_name
+                            found = True
+                            break
+                    except:
+                        continue
+                
+                # FALLBACK PARA TESTE (se não encontrar data exata, pega a TABELA 1 como padrão ou exibe aviso)
+                # Remova este fallback em produção se for estrito.
+                if not found:
+                    st.warning(f"Não foi encontrada uma tabela com a data de hoje ({hoje_dia.strftime('%d/%m/%Y')}) na célula C3. Exibindo TABELA 1 como exemplo.")
+                    tabela_hoje = data_sheets.get("TABELA 1")
+                    nome_aba_hoje = "TABELA 1 (Exemplo)"
+
+                if tabela_hoje is not None:
+                    # --- PROCESSAMENTO EXIBIÇÃO ---
+                    # HEADER INFO
+                    # DIA DA SEMANA: G3 (0, 6) -> row 2, col 6
+                    # REGIME: C4 (row 3, col 2)
+                    # ROTINA: G4 (row 3, col 6)
+                    # POR DO SOL: J3 (row 2, col 9)
                     
-                    # CSS for Cards (Dark Gray in Dark Mode, White in Light Mode)
+                    try:
+                        dia_sem = str(tabela_hoje.iloc[2, 6]).strip()
+                        regime  = str(tabela_hoje.iloc[3, 2]).strip()
+                        rotina  = str(tabela_hoje.iloc[3, 6]).strip()
+                        p_sol_raw   = tabela_hoje.iloc[2, 9]
+                        
+                        # Tratamento de erro no Pôr do Sol
+                        # Se vier algo como "#ERROR!" ou Exception, mostrar "-" ou calcular
+                        s_sol = str(p_sol_raw)
+                        if "ERROR" in s_sol or "Exception" in s_sol:
+                            # Tenta calcular
+                            p_sol = calculate_sunset(datetime.now()) + "*"
+                        else:
+                            # Tenta formatar se for datetime/time
+                            if isinstance(p_sol_raw, (datetime, pd.Timestamp)):
+                                p_sol = p_sol_raw.strftime("%H:%M")
+                            elif isinstance(p_sol_raw, time): # type: ignore
+                                p_sol = p_sol_raw.strftime("%H:%M")
+                            else:
+                                p_sol = s_sol
+                                
+                    except Exception as e:
+                        st.error(f"Erro ao ler cabeçalho da tabela: {e}")
+                        dia_sem, regime, rotina, p_sol = "-", "-", "-", "-"
+                    
+                    # CARDS DE CABEÇALHO
+                    # Estilo clean sem emojis, cartas claras em light mode
+                    
+                    # CSS específico para cards
                     st.markdown("""
                     <style>
-                        /* Base Card Style */
-                        .service-card, .service-card-room, .header-info-card {
-                            /* 
-                               Use a semi-transparent white background.
-                               - In Dark Mode (Dark BG): Renders as Dark Gray (Lightens the background).
-                               - In Light Mode (White BG): Renders as White (Invisible change).
-                            */
-                            background-color: rgba(255, 255, 255, 0.07); 
-                            color: var(--text-color);
-                            border-radius: 5px;
-                            padding: 15px;
-                            margin-bottom: 10px;
-                            transition: transform 0.2s;
-                            border: 1px solid rgba(128, 128, 128, 0.2);
-                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                        }
-                        
-                        /* Specific Stripes */
-                        .service-card { border-left: 5px solid #3b82f6; } /* Blue */
-                        .service-card-room { border-left: 5px solid #10b981; } /* Green */
-                        .header-info-card { border-left: 5px solid #f59e0b; text-align: center; } /* Amber */
-
-                        /* Text Styles */
-                        .service-title, .header-label {
-                            color: var(--text-color);
-                            opacity: 0.8;
-                            font-size: 0.85rem;
-                            text-transform: uppercase;
-                            letter-spacing: 0.05em;
-                            font-weight: 600;
-                            margin-bottom: 5px;
-                        }
-                        .service-value, .header-val {
-                            color: var(--text-color);
-                            font-size: 1.1rem;
-                            font-weight: 500;
-                        }
-                        .service-time, .service-time-inline {
-                            color: var(--text-color);
-                            opacity: 0.7;
-                            font-size: 0.8rem;
-                        }
-                        .service-header-inline {
-                            display: flex;
-                            align-items: baseline;
-                            gap: 10px;
-                            margin-bottom: 5px;
-                        }
+                    .serv-card {
+                        background-color: var(--secondary-background-color);
+                        padding: 15px;
+                        border-radius: 8px;
+                        border-left: 4px solid #4099ff;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                        color: var(--text-color);
+                    }
+                    .serv-card h4 {
+                        margin: 0;
+                        font-size: 0.8rem;
+                        color: #888;
+                        text-transform: uppercase;
+                    }
+                    .serv-card p {
+                        margin: 5px 0 0 0;
+                        font-size: 1.1rem;
+                        font-weight: 600;
+                    }
                     </style>
                     """, unsafe_allow_html=True)
-
-                    st.markdown(f"### Escala de Hoje ({hoje.strftime('%d/%m/%Y')})")
-                    st.caption(f"Fonte: {match['sheet_name']}")
                     
-                    # --- HEADER INFO ---
-                    h = match["header"]
                     c_h1, c_h2, c_h3, c_h4 = st.columns(4)
-                    with c_h1:
-                        st.markdown(f"""
-                        <div class="header-info-card">
-                            <div class="header-label">Dia da Semana</div>
-                            <div class="header-val">{h['dia_semana']}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with c_h2:
-                        st.markdown(f"""
-                        <div class="header-info-card">
-                            <div class="header-label">Regime</div>
-                            <div class="header-val">{h['regime']}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with c_h3:
-                        st.markdown(f"""
-                        <div class="header-info-card">
-                            <div class="header-label">Rotina</div>
-                            <div class="header-val">{h['rotina']}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with c_h4:
-                        st.markdown(f"""
-                        <div class="header-info-card">
-                            <div class="header-label">Pôr do Sol</div>
-                            <div class="header-val">{h['por_do_sol']}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    c_h1.markdown(f"<div class='serv-card'><h4>DIA DA SEMANA</h4><p>{dia_sem}</p></div>", unsafe_allow_html=True)
+                    c_h2.markdown(f"<div class='serv-card' style='border-left-color: #ff5370;'><h4>REGIME</h4><p>{regime}</p></div>", unsafe_allow_html=True)
+                    c_h3.markdown(f"<div class='serv-card' style='border-left-color: #2ed8b6;'><h4>ROTINA</h4><p>{rotina}</p></div>", unsafe_allow_html=True)
+                    c_h4.markdown(f"<div class='serv-card' style='border-left-color: #ffb64d;'><h4>PÔR DO SOL</h4><p>{p_sol}</p></div>", unsafe_allow_html=True)
                     
                     st.markdown("---")
-
-                    # --- SERVIÇO DIÁRIO ---
-                    st.markdown("#### Serviço Diário")
-                    labels_diario = ["Oficial / Sup", "Fiel de Cav", "Conferente", "Rancheiro"]
-                    servico_diario = match["servico_diario"]
                     
-                    cd1, cd2 = st.columns(2)
+                    # LAYOUT DE SERVIÇO
+                    # Serviço Diário (C7:G21 aprox) e Serviço de Quarto (H7:L21)
+                    # Vamos pegar range dinâmico ou fixo conforme observado
+                    # Diário: Col C (função) e G (nome) das linhas 7 a 26
+                    # Quarto: Col H (Horário/Função) e L (Nome)
                     
-                    for i, item in enumerate(servico_diario):
-                        label = labels_diario[i] if i < len(labels_diario) else "Outro"
-                        if pd.notna(item) and str(item).strip() != "":
-                            col_to_use = cd1 if i % 2 == 0 else cd2
-                            with col_to_use:
-                                    # Format Name and CPF
-                                    name_part = str(item)
-                                    cpf_part = ""
-                                    if "CPF:" in name_part:
-                                        parts = name_part.split("CPF:")
-                                        name_part = parts[0].strip()
-                                        cpf_part = "CPF: " + parts[1].strip()
-                                    
-                                    st.markdown(f"""
-                                    <div class="service-card">
-                                        <div class="service-title">{label}</div>
-                                        <div class="service-value">
-                                            <div style="font-weight: bold;">{name_part}</div>
-                                            <div style="font-size: 0.85em; opacity: 0.7; margin-top: 2px;">{cpf_part}</div>
-                                        </div>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-                                
-                    st.markdown("---")
+                    # Função Helper para extrair bloco
+                    def get_servico_block(df, row_start, row_end, col_func, col_nome):
+                        items = []
+                        for r in range(row_start, row_end + 1):
+                            if r >= len(df): break
+                            func = str(df.iloc[r, col_func]).strip()
+                            nome = str(df.iloc[r, col_nome]).strip()
+                            
+                            # Ignorar vazios ou placeholders
+                            if not func or func in ["nan", "None", "-"]: continue
+                            if not nome or nome in ["nan", "None"]: nome = "-"
+                            
+                            items.append({"Função": func, "Militar": nome})
+                        return pd.DataFrame(items)
+
+                    # Ajuste de índices (0-based)
+                    # Excel row 7 = index 6
                     
-                    # --- SERVIÇO DE QUARTO ---
-                    st.markdown("#### Serviço de Quarto")
-                    labels_quarto = [
-                        ("1º QUARTO", "08:00 - 12:00 / 20:00 - 24:00"),
-                        ("2º QUARTO", "12:00 - 16:00 / 00:00 - 04:00"),
-                        ("3º QUARTO", "16:00 - 20:00 / 04:00 - 08:00")
-                    ]
-                    servico_quarto = match["servico_quarto"]
+                    # SERVIÇO DIÁRIO
+                    st.markdown("##### Serviço Diário")
+                    # Assumindo range observado na estrutura: Row 7 até 26, Cols C(2) e G(6)
+                    df_diario_tbl = get_servico_block(tabela_hoje, 6, 25, 2, 6)
                     
-                    for i, item in enumerate(servico_quarto):
-                        label_info = labels_quarto[i] if i < len(labels_quarto) else ("Outro", "")
-                        label_title = label_info[0]
-                        label_time = label_info[1]
-                        
-                        if pd.notna(item) and str(item).strip() != "":
-                            # Format Name and CPF
-                            name_part = str(item)
-                            cpf_part = ""
-                            if "CPF:" in name_part:
-                                parts = name_part.split("CPF:")
-                                name_part = parts[0].strip()
-                                cpf_part = "CPF: " + parts[1].strip()
-
-                            st.markdown(f"""
-                            <div class="service-card-room">
-                                <div class="service-header-inline">
-                                    <div class="service-title">{label_title}</div>
-                                    <div class="service-time-inline">{label_time}</div>
-                                </div>
-                                <div class="service-value">
-                                    <div style="font-weight: bold;">{name_part}</div>
-                                    <div style="font-size: 0.85em; opacity: 0.7; margin-top: 2px;">{cpf_part}</div>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                
-                else:
-                    # No matches found
-                    st.info(f"Nenhuma escala encontrada para a data de hoje ({hoje.strftime('%d/%m/%Y')}) nas abas verificadas.")
-            else:
-                st.error("Erro ao carregar dados da Tabela de Serviço.")
-
-        with tab_analise:
-            st.markdown("### Análise de Escalas")
-            st.markdown("#### Escala Diária")
-            col_escala_container, _ = st.columns([1, 3])
-            with col_escala_container:
-                data_ref_diaria = st.date_input("Data de Referência", value=(datetime.utcnow() - timedelta(hours=3)), key="data_ref_escala", format="DD/MM/YYYY")
-                dt_ref = pd.to_datetime(data_ref_diaria)
-                col_escala = None
-                possiveis = ["Escala", "Serviço", "Função", "Setor", "Divisão"]
-                for c in possiveis:
-                    if c in df_raw.columns:
-                        col_escala = c
-                        break
-                target_col = col_escala if col_escala else "Posto/Grad"
-                if not col_escala and "Posto/Grad" not in df_raw.columns:
-                    st.error("Não foi possível identificar a coluna de Escala/Serviço para cálculo.")
-                else:
-                    daily_data = []
-                    for servico in SERVICOS_CONSIDERADOS:
-                        people_in_service = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
-                        if people_in_service.empty:
-                             people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
-                        total = len(people_in_service)
-                        absent = 0
-                        for _, person in people_in_service.iterrows():
-                            status = get_status_em_data(person, dt_ref, BLOCOS_DATAS)
-                            if status != "Presente":
-                                absent += 1
-                        available = max(0, total - absent)
-                        scale_val = max(0, available - 1)
-                        daily_data.append({
-                            "Serviço": servico,
-                            "Escala": f"{scale_val}x1"
-                        })
-                    df_daily = pd.DataFrame(daily_data)
-                    def color_scale_daily(val):
-                        if isinstance(val, str):
-                            if "0x1" in val or "1x1" in val:
-                                return "color: #ff5370; font-weight: bold"
-                            elif "2x1" in val:
-                                return "color: #ffb64d; font-weight: bold"
-                            elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
-                                 return "color: #2ed8b6; font-weight: bold"
-                        return ""
-                    st.dataframe(df_daily.style.map(color_scale_daily, subset=["Escala"]), use_container_width=True, hide_index=True)
-                    st.markdown("---")
-            st.markdown("#### Escala Mensal")
-            col_mes_sel, col_ano_sel = st.columns(2)
-            meses_dict = {
-                "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
-                "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
-            }
-            now = (datetime.utcnow() - timedelta(hours=3))
-            sel_mes_nome = col_mes_sel.selectbox("Mês", list(meses_dict.keys()), index=now.month-1, key="mes_escala")
-            sel_ano = col_ano_sel.number_input("Ano", value=now.year, min_value=2020, max_value=2030, key="ano_escala")
-            sel_mes = meses_dict[sel_mes_nome]
-            days_in_month = pd.Period(f"{sel_ano}-{sel_mes}-01").days_in_month
-            dates = [datetime(sel_ano, sel_mes, d) for d in range(1, days_in_month+1)]
-            data_matrix = []
-            for d in dates:
-                row_data = {"Dia": d.strftime("%d/%m")}
-                for servico in SERVICOS_CONSIDERADOS:
-                    people_in_service = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
-                    if people_in_service.empty:
-                            people_in_service = df_raw[df_raw[target_col].astype(str) == servico]
-                    total = len(people_in_service)
-                    absent = 0
-                    for _, person in people_in_service.iterrows():
-                        status = get_status_em_data(person, d, BLOCOS_DATAS)
-                        if status != "Presente":
-                            absent += 1
-                    available = max(0, total - absent)
-                    scale_val = max(0, available - 1)
-                    row_data[servico] = f"{scale_val}x1"
-                data_matrix.append(row_data)
-            df_tabela = pd.DataFrame(data_matrix)
-            def color_scale_monthly(val):
-                if isinstance(val, str):
-                    if "0x1" in val or "1x1" in val:
-                        return "color: #ff5370; font-weight: bold"
-                    elif "2x1" in val:
-                        return "color: #ffb64d; font-weight: bold"
-                    elif "3x1" in val or "4x1" in val or "5x1" in val or "6x1" in val:
-                            return "color: #2ed8b6; font-weight: bold"
-                return ""
-            st.dataframe(df_tabela.style.map(color_scale_monthly), use_container_width=True, hide_index=True)
-            st.markdown("---")
-            st.markdown("#### Militares fora da escala")
-            df_fora_escala = df_raw[df_raw[target_col].astype(str).str.contains("não concorre", case=False, na=False)].copy()
-            if df_fora_escala.empty:
-                st.info("Todos os militares estão alocados em alguma escala considerada.")
-            else:
-                st.write(f"Total de militares que não concorrem à escala: **{len(df_fora_escala)}**")
-                st.dataframe(df_fora_escala[["Posto", "Nome", target_col]], use_container_width=True, hide_index=True)
-
-            st.markdown("---")
-            st.markdown("#### Componentes das Escalas")
-            cols_srv = st.columns(len(SERVICOS_CONSIDERADOS))
-            tabs_escalas = st.tabs(SERVICOS_CONSIDERADOS)
-            for i, servico in enumerate(SERVICOS_CONSIDERADOS):
-                with tabs_escalas[i]:
-                    people = df_raw[df_raw[target_col].astype(str).str.contains(servico, case=False, regex=False)]
-                    if people.empty:
-                        people = df_raw[df_raw[target_col].astype(str) == servico]
-                    if not people.empty:
-                        st.write(f"**Total:** {len(people)}")
-                        st.dataframe(people[["Posto", "Nome"]], use_container_width=True, hide_index=True)
+                    if not df_diario_tbl.empty:
+                         # Estilização custom html para tabela limpa
+                         html_tbl = "<table style='width:100%; border-collapse: collapse;'>"
+                         for _, row in df_diario_tbl.iterrows():
+                             html_tbl += f"""
+                             <tr style='border-bottom: 1px solid rgba(128,128,128,0.2);'>
+                                <td style='padding: 8px; font-weight: bold; width: 40%; color: #4099ff;'>{row['Função']}</td>
+                                <td style='padding: 8px;'>{row['Militar']}</td>
+                             </tr>
+                             """
+                         html_tbl += "</table>"
+                         st.markdown(html_tbl, unsafe_allow_html=True)
                     else:
-                        st.info(f"Ninguém cadastrado como {servico}.")
+                        st.info("Não detectado.")
+                        
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # SERVIÇO DE QUARTO
+                    st.markdown("##### Serviço de Quarto")
+                    # Assumindo range: Row 7 até 26, Cols H(7) e L(11) ??
+                    # Precisa confirmar colunas. H=7, I=8, J=9, K=10, L=11.
+                    df_quarto_tbl = get_servico_block(tabela_hoje, 6, 25, 7, 11)
+                    
+                    if not df_quarto_tbl.empty:
+                         html_tbl_2 = "<table style='width:100%; border-collapse: collapse;'>"
+                         for _, row in df_quarto_tbl.iterrows():
+                             html_tbl_2 += f"""
+                             <tr style='border-bottom: 1px solid rgba(128,128,128,0.2);'>
+                                <td style='padding: 8px; font-weight: bold; width: 40%; color: #2ed8b6;'>{row['Função']}</td>
+                                <td style='padding: 8px;'>{row['Militar']}</td>
+                             </tr>
+                             """
+                         html_tbl_2 += "</table>"
+                         st.markdown(html_tbl_2, unsafe_allow_html=True)
+                    else:
+                        st.info("Não detectado.")
 
     elif pagina == "Cardápio":
         st.subheader("Cardápio Semanal")
+        df_cardapio = load_cardapio()
         
-        try:
-            df_cardapio_raw = load_cardapio()
-            
-            if df_cardapio_raw.empty:
-                st.info("Não foi possível carregar o cardápio.")
-            else:
-                # Processamento dos dados
-                # Datas estão na linha 2 (index 1), colunas B a I (index 1 a 8)
-                # Refeições estão nas linhas 4 a 7 (index 3 a 6)
-                
-                try:
-                    # Extrair datas
-                    raw_dates = df_cardapio_raw.iloc[1, 1:9].values
-                    
-                    # Extrair refeições
-                    # Linha 4: Café da Manhã
-                    # Linha 5: Almoço
-                    # Linha 6: Jantar
-                    # Linha 7: Ceia
-                    meals_data = {
-                        "Café da Manhã": df_cardapio_raw.iloc[3, 1:9].values,
-                        "Almoço": df_cardapio_raw.iloc[4, 1:9].values,
-                        "Jantar": df_cardapio_raw.iloc[5, 1:9].values,
-                        "Ceia": df_cardapio_raw.iloc[6, 1:9].values
-                    }
-                    
-                    # Construir DataFrame estruturado
-                    structured_data = []
-                    for i, date_val in enumerate(raw_dates):
-                        # Parse da data
-                        date_obj = pd.NaT
-                        if pd.notna(date_val):
-                            try:
-                                # Tenta DD/MM/YYYY
-                                date_obj = pd.to_datetime(str(date_val).strip(), dayfirst=True, errors='coerce')
-                            except:
-                                pass
-                        
-                        day_data = {"Data": date_obj, "DataStr": str(date_val)}
-                        for meal_name, meal_vals in meals_data.items():
-                            day_data[meal_name] = meal_vals[i] if i < len(meal_vals) else ""
-                        
-                        structured_data.append(day_data)
-                        
-                    df_menu = pd.DataFrame(structured_data)
-                    
-                    # --- VISÃO DIÁRIA ---
-                    st.markdown("### Cardápio do Dia")
-                    hoje_date = (datetime.utcnow() - timedelta(hours=3)).date()
-                    
-                    # Filtra para hoje (compara apenas a data)
-                    df_hoje = df_menu[df_menu["Data"].dt.date == hoje_date]
-                    
-                    if not df_hoje.empty:
-                        row = df_hoje.iloc[0]
-                        c1, c2, c3, c4 = st.columns(4)
-                        
-                        # CSS for Cardápio Cards
-                        st.markdown("""
-                        <style>
-                            .card-menu {
-                                background-color: rgba(255, 255, 255, 0.07);
-                                color: var(--text-color);
-                                border-radius: 5px;
-                                padding: 15px;
-                                margin-bottom: 10px;
-                                transition: transform 0.2s;
-                                border: 1px solid rgba(128, 128, 128, 0.2);
-                                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                                border-left: 5px solid #f97316; /* Orange */
-                            }
-                            .card-title {
-                                color: var(--text-color);
-                                opacity: 0.8;
-                                font-size: 0.85rem;
-                                text-transform: uppercase;
-                                letter-spacing: 0.05em;
-                                font-weight: 600;
-                                margin-bottom: 5px;
-                            }
-                            .card-value {
-                                color: var(--text-color);
-                                font-size: 1.1rem;
-                                font-weight: 500;
-                            }
-                        </style>
-                        """, unsafe_allow_html=True)
-
-                        with c1:
-                            val = row["Café da Manhã"] if pd.notna(row["Café da Manhã"]) else "-"
-                            st.markdown(f"""
-                            <div class="card-menu">
-                                <div class="card-title">Café da Manhã</div>
-                                <div class="card-value">{val}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                        with c2:
-                            val = row["Almoço"] if pd.notna(row["Almoço"]) else "-"
-                            st.markdown(f"""
-                            <div class="card-menu">
-                                <div class="card-title">Almoço</div>
-                                <div class="card-value">{val}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                        with c3:
-                            val = row["Jantar"] if pd.notna(row["Jantar"]) else "-"
-                            st.markdown(f"""
-                            <div class="card-menu">
-                                <div class="card-title">Jantar</div>
-                                <div class="card-value">{val}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                        with c4:
-                            val = row["Ceia"] if pd.notna(row["Ceia"]) else "-"
-                            st.markdown(f"""
-                            <div class="card-menu">
-                                <div class="card-title">Ceia</div>
-                                <div class="card-value">{val}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                    else:
-                        st.info(f"Não há cardápio cadastrado para hoje ({hoje_date.strftime('%d/%m/%Y')}).")
-                    
-                    st.markdown("---")
-                    
-                    # --- VISÃO SEMANAL ---
-                    st.markdown("### Visão Semanal")
-                    
-                    # Prepara tabela para exibição (Data como coluna ou index)
-                    df_display = df_menu.copy()
-                    # Formata data para exibição
-                    DIAS_PT = {0: "Seg", 1: "Ter", 2: "Qua", 3: "Qui", 4: "Sex", 5: "Sáb", 6: "Dom"}
-                    df_display["Dia"] = df_display["Data"].apply(lambda x: f"{x.day:02d}/{x.month:02d} ({DIAS_PT[x.weekday()]})" if pd.notna(x) else "Data Inválida")
-                    
-                    # Seleciona colunas
-                    cols_show = ["Dia", "Café da Manhã", "Almoço", "Jantar", "Ceia"]
-                    st.dataframe(df_display[cols_show], use_container_width=True, hide_index=True)
-                    
-                except Exception as e:
-                    st.error(f"Erro ao processar estrutura do cardápio: {e}")
-                    st.dataframe(df_cardapio_raw.head(10))
-
-        except Exception as e:
-            st.error(f"Erro ao carregar cardápio: {e}")
+        if df_cardapio.empty:
+            st.info("Cardápio não disponível.")
+        else:
+            # Assumindo layout simples: Dia na col A, Refeição col B, Prato col C...
+            # Ou apenas exibir como tabela colorida
+            st.dataframe(df_cardapio, use_container_width=True, hide_index=True)
 
     elif pagina == "Aniversários":
         st.subheader("Aniversariantes")
         
-        try:
-            df_niver_raw = load_aniversarios()
-            
-            if df_niver_raw.empty:
-                st.info("Não foi possível carregar a lista de aniversariantes.")
-            else:
-                # Processar dados
-                # Colunas esperadas: B (Posto), E (Nome), H (Aniversário)
-                # Vamos tentar identificar pelo index se os nomes não baterem, mas assumiremos nomes primeiro ou index como fallback.
+        # Carrega dados específicos (Posto, Nome, Data)
+        df_aniversarios = load_aniversarios()
+        
+        # Se a função retornar vazio ou estrutura errada, tentar pegar do df_raw se tiver coluna Aniversário
+        # Assumindo que load_aniversarios já retorna estrutura correta.
+        # Vamos re-implementar load_aniversarios para ser robusto no topo ou usar lógica aqui?
+        # A função load_aniversarios está placeholder no topo, vamos aprimorar a lógica de parsing aqui se necessário.
+        
+        # Se df_aniversarios estiver vazio ou incompleto, tentamos extrair do df_raw se tiver info de data nascimento
+        # Mas o requisito pede uma planilha separada URL_ANIVERSARIOS.
+        
+        if df_aniversarios.empty:
+             st.info("Não foi possível carregar a lista de aniversários.")
+        else:
+            # Tentar identificar colunas (B, E, H) -> indices 1, 4, 7
+            # O dataframe vem com tudo. Select por indice.
+            try:
+                # Copia colunas de interesse (assumindo indices fixos da planilha original de aniver)
+                # O read() traz apenas dados preenchidos
+                # Vamos pegar colunas pelo nome se existirem, ou indice.
+                # Assumindo que a planilha tem cabeçalho na linha 1
                 
-                # Ajuste de índices (0-based): B=1, E=4, H=7
-                # Cria um DF limpo
-                dados_niver = []
-                
-                # Itera sobre as linhas (pulando header se necessário, mas o read já deve ter tratado)
-                for idx, row in df_niver_raw.iterrows():
-                    # Tenta pegar valores por posição para garantir (já que nomes podem mudar)
-                    try:
-                        posto = row.iloc[1]
-                        nome = row.iloc[4]
-                        data_str = row.iloc[7]
-                        
-                        if pd.notna(nome) and str(nome).strip() != "" and pd.notna(data_str):
-                            dt_niver = parse_aniversario_date(data_str)
-                            if pd.notna(dt_niver):
-                                dados_niver.append({
-                                    "Posto": posto,
-                                    "Nome": nome,
-                                    "DataOriginal": data_str,
-                                    "Data": dt_niver,
-                                    "Dia": dt_niver.day,
-                                    "Mês": dt_niver.month
-                                })
-                    except:
-                        continue
-                        
-                df_aniversarios = pd.DataFrame(dados_niver)
-                
-                if df_aniversarios.empty:
-                    st.info("Nenhum aniversariante encontrado ou erro no processamento das datas.")
+                # Se colunas não identificadas, pega por iloc
+                if len(df_aniversarios.columns) >= 8:
+                    df_niver = df_aniversarios.iloc[:, [1, 4, 7]].copy()
+                    df_niver.columns = ["Posto", "Nome", "Data"]
                 else:
-                    # Métricas
-                    hoje_dt = (datetime.utcnow() - timedelta(hours=3))
-                    mes_atual = hoje_dt.month
-                    dia_atual = hoje_dt.day
-                    
-                    aniversariantes_mes = df_aniversarios[df_aniversarios["Mês"] == mes_atual]
-                    aniversariantes_dia = df_aniversarios[(df_aniversarios["Mês"] == mes_atual) & (df_aniversarios["Dia"] == dia_atual)]
-                    
-                    # Próximo e Último
-                    # Cria uma coluna com a data de aniversário no ano corrente
-                    df_aniversarios["DataCorrente"] = df_aniversarios.apply(
-                        lambda x: x["Data"].replace(year=hoje_dt.year), axis=1
-                    )
-                    
-                    # Ordena por data
-                    df_aniversarios = df_aniversarios.sort_values("DataCorrente")
-                    
-                    # Próximo: data >= hoje
-                    proximos = df_aniversarios[df_aniversarios["DataCorrente"] >= hoje_dt.replace(hour=0, minute=0, second=0, microsecond=0)]
-                    if proximos.empty:
-                        # Se não tem mais este ano, pega o primeiro do ano (que será ano que vem na prática)
-                        proximo = df_aniversarios.iloc[0]
+                    # Fallback
+                    df_niver = df_aniversarios.copy()
+                
+                # Drop na
+                df_niver = df_niver.dropna()
+                
+                # Parse Data
+                def parse_niver_date(v):
+                    if pd.isna(v): return pd.NaT
+                    s = str(v).strip()
+                    # Formatos possiveis DD/MM/YYYY ou DD/MM
+                    try:
+                        dt = pd.to_datetime(s, dayfirst=True)
+                        # Ignorar ano para calculo de aniversario, mas precisa de um ano base
+                        # Retorna (mes, dia)
+                        return dt
+                    except:
+                        return pd.NaT
+                
+                df_niver["DataObj"] = df_niver["Data"].apply(parse_niver_date)
+                df_niver = df_niver.dropna(subset=["DataObj"])
+                
+                hoje_n = datetime.today()
+                
+                # Proximos aniversarios (nos proximos 30 dias)
+                df_niver["Dia"] = df_niver["DataObj"].dt.day
+                df_niver["Mes"] = df_niver["DataObj"].dt.month
+                
+                # Lógica de "próximos": considera virada de ano
+                def dias_para_niver(row):
+                    niver_este_ano = datetime(hoje_n.year, int(row["Mes"]), int(row["Dia"]))
+                    if niver_este_ano < hoje_n.replace(hour=0, minute=0, second=0, microsecond=0):
+                        niver_prox_ano = datetime(hoje_n.year + 1, int(row["Mes"]), int(row["Dia"]))
+                        delta = (niver_prox_ano - hoje_n).days
                     else:
-                        proximo = proximos.iloc[0]
+                        delta = (niver_este_ano - hoje_n).days
+                    return delta
+                
+                df_niver["DiasPara"] = df_niver.apply(dias_para_niver, axis=1)
+                df_niver = df_niver.sort_values("DiasPara")
+                
+                # Filtra próximos 45 dias
+                df_proximos = df_niver[df_niver["DiasPara"] <= 45].copy()
+                
+                if df_proximos.empty:
+                    st.info("Nenhum aniversário nos próximos 45 dias.")
+                else:
+                    st.markdown("##### Próximos Aniversariantes (45 dias)")
+                    for _, row in df_proximos.iterrows():
+                        msg_dias = "Hoje!" if row['DiasPara'] <= 0 else f"em {int(row['DiasPara'])} dias"
+                        color_ico = "#ff5370" if row['DiasPara'] <= 0 else "#4099ff"
                         
-                    # Último: data < hoje
-                    anteriores = df_aniversarios[df_aniversarios["DataCorrente"] < hoje_dt.replace(hour=0, minute=0, second=0, microsecond=0)]
-                    if anteriores.empty:
-                        # Se não tem anteriores este ano, pega o último do ano
-                        ultimo = df_aniversarios.iloc[-1]
-                    else:
-                        ultimo = anteriores.iloc[-1]
-                    
-                    # Cards
-                    c1, c2, c3, c4 = st.columns(4)
-                    
-                    c1.metric("Aniversariantes do Mês", len(aniversariantes_mes))
-                    # CSS for Aniversários Cards
-                    st.markdown("""
-                    <style>
-                        .card-niver {
-                            background-color: rgba(255, 255, 255, 0.07);
-                            color: var(--text-color);
-                            border-radius: 5px;
-                            padding: 15px;
-                            margin-bottom: 10px;
-                            transition: transform 0.2s;
-                            border: 1px solid rgba(128, 128, 128, 0.2);
-                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                            border-left: 5px solid #ec4899; /* Pink */
-                        }
-                        /* Reuse .card-title and .card-value if already defined, but define here to be safe if tabs are separate */
-                        .card-title {
-                            color: var(--text-color);
-                            opacity: 0.8;
-                            font-size: 0.85rem;
-                            text-transform: uppercase;
-                            letter-spacing: 0.05em;
-                            font-weight: 600;
-                            margin-bottom: 5px;
-                        }
-                        .card-value {
-                            color: var(--text-color);
-                            font-size: 1.1rem;
-                            font-weight: 500;
-                        }
-                    </style>
-                    """, unsafe_allow_html=True)
-
-                    with c2:
-                        if aniversariantes_dia.empty:
-                            val = "Ninguém hoje"
-                        else:
-                            lista_nomes = [f"{row['Posto']} {row['Nome']}" for _, row in aniversariantes_dia.iterrows()]
-                            val = ", ".join(lista_nomes)
-                        
-                        st.markdown(f"""
-                        <div class="card-niver">
-                            <div class="card-title">Aniversariantes do Dia</div>
-                            <div class="card-value">{val}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    with c3:
-                        val = f"{ultimo['Posto']} {ultimo['Nome']} ({ultimo['Dia']:02d}/{ultimo['Mês']:02d})"
-                        st.markdown(f"""
-                        <div class="card-niver">
-                            <div class="card-title">Último Aniversariante</div>
-                            <div class="card-value">{val}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    with c4:
-                        val = f"{proximo['Posto']} {proximo['Nome']} ({proximo['Dia']:02d}/{proximo['Mês']:02d})"
-                        st.markdown(f"""
-                        <div class="card-niver">
-                            <div class="card-title">Próximo Aniversariante</div>
-                            <div class="card-value">{val}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    st.markdown("---")
-                    
-                    # Filtros e Tabela
-                    st.subheader("Pesquisar Aniversariantes")
-                    
-                    meses_dict = {
-                        "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
-                        "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12,
-                        "Todos": 0
-                    }
-                    
-                    sel_mes_nome = st.selectbox("Filtrar por Mês", list(meses_dict.keys()), index=list(meses_dict.values()).index(mes_atual))
-                    sel_mes_num = meses_dict[sel_mes_nome]
-                    
-                    if sel_mes_num != 0:
-                        df_show = df_aniversarios[df_aniversarios["Mês"] == sel_mes_num].copy()
-                    else:
-                        df_show = df_aniversarios.copy()
-                        
-                    if not df_show.empty:
-                        # Formatar data para exibição
-                        df_show["Data Aniversário"] = df_show.apply(lambda x: f"{x['Dia']:02d}/{x['Mês']:02d}", axis=1)
-                        st.dataframe(
-                            df_show.sort_values(["Mês", "Dia"])[["Posto", "Nome", "Data Aniversário"]],
-                            use_container_width=True,
-                            hide_index=True
+                        st.markdown(
+                            f"""
+                            <div style="
+                                display: flex; align-items: center; justify-content: space-between;
+                                background-color: rgba(255,255,255,0.05);
+                                padding: 10px 15px; border-radius: 8px; margin-bottom: 8px;
+                                border-left: 4px solid {color_ico};
+                            ">
+                                <div>
+                                    <div style="font-weight: bold; font-size: 1rem;">{row['Posto']} {row['Nome']}</div>
+                                    <div style="font-size: 0.85rem; color: #888;">{int(row['Dia']):02d}/{int(row['Mes']):02d}</div>
+                                </div>
+                                <div style="
+                                    background-color: {color_ico}; color: white;
+                                    padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;
+                                ">
+                                    {msg_dias}
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
                         )
-                    else:
-                        st.info(f"Nenhum aniversariante encontrado em {sel_mes_nome}.")
-
-        except Exception as e:
-            st.error(f"Erro ao carregar aniversários: {e}")
-
+                    
+                    with st.expander("Ver lista completa"):
+                        st.dataframe(df_niver[["Posto", "Nome", "Data"]], use_container_width=True, hide_index=True)
+                        
+            except Exception as e:
+                st.error(f"Erro ao processar aniversários: {e}")
     elif pagina == "Tabela de Lotação":
         st.subheader("Tabela de Lotação")
         
-        try:
-            df_lotacao = load_lotacao_data()
+        # Carrega dados com função específica (estrutura fixa)
+        df_lotacao = load_lotacao_data()
+        
+        if df_lotacao.empty:
+            st.info("Tabela de Lotação não encontrada ou vazia.")
+        else:
+            # KPIS
+            tl_total = df_lotacao["TL"].sum()
+            ef_total = df_lotacao["EF"].sum()
+            gap_total = df_lotacao["D"].sum()
             
-            if df_lotacao.empty:
-                st.info("Não foi possível carregar a Tabela de Lotação.")
-            else:
-                # 1. KPIs
-                tl_total = df_lotacao["TL"].sum()
-                ef_total = df_lotacao["EF"].sum()
-                d_total = df_lotacao["D"].sum()
+            c_l1, c_l2, c_l3 = st.columns(3)
+            c_l1.metric("Lotação Total (TL)", tl_total)
+            c_l2.metric("Efetivo Atual (EF)", ef_total)
+            c_l3.metric("Balanço Geral", gap_total, delta_color="normal") # normal: red if negative, green if pos
+            
+            st.markdown("---")
+            
+            col_l_graf, col_l_tab = st.columns([1, 2])
+            
+            with col_l_graf:
+                # Gráfico de barras divergentes (Déficit/Excesso) por Especialidade
+                st.markdown("##### Déficit/Excesso por Especialidade")
                 
-                col_k1, col_k2, col_k3 = st.columns(3)
-                col_k1.metric("Lotação Total (TL)", int(tl_total))
-                col_k2.metric("Efetivo Atual (EF)", int(ef_total))
-                col_k3.metric("Balanço Geral", int(d_total), delta=int(d_total), delta_color="normal")
+                # Prepara dados para ECharts Bar (com cores condicionais se possível ou simples)
+                # simplificado: Ordenar por GAP
+                df_chart_lot = df_lotacao.sort_values("D", ascending=True) # Mostrar maiores deficits primeiro
                 
-                st.markdown("---")
+                # Echarts precisa de lists
+                x_data = df_chart_lot["Especialidade"].tolist()
+                y_data = df_chart_lot["D"].tolist()
                 
-                # 2. Listas de Faltas e Excessos
-                col_list1, col_list2 = st.columns(2)
+                # Cores customizadas na serie? 
+                # ECharts permite itemStyle function ou array. 
+                # Vamos usar um bar chart simples, mas com coloração visual via JS callback seria ideal.
+                # Aqui simplificamos: barras comuns. O valor negativo aparece para baixo? Echarts Bar padrao sim.
                 
-                with col_list1:
-                    st.markdown("##### Faltas (Déficit)")
-                    df_deficit = df_lotacao[df_lotacao["D"] < 0].sort_values("D")
-                    if df_deficit.empty:
-                        st.success("Nenhuma falta registrada.")
-                    else:
-                        # Mostra como tabela limpa
-                        st.dataframe(
-                            df_deficit[["Especialidade", "D"]], 
-                            use_container_width=True, 
-                            hide_index=True
-                        )
-                        
-                with col_list2:
-                    st.markdown("##### Excessos")
-                    df_excess = df_lotacao[df_lotacao["D"] > 0].sort_values("D", ascending=False)
-                    if df_excess.empty:
-                        st.info("Nenhum excesso registrado.")
-                    else:
-                        st.dataframe(
-                            df_excess[["Especialidade", "D"]], 
-                            use_container_width=True, 
-                            hide_index=True
-                        )
-                
-                st.markdown("---")
-                
-                # 3. Gráficos Donut (ECharts)
-                st.markdown("### Análise Gráfica")
-                col_g1, col_g2 = st.columns(2)
-                
-                with col_g1:
-                    st.markdown("##### Panorama das Especialidades")
-                    # Conta quantos estão em cada status
-                    status_counts = df_lotacao["Status"].value_counts().reset_index()
-                    status_counts.columns = ["Status", "Count"]
-                    
-                    # Prepara dados para o Donut
-                    data_status = []
-                    for _, row in status_counts.iterrows():
-                        data_status.append({"value": int(row["Count"]), "name": row["Status"]})
-                        
-                    opt_status = make_echarts_donut(data_status, "Status")
-                    st_echarts(options=opt_status, height="400px")
-                    
-                with col_g2:
-                    st.markdown("##### Taxa de Ocupação Global")
-                    # TL vs EF Global
-                    # Se EF > TL, ocupação é > 100% (Excesso Global)
-                    # Vamos mostrar: Ocupado vs Vago (se houver vaga)
-                    
-                    vagas_aberto = max(0, tl_total - ef_total)
-                    ocupado = min(ef_total, tl_total) # O que cabe na lotação
-                    excesso_global = max(0, ef_total - tl_total) # O que transborda
-                    
-                    data_ocupacao = [
-                        {"value": int(ocupado), "name": "Ocupado"},
-                        {"value": int(vagas_aberto), "name": "Vago"}
-                    ]
-                    
-                    if excesso_global > 0:
-                        data_ocupacao.append({"value": int(excesso_global), "name": "Excesso Global"})
-                        
-                    opt_ocupacao = make_echarts_donut(data_ocupacao, "Ocupação")
-                    st_echarts(options=opt_ocupacao, height="400px")
-
-                st.markdown("---")
-                
-                # 4. Gráfico de Barras (ECharts)
-                st.markdown("### Detalhamento por Especialidade")
-                
-                if "Especialidade" in df_lotacao.columns:
-                    df_grouped = df_lotacao.groupby("Especialidade")[["TL", "EF", "D"]].sum().reset_index()
-                    df_chart = df_grouped.sort_values("D", ascending=True)
-                    
-                    # Preparar dados para ECharts
-                    x_data = df_chart["Especialidade"].tolist()
-                    y_data = []
-                    
-                    for val in df_chart["D"].tolist():
-                        val_int = int(val)
-                        color = "#a3a3a3"
-                        if val_int < 0: color = "#ff5370"
-                        elif val_int > 0: color = "#2ed8b6"
-                        
-                        y_data.append({
-                            "value": val_int,
-                            "itemStyle": {"color": color},
-                            "label": {
-                                "show": True, 
-                                "position": "top" if val_int >= 0 else "bottom",
-                                "formatter": "{c}"
-                            }
-                        })
-                    
-                    options = {
-                        "tooltip": {
-                            "trigger": "axis",
-                            "axisPointer": {"type": "shadow"},
-                            "backgroundColor": "rgba(50, 50, 50, 0.9)",
-                            "borderColor": "#777",
-                            "textStyle": {"color": "#fff"}
-                        },
-                        "xAxis": {
-                            "type": "category",
-                            "data": x_data,
-                            "axisLabel": {"interval": 0, "rotate": 45}
-                        },
-                        "yAxis": {"type": "value"},
-                        "series": [
-                            {
-                                "data": y_data, 
-                                "type": "bar",
-                                "name": "Diferença"
-                            }
-                        ],
-                        "grid": {
-                            "left": "3%",
-                            "right": "4%",
-                            "bottom": "15%", # Espaço para labels rotacionados
-                            "containLabel": True
+                opt_lotacao = {
+                    "tooltip": {"trigger": "axis"},
+                    "grid": {"left": "3%", "right": "4%", "bottom": "3%", "containLabel": True},
+                    "xAxis": {
+                        "type": "value",
+                        "position": "top",
+                        "splitLine": {"lineStyle": {"type": "dashed"}}
+                    },
+                    "yAxis": {
+                        "type": "category",
+                        "axisTick": {"show": False},
+                        "data": x_data
+                    },
+                    "series": [
+                        {
+                            "name": "Diferença",
+                            "type": "bar",
+                            "stack": "Total",
+                            "label": {"show": True},
+                            "data": [
+                                {
+                                    "value": val,
+                                    "itemStyle": {"color": "#ff5370" if val < 0 else "#2ed8b6"}
+                                } 
+                                for val in y_data
+                            ]
                         }
-                    }
-                    
-                    st_echarts(options=options, height="500px")
+                    ]
+                }
+                st_echarts(options=opt_lotacao, height="600px")
+
+            with col_l_tab:
+                st.markdown("##### Detalhamento")
                 
-                st.markdown("---")
-                
-                # 5. Tabela Completa
-                st.markdown("### Tabela Completa")
-                
-                # Styling
-                def style_d(v):
-                    if isinstance(v, (int, float)):
-                        if v < 0: return "color: #ff5370; font-weight: bold;"
-                        elif v > 0: return "color: #2ed8b6; font-weight: bold;"
-                    return "color: #a3a3a3;"
-                
+                # Style simples na tabela
                 st.dataframe(
-                    df_lotacao.style.map(style_d, subset=["D"]),
+                    df_lotacao.style.applymap(
+                        lambda v: 'color: #ff5370; font-weight: bold;' if isinstance(v, (int, float)) and v < 0 else 
+                                  ('color: #2ed8b6; font-weight: bold;' if isinstance(v, (int, float)) and v > 0 else ''),
+                        subset=['D']
+                    ).format({"TL": "{:.0f}", "EF": "{:.0f}", "D": "{:.0f}"}),
                     use_container_width=True,
-                    hide_index=True
+                    height=600
                 )
-                
-        except Exception as e:
-            st.error(f"Erro ao processar Tabela de Lotação: {e}")
 
     elif pagina == "Log / Debug":
-        st.subheader("Log / Debug")
+        st.subheader("Logs e Debug")
+        st.write("Estado da Sessão:")
+        st.write(st.session_state)
         
-        # --- NEW DEBUG SECTION FOR CHECKBOXES ---
-        st.markdown("### 🔍 Diagnóstico de Colunas GVI e IN")
-        st.info("Use esta seção para verificar como o Python está lendo os valores das checkboxes.")
-        
-        cols_debug = []
-        if "Gvi/GP" in df_raw.columns: cols_debug.append("Gvi/GP")
-        if "IN" in df_raw.columns: cols_debug.append("IN")
-        
-        if cols_debug:
-            st.write("Valores únicos encontrados nas colunas:")
-            for col in cols_debug:
-                unique_vals = df_raw[col].unique()
-                st.write(f"**{col}:** {unique_vals}")
-                
-            st.markdown("##### Teste da função `parse_bool`:")
-            test_val = st.text_input("Digite um valor para testar se é True/False (ex: 'Sim', 'TRUE', 'x'):")
-            if test_val:
-                res = parse_bool(test_val)
-                st.write(f"O valor '{test_val}' é considerado: **{res}**")
-        else:
-            st.error("Colunas Gvi/GP ou IN não encontradas na planilha.")
+        if st.checkbox("Mostrar DataFrame Bruto (df_raw)"):
+            st.dataframe(df_raw)
             
-        st.markdown("---")
-        st.markdown("### df_raw (dados brutos do Google Sheets)")
-        st.write(f"Total de linhas em df_raw: **{len(df_raw)}**")
-        st.write("Colunas disponíveis em df_raw:")
-        st.write(list(df_raw.columns))
-        st.write("Prévia de df_raw (primeiras 15 linhas):")
-        st.dataframe(df_raw.head(15), use_container_width=True)
-        st.markdown("---")
-        st.markdown("### Blocos de datas detectados")
-        if BLOCOS_DATAS:
-            debug_blocos = []
-            for idx, (c_ini, c_fim, c_mot, tipo_base) in enumerate(BLOCOS_DATAS, start=1):
-                debug_blocos.append({"Bloco": idx, "Col_Inicio": c_ini, "Col_Fim": c_fim, "Col_Motivo/Curso": c_mot, "Tipo_base": tipo_base})
-            st.dataframe(pd.DataFrame(debug_blocos), use_container_width=True)
-        else:
-            st.info("Nenhum bloco de datas detectado.")
-        st.markdown("---")
-        st.markdown("### df_eventos (eventos gerados)")
-        st.write(f"Total de eventos em df_eventos: **{len(df_eventos)}**")
-        if not df_eventos.empty:
-            st.dataframe(df_eventos.head(40), use_container_width=True)
-            st.write("Anos em Inicio:", df_eventos["Inicio"].dt.year.unique())
-            st.write("Anos em Fim:", df_eventos["Fim"].dt.year.unique())
-            st.write("Tipos registrados:", df_eventos["Tipo"].unique())
-            st.write("Motivos agrupados:", df_eventos["MotivoAgrupado"].unique())
-        else:
-            st.info("df_eventos está vazio. Verifique se as colunas de datas estão corretamente preenchidas na planilha.")
+        if st.checkbox("Mostrar Eventos Processados (df_eventos)"):
+            st.dataframe(df_eventos)
+            
+        if st.checkbox("Mostrar Blocos de Datas Detectados"):
+            st.write(BLOCOS_DATAS)
 
-
-# ============================================================
-# 12. RODAPÉ
-# ============================================================
-st.markdown("<hr style='border-color: rgba(148, 163, 184, 0.2); margin-top:2rem;'/>", unsafe_allow_html=True)
-st.markdown(
-    f"""
-    <div style='text-align:center; color:#94a3b8; padding:0.5rem 0; font-size:0.85rem;'>
-    Created by <strong>Klismann Freitas</strong> - Versão do painel: <strong>{SCRIPT_VERSION}</strong>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+    # --- FOOTER ---
+    st.markdown("---")
+    st.markdown(
+        "<div style='text-align: center; color: #666; font-size: 0.8rem;'>"
+        "AMEZIA © 2025 - Sistema de Gestão de Efetivo<br>"
+        "Desenvolvido para apoio à decisão."
+        "</div>", 
+        unsafe_allow_html=True
+    )
