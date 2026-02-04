@@ -779,6 +779,23 @@ def parse_sheet_date(val):
         
     return pd.NaT
 
+
+def parse_grupos(val):
+    """
+    Analisa o conteúdo da célula de grupos (coluna JM).
+    Pode conter múltiplos grupos (ex: listbox com separador).
+    Retorna uma lista de strings normalizadas.
+    """
+    if pd.isna(val) or str(val).strip() == "":
+        return []
+    
+    s_val = str(val).strip()
+    # Listbox do Google Sheets geralmente separa por vírgula ou nova linha.
+    # Vamos tratar ambos.
+    s_val = s_val.replace("\n", ",").replace(";", ",")
+    items = [x.strip() for x in s_val.split(",") if x.strip()]
+    return items
+
 # ============================================================
 # 3. CARGA DE DADOS
 # ============================================================
@@ -1191,6 +1208,7 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
             "EqMan": eqman,
             "GVI": gvi,
             "IN": insp,
+            "Grupos": parse_grupos(row.get("Grupos", row.get("Grupo", []))), # Tenta 'Grupos' ou 'Grupo'
         }
 
         for col_ini, col_fim, col_mot, tipo_base in blocos:
@@ -1238,6 +1256,65 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
     return pd.DataFrame(eventos)
 
 df_eventos = construir_eventos(df_raw, BLOCOS_DATAS)
+
+# ============================================================
+# 6. LÓGICA DE CONFLITOS (NOVO)
+# ============================================================
+def detectar_conflitos(df_eventos):
+    """
+    Detecta conflitos de férias entre militares do mesmo grupo.
+    Retorna um DataFrame com os conflitos.
+    """
+    if df_eventos.empty:
+        return pd.DataFrame()
+
+    # Filtra apenas férias
+    df_ferias = df_eventos[df_eventos["Tipo"] == "Férias"].copy()
+    
+    conflict_data = []
+
+    # Explode por grupo para comparar dentro de cada grupo
+    # Cada linha será (Pessoa, Grupo, DataIni, DataFim)
+    df_exploded = df_ferias.explode("Grupos")
+    df_exploded = df_exploded.dropna(subset=["Grupos"])
+    
+    # Remove strings vazias que possam ter sobrado
+    df_exploded = df_exploded[df_exploded["Grupos"] != ""]
+    
+    # Agrupa por Grupo
+    for grupo, group_df in df_exploded.groupby("Grupos"):
+        # Itera pares para achar overlap
+        # Otimização: ordenar por data início
+        group_df = group_df.sort_values("Inicio")
+        records = group_df.to_dict("records")
+        
+        for i in range(len(records)):
+            for j in range(i + 1, len(records)):
+                p1 = records[i]
+                p2 = records[j]
+                
+                # Se nomes são iguais, não é conflito
+                if p1["Nome"] == p2["Nome"]:
+                    continue
+                    
+                # Checa overlap
+                # Overlap: Inicio1 <= Fim2 AND Inicio2 <= Fim1
+                if (p1["Inicio"] <= p2["Fim"]) and (p2["Inicio"] <= p1["Fim"]):
+                    # Calcula dias de sobreposição
+                    start_overlap = max(p1["Inicio"], p2["Inicio"])
+                    end_overlap = min(p1["Fim"], p2["Fim"])
+                    days_overlap = (end_overlap - start_overlap).days + 1
+                    
+                    conflict_data.append({
+                        "Grupo": grupo,
+                        "Militar 1": f"{p1['Posto']} {p1['Nome']}",
+                        "Período 1": f"{p1['Inicio'].strftime('%d/%m')} a {p1['Fim'].strftime('%d/%m')}",
+                        "Militar 2": f"{p2['Posto']} {p2['Nome']}",
+                        "Período 2": f"{p2['Inicio'].strftime('%d/%m')} a {p2['Fim'].strftime('%d/%m')}",
+                        "Dias Conflito": days_overlap
+                    })
+
+    return pd.DataFrame(conflict_data)
 
 
 # ============================================================
@@ -2187,6 +2264,32 @@ else:
                                 st_echarts(options=opt_mes_ferias, height="500px")
                         else:
                             col_fx2.info("Sem dados diários suficientes para calcular férias por mês.")
+
+                    st.markdown("---")
+                    
+                    # 4. CONFLITOS DE FÉRIAS (NOVO REQUISITO)
+                    st.markdown("#### ⚠️ Conflitos de Férias por Grupo")
+                    df_conflitos = detectar_conflitos(df_eventos)
+                    
+                    if not df_conflitos.empty:
+                        # Formata e exibe
+                        st.warning(f"Foram detectados {len(df_conflitos)} conflitos entre militares do mesmo grupo.")
+                        
+                        # Ordena por Grupo e Militar 1
+                        df_conflitos = df_conflitos.sort_values(["Grupo", "Militar 1"])
+                        
+                        st.dataframe(
+                            df_conflitos,
+                            column_config={
+                                "Grupo": st.column_config.TextColumn("Grupo de Conflito"),
+                                "Dias Conflito": st.column_config.NumberColumn("Dias coincid.", format="%d dias"),
+                            },
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    else:
+                        st.success("Não foram detectados conflitos de férias entre militares do mesmo grupo.")
+
 
     elif pagina == "Cursos":
         st.subheader("Análises de Cursos")
