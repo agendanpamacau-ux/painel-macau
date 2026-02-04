@@ -423,8 +423,9 @@ def make_echarts_line(x_data, y_data):
     x_data: lista de categorias
     y_data: lista de valores
     """
-    # Garante tipos nativos para evitar erro de Marshalling com JsCode
-    y_data = [float(y) if pd.notna(y) else 0.0 for y in y_data]
+    # Formata como STRING com 2 casas decimais direto no Python
+    # ECharts interpreta strings em eixos numéricos corretamente
+    y_data_fmt = [f"{float(y):.2f}" if pd.notna(y) else "0.00" for y in y_data]
     
     options = {
         "xAxis": {
@@ -433,22 +434,22 @@ def make_echarts_line(x_data, y_data):
         },
         "yAxis": {"type": "value"},
         "series": [{
-            "data": y_data, 
+            "data": y_data_fmt, 
             "type": "line",
             "label": {
                 "show": True, 
                 "position": "top",
                 "color": "inherit", 
                 "fontSize": 12,
-                "formatter": JsCode("function(params){return Number(params.value).toFixed(2);}") 
+                "formatter": "{c}" # Exibe o valor do dado (que já é string formatada)
             }
         }],
         "tooltip": {
             "trigger": "axis",
             "backgroundColor": "rgba(50, 50, 50, 0.9)",
             "borderColor": "#777",
-            "textStyle": {"color": "#fff"},
-            "valueFormatter": JsCode("(value) => Number(value).toFixed(2)") 
+            "textStyle": {"color": "#fff"}
+            # valueFormatter removido pois o dado já vem formatado
         }
     }
     return options
