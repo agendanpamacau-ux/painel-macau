@@ -8,7 +8,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import base64
 import os
-from streamlit_echarts import st_echarts
+from streamlit_echarts import st_echarts, JsCode
 
 
 
@@ -437,7 +437,7 @@ def make_echarts_line(x_data, y_data):
                 "position": "top",
                 "color": "inherit", 
                 "fontSize": 12,
-                "formatter": "{c}" # Usa o valor cru, mas podemos tratar no data ou aqui
+                "formatter": JsCode("function(params){return Number(params.value).toFixed(2);}") 
             }
         }],
         "tooltip": {
@@ -445,7 +445,7 @@ def make_echarts_line(x_data, y_data):
             "backgroundColor": "rgba(50, 50, 50, 0.9)",
             "borderColor": "#777",
             "textStyle": {"color": "#fff"},
-            "valueFormatter": "(value) => value.toFixed(1)" # Formata tooltip para 1 casa
+            "valueFormatter": JsCode("(value) => Number(value).toFixed(2)") 
         }
     }
     return options
@@ -1020,6 +1020,27 @@ def load_calendar_events(calendar_id: str, start_date: str = None, end_date: str
         return pd.DataFrame(data)
     except Exception:
         return pd.DataFrame()
+
+@st.cache_data(ttl=3600, show_spinner="Carregando tempo de bordo...")
+def load_tempo_bordo():
+    """Carrega dados de tempo de embarque da planilha de Tripulação."""
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # Header na linha 8 (index 7). Dados começam na 9.
+    # Mas se user diz "a partir da linha 8", pode ser header na 7.
+    # Vamos ler header=7 (Row 8).
+    df = conn.read(spreadsheet=URL_ANIVERSARIOS, header=7, ttl="1h")
+    
+    # Coluna N é index 13. Vamos pegar pelo nome se possível, ou index fallback.
+    # Se header=7 lê a linha 8 como header. A coluna N deve ter um título.
+    # Se não tiver, acessamos por iloc.
+    col_data = None
+    if len(df.columns) > 13:
+        col_data = df.iloc[:, 13] # Coluna N
+    
+    if col_data is None:
+        return pd.DataFrame()
+        
+    return pd.DataFrame({"DataEmbarque": col_data})
 
 @st.cache_data(ttl=300)
 def get_events_today_all_calendars():
@@ -3108,7 +3129,7 @@ else:
             df_lotacao = load_lotacao_data()
             
             if df_lotacao.empty:
-                st.info("Não foi possível carregar a Tabela de Lotação.")
+                st.error("Não foi possível carregar a tabela de lotação.")
             else:
                 # 1. KPIs
                 tl_total = df_lotacao["TL"].sum()
@@ -3154,7 +3175,7 @@ else:
                 
                 # 3. Gráficos Donut (ECharts)
                 st.markdown("### Análise Gráfica")
-                col_g1, col_g2 = st.columns(2)
+                col_g1, col_g2, col_g3 = st.columns(3)
                 
                 with col_g1:
                     st.markdown("##### Panorama das Especialidades")
@@ -3190,6 +3211,39 @@ else:
                         
                     opt_ocupacao = make_echarts_donut(data_ocupacao, "Ocupação")
                     st_echarts(options=opt_ocupacao, height="400px")
+                    
+                with col_g3:
+                    st.markdown("##### Tempo de Bordo")
+                    try:
+                        df_tempo = load_tempo_bordo()
+                        if not df_tempo.empty:
+                            hoje = datetime.utcnow() - timedelta(hours=3)
+                            
+                            def calc_anos(val):
+                                dt = parse_sheet_date(val)
+                                if pd.isna(dt): return None
+                                diff = hoje - dt
+                                return diff.days / 365.25
+                            
+                            df_tempo["Anos"] = df_tempo["DataEmbarque"].apply(calc_anos)
+                            df_tempo = df_tempo.dropna(subset=["Anos"])
+                            
+                            menos_1 = (df_tempo["Anos"] < 1).sum()
+                            entre_1_2 = ((df_tempo["Anos"] >= 1) & (df_tempo["Anos"] < 2)).sum()
+                            mais_2 = (df_tempo["Anos"] >= 2).sum()
+                            
+                            data_donut = [
+                                {"value": int(menos_1), "name": "Menos de 1 ano"},
+                                {"value": int(entre_1_2), "name": "1 a 2 anos"},
+                                {"value": int(mais_2), "name": "Mais de 2 anos"}
+                            ]
+                            
+                            opt_donut = make_echarts_donut(data_donut, "Tempo Bordo")
+                            st_echarts(options=opt_donut, height="400px")
+                        else:
+                            st.info("Sem dados de tempo de bordo.")
+                    except Exception as e:
+                        st.error(f"Erro no gráfico: {e}")
 
                 st.markdown("---")
                 
