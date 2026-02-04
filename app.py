@@ -1654,7 +1654,12 @@ if pagina == "Presentes":
         if df_presentes.empty:
             st.info("Nenhum militar presente para os filtros atuais.")
         else:
-            tabela = df_presentes[["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"]].copy()
+            # Seleção segura de colunas
+            cols_desejadas = ["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"]
+            cols_existentes = [c for c in cols_desejadas if c in df_presentes.columns]
+            
+            tabela = df_presentes[cols_existentes].copy()
+            
             if "Gvi/GP" in tabela.columns:
                 tabela["GVI/GP"] = tabela["Gvi/GP"].apply(lambda v: "Sim" if parse_bool(v) else "Não")
             if "IN" in tabela.columns:
