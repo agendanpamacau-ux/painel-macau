@@ -1203,13 +1203,6 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
         gvi = parse_bool(row.get("Gvi/GP", ""))
         insp = parse_bool(row.get("IN", ""))
 
-        militar_info = {
-            "Posto": posto,
-            "Nome": nome,
-            "Escala": escala,
-            "EqMan": eqman,
-            "GVI": gvi,
-
         # Lógica para encontrar a coluna grupos de forma robusta
         cols_lower = [str(c).lower().strip() for c in row.index]
         grupos_val = []
@@ -1224,10 +1217,7 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
         if found_col:
             grupos_val = row[found_col]
         else:
-            # 2. Fallback: Se não achar, tenta 'JM' (se fosse nome) ou última coluna
-            # Mas aqui acessamos por nome. Se o usuário disse coluna JM (index ~270),
-            # e não tem nome, ela pode ser "Unnamed: 272".
-            # Vamos tentar pegar 'Grupos' no get() primeiro.
+            # 2. Fallback
             grupos_val = row.get("Grupos", row.get("Grupo", []))
 
         militar_info = {
