@@ -1209,8 +1209,35 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
             "Escala": escala,
             "EqMan": eqman,
             "GVI": gvi,
+
+        # Lógica para encontrar a coluna grupos de forma robusta
+        cols_lower = [str(c).lower().strip() for c in row.index]
+        grupos_val = []
+        
+        # 1. Tenta encontrar coluna que contém 'grupo'
+        found_col = None
+        for c in row.index:
+            if "grupo" in str(c).lower():
+                found_col = c
+                break
+        
+        if found_col:
+            grupos_val = row[found_col]
+        else:
+            # 2. Fallback: Se não achar, tenta 'JM' (se fosse nome) ou última coluna
+            # Mas aqui acessamos por nome. Se o usuário disse coluna JM (index ~270),
+            # e não tem nome, ela pode ser "Unnamed: 272".
+            # Vamos tentar pegar 'Grupos' no get() primeiro.
+            grupos_val = row.get("Grupos", row.get("Grupo", []))
+
+        militar_info = {
+            "Posto": posto,
+            "Nome": nome,
+            "Escala": escala,
+            "EqMan": eqman,
+            "GVI": gvi,
             "IN": insp,
-            "Grupos": parse_grupos(row.get("Grupos", row.get("Grupo", []))), # Tenta 'Grupos' ou 'Grupo'
+            "Grupos": parse_grupos(grupos_val), 
         }
 
         for col_ini, col_fim, col_mot, tipo_base in blocos:
