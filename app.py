@@ -1270,14 +1270,14 @@ def detectar_conflitos(df_eventos):
     if df_eventos.empty:
         return pd.DataFrame()
 
-    # Filtra apenas férias
-    df_ferias = df_eventos[df_eventos["Tipo"] == "Férias"].copy()
+    # Considera TODOS os eventos de ausência (Férias, Cursos, Licenças, etc.)
+    df_ausencias = df_eventos.copy()
     
     conflict_data = []
 
     # Explode por grupo para comparar dentro de cada grupo
     # Cada linha será (Pessoa, Grupo, DataIni, DataFim)
-    df_exploded = df_ferias.explode("Grupos")
+    df_exploded = df_ausencias.explode("Grupos")
     df_exploded = df_exploded.dropna(subset=["Grupos"])
     
     # Remove strings vazias que possam ter sobrado
@@ -2270,7 +2270,7 @@ else:
                     st.markdown("---")
                     
                     # 4. CONFLITOS DE FÉRIAS (NOVO REQUISITO)
-                    st.markdown("#### ⚠️ Conflitos de Férias por Grupo")
+                    st.markdown("#### Conflitos de Ausência por Grupo")
                     df_conflitos = detectar_conflitos(df_eventos)
                     
                     if not df_conflitos.empty:
@@ -2290,7 +2290,7 @@ else:
                             hide_index=True
                         )
                     else:
-                        st.success("Não foram detectados conflitos de férias entre militares do mesmo grupo.")
+                        st.info("Não foram detectados conflitos de ausência entre militares do mesmo grupo.")
 
 
     elif pagina == "Cursos":
