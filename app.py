@@ -423,6 +423,9 @@ def make_echarts_line(x_data, y_data):
     x_data: lista de categorias
     y_data: lista de valores
     """
+    # Garante tipos nativos para evitar erro de Marshalling com JsCode
+    y_data = [float(y) if pd.notna(y) else 0.0 for y in y_data]
+    
     options = {
         "xAxis": {
             "type": "category",
