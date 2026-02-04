@@ -1207,18 +1207,26 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
         cols_lower = [str(c).lower().strip() for c in row.index]
         grupos_val = []
         
-        # 1. Tenta encontrar coluna que contém 'grupo'
-        found_col = None
-        for c in row.index:
-            if "grupo" in str(c).lower():
-                found_col = c
-                break
+        # Lógica para encontrar a coluna grupos de forma robusta
+        # USER REQUEST: Coluna 66 (index 65, 0-based)
+        grupos_val = []
         
-        if found_col:
-            grupos_val = row[found_col]
-        else:
-            # 2. Fallback
-            grupos_val = row.get("Grupos", row.get("Grupo", []))
+        try:
+            # Tenta encontrar coluna que contém 'conflito' ou 'grupo'
+            found_col = None
+            for c in row.index:
+                c_str = str(c).lower()
+                if "conflito" in c_str or "grupo" in c_str:
+                    found_col = c
+                    break
+            
+            if found_col:
+                grupos_val = row[found_col]
+            else:
+                # Fallback para o index 65 (Coluna 66 - JM segundo usuario, mas index numerico)
+                grupos_val = row.iloc[65]
+        except:
+             grupos_val = []
 
         militar_info = {
             "Posto": posto,
@@ -2309,6 +2317,29 @@ else:
                     else:
                         st.info("Não foram detectados conflitos de ausência entre militares do mesmo grupo.")
 
+
+
+                    # DEBUG AREA (Temporário para análise)
+                    with st.expander("🛠️ DEBUG: Análise de Dados e Conflitos", expanded=False):
+                        st.write("### 1. Colunas encontradas na planilha")
+                        st.write(list(df_raw.columns))
+                        
+                        st.write("### 2. Verificação da Coluna de Grupos")
+                        # Tenta mostrar o que foi lido nos eventos
+                        if not df_eventos.empty:
+                            sample_groups = df_eventos[["Nome", "Grupos"]].head(20)
+                            st.dataframe(sample_groups)
+                            
+                            st.write("### 3. Estatísticas de Eventos")
+                            metric_cols = st.columns(3)
+                            metric_cols[0].metric("Total Eventos", len(df_eventos))
+                            metric_cols[1].metric("Eventos c/ Grupo", df_eventos["Grupos"].apply(lambda x: len(x) > 0).sum())
+                            
+                            st.write("### 4. Raw Conflict Data")
+                            st.dataframe(df_conflitos)
+                        
+                        st.write("### 5. Exemplo de Dados Brutos (Primeiras 5 linhas)")
+                        st.dataframe(df_raw.head())
 
     elif pagina == "Cursos":
         st.subheader("Análises de Cursos")
