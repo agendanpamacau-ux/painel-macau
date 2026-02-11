@@ -417,15 +417,17 @@ def make_echarts_donut(data_list, title):
 # ============================================================
 # HELPER: ECHARTS LINE
 # ============================================================
-def make_echarts_line(x_data, y_data):
+def make_echarts_line(x_data, y_data, integer=False):
     """
     Gera um gráfico de linha simples.
     x_data: lista de categorias
     y_data: lista de valores
+    integer: se True, formata valores como inteiros (para quantitativos)
     """
-    # Formata como STRING com 2 casas decimais direto no Python
-    # ECharts interpreta strings em eixos numéricos corretamente
-    y_data_fmt = [f"{float(y):.2f}" if pd.notna(y) else "0.00" for y in y_data]
+    if integer:
+        y_data_fmt = [str(int(float(y))) if pd.notna(y) else "0" for y in y_data]
+    else:
+        y_data_fmt = [f"{float(y):.2f}" if pd.notna(y) else "0.00" for y in y_data]
     
     options = {
         "xAxis": {
@@ -441,7 +443,7 @@ def make_echarts_line(x_data, y_data):
                 "position": "top",
                 "color": "inherit", 
                 "fontSize": 12,
-                "formatter": "{c}" # Exibe o valor do dado (que já é string formatada)
+                "formatter": "{c}"
             }
         }],
         "tooltip": {
@@ -449,7 +451,6 @@ def make_echarts_line(x_data, y_data):
             "backgroundColor": "rgba(50, 50, 50, 0.9)",
             "borderColor": "#777",
             "textStyle": {"color": "#fff"}
-            # valueFormatter removido pois o dado já vem formatado
         }
     }
     return options
@@ -457,12 +458,18 @@ def make_echarts_line(x_data, y_data):
 # ============================================================
 # HELPER: ECHARTS BAR
 # ============================================================
-def make_echarts_bar(x_data, y_data):
+def make_echarts_bar(x_data, y_data, integer=True):
     """
     Gera um gráfico de barras simples.
     x_data: lista de categorias
     y_data: lista de valores
+    integer: se True, formata valores como inteiros (padrão para barras)
     """
+    if integer:
+        y_data_fmt = [int(float(y)) if pd.notna(y) else 0 for y in y_data]
+    else:
+        y_data_fmt = [round(float(y), 2) if pd.notna(y) else 0.0 for y in y_data]
+    
     options = {
         "xAxis": {
             "type": "category",
@@ -471,7 +478,7 @@ def make_echarts_bar(x_data, y_data):
         },
         "yAxis": {"type": "value"},
         "series": [{
-            "data": y_data, 
+            "data": y_data_fmt, 
             "type": "bar",
             "label": {
                 "show": True, 
@@ -1724,7 +1731,7 @@ elif pagina == "Ausentes":
             st.markdown("##### Ausentes por mês (Geral)")
             # Format dates for x-axis
             x_dates_aus = df_aus_mes["Mes"].dt.strftime("%b/%Y").tolist()
-            opt_aus_mes = make_echarts_line(x_dates_aus, df_aus_mes["Militares"].tolist())
+            opt_aus_mes = make_echarts_line(x_dates_aus, df_aus_mes["Militares"].tolist(), integer=True)
             st_echarts(options=opt_aus_mes, height="400px")
             
             st.markdown("---")
@@ -1774,7 +1781,7 @@ elif pagina == "Ausentes":
                 
                 st.markdown(f"##### Ausências diárias em {sel_mes_nome_aus}/{sel_ano_aus}")
                 x_dates_dia = df_aus_dia["Data"].dt.strftime("%d/%m").tolist()
-                opt_aus_dia = make_echarts_line(x_dates_dia, df_aus_dia["Militares"].tolist())
+                opt_aus_dia = make_echarts_line(x_dates_dia, df_aus_dia["Militares"].tolist(), integer=True)
                 st_echarts(options=opt_aus_dia, height="400px")
         else:
              st.info("Sem dados para gerar gráficos com os filtros atuais.")
@@ -1814,7 +1821,7 @@ elif pagina == "Dias de Mar":
             
             # Gráfico 1: Dias de Mar por Ano (LINHA)
             st.markdown("##### Dias de Mar por Ano")
-            opt_ano = make_echarts_line(df_por_ano["ANO"].astype(str).tolist(), df_por_ano["DIAS DE MAR"].tolist())
+            opt_ano = make_echarts_line(df_por_ano["ANO"].astype(str).tolist(), df_por_ano["DIAS DE MAR"].tolist(), integer=True)
             st_echarts(options=opt_ano, height="400px")
             
             st.markdown("---")
@@ -1854,7 +1861,7 @@ elif pagina == "Dias de Mar":
                         df_completo["Mês"] = df_completo["Mês_Num"].map(mapa_meses)
                         
                         st.markdown(f"##### Dias de Mar em {ano_sel_mar} (por mês de início da comissão)")
-                        opt_mes_mar = make_echarts_line(df_completo["Mês"].tolist(), df_completo["DIAS DE MAR"].tolist())
+                        opt_mes_mar = make_echarts_line(df_completo["Mês"].tolist(), df_completo["DIAS DE MAR"].tolist(), integer=True)
                         st_echarts(options=opt_mes_mar, height="400px")
                         
                         with st.expander("Ver dados brutos do ano selecionado"):
@@ -2410,7 +2417,7 @@ else:
                                 with col_g2:
                                     st.markdown("##### Militares em curso por mês")
                                     x_curso_mes = df_curso_mes["Mes"].dt.strftime("%b/%Y").tolist()
-                                    opt_curso_mes = make_echarts_line(x_curso_mes, df_curso_mes["Militares"].tolist())
+                                    opt_curso_mes = make_echarts_line(x_curso_mes, df_curso_mes["Militares"].tolist(), integer=True)
                                     st_echarts(options=opt_curso_mes, height="400px")
                             else:
                                 col_g2.info("Sem dados diários suficientes para análise mensal de cursos.")
