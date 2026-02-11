@@ -869,7 +869,7 @@ def parse_mar_date(val, ano):
             
     return pd.NaT
 
-@st.cache_data(ttl=600, show_spinner="Carregando dados de Mar...")
+@st.cache_data(ttl=0, show_spinner="Carregando dados de Mar...")
 def load_dias_mar():
     """Carrega dados da planilha separada de Dias de Mar"""
     conn = st.connection("gsheets", type=GSheetsConnection)
@@ -2156,7 +2156,7 @@ else:
                     media_dias_ferias = (df_ferias_evt.groupby("Nome")["Duracao_dias"].sum().mean() if not df_ferias_evt.empty else 0)
                     col_a1.metric("Dias de ausência (total)", int(total_dias_ausencia))
                     col_a2.metric("Média de dias de ausência por militar", f"{media_dias_por_militar:.1f}")
-                    col_a3.metric("Média de dias de FÉRIAS por militar", f"{media_dias_ferias:.1f}")
+                    col_a3.metric("Média de dias de férias por militar", f"{media_dias_ferias:.1f}")
                     st.markdown("---")
                     df_motivos_dias = (df_evt.groupby("MotivoAgrupado")["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False))
                     
