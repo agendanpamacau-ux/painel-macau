@@ -1771,9 +1771,11 @@ elif pagina == "Ausentes":
                 
                 if not ausentes_mes_evt.empty:
                     tabela_mes = ausentes_mes_evt[["Posto", "Nome", "MotivoAgrupado", "Inicio", "Fim"]].copy()
-                    tabela_mes["Início"] = tabela_mes["Inicio"].dt.strftime("%d/%m")
-                    tabela_mes["Fim"] = tabela_mes["Fim"].dt.strftime("%d/%m")
-                    tabela_mes = tabela_mes.drop(columns=["Inicio", "Fim"])
+                    # Limita as datas ao mês selecionado
+                    ultimo_dia_mes = end_date - timedelta(days=1)
+                    tabela_mes["Início"] = tabela_mes["Inicio"].clip(lower=pd.Timestamp(start_date)).dt.strftime("%d/%m")
+                    tabela_mes["Fim"] = tabela_mes["Fim"].clip(upper=pd.Timestamp(ultimo_dia_mes)).dt.strftime("%d/%m")
+                    tabela_mes = tabela_mes.drop(columns=["Inicio"])
                     tabela_mes = tabela_mes.sort_values(by=["Nome"])
                     st.dataframe(tabela_mes, use_container_width=True, hide_index=True)
                 
