@@ -1039,32 +1039,36 @@ def load_metas():
 @st.cache_data(ttl=600, show_spinner="Carregando datas importantes...")
 def load_datas_importantes():
     """Carrega dados da aba Datas_importantes da planilha de ausências.
-    A partir da linha 3 (header na linha 2).
+    A partir da linha 3 (header na linha 2 -> header=1).
     Coluna A: Nome do Evento
     Coluna B: Data Início
     Coluna C: Data Fim
     """
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        df = conn.read(spreadsheet=URL_AUSENCIAS, worksheet="Datas_importantes", header=2, ttl="10m")
+        df = conn.read(spreadsheet=URL_AUSENCIAS, worksheet="Datas_importantes", header=None, ttl="10m")
         if df is None or df.empty:
             return pd.DataFrame()
         
         eventos = []
-        for idx, row in df.iterrows():
-            nome = row.iloc[0]
-            dt_inicio_str = row.iloc[1]
-            dt_fim_str = row.iloc[2]
-            
-            if pd.notna(nome) and str(nome).strip() != "" and pd.notna(dt_inicio_str):
-                dt_inicio = pd.to_datetime(dt_inicio_str, dayfirst=True, errors='coerce')
-                dt_fim = pd.to_datetime(dt_fim_str, dayfirst=True, errors='coerce') if pd.notna(dt_fim_str) else dt_inicio
-                if pd.notna(dt_inicio):
-                    eventos.append({
-                        "Evento": str(nome).strip(),
-                        "Inicio": dt_inicio.date(),
-                        "Fim": dt_fim.date() if pd.notna(dt_fim) else dt_inicio.date()
-                    })
+        # Linha 1 = index 0. Linha 2 = index 1. Os dados começam na linha 3 (index 2).
+        for i in range(2, len(df)):
+            try:
+                nome = df.iloc[i, 0]
+                dt_inicio_str = df.iloc[i, 1]
+                dt_fim_str = df.iloc[i, 2]
+                
+                if pd.notna(nome) and str(nome).strip() != "" and pd.notna(dt_inicio_str):
+                    dt_inicio = pd.to_datetime(dt_inicio_str, dayfirst=True, errors='coerce')
+                    dt_fim = pd.to_datetime(dt_fim_str, dayfirst=True, errors='coerce') if pd.notna(dt_fim_str) else dt_inicio
+                    if pd.notna(dt_inicio):
+                        eventos.append({
+                            "Evento": str(nome).strip(),
+                            "Inicio": dt_inicio.date(),
+                            "Fim": dt_fim.date() if pd.notna(dt_fim) else dt_inicio.date()
+                        })
+            except Exception as e_row:
+                continue
                     
         return pd.DataFrame(eventos)
     except Exception as e:
@@ -1952,8 +1956,10 @@ elif pagina == "Ausentes":
         st.info("Sem dados de ausências para gerar gráficos.")
 
     st.markdown("---")
+    
     # --- AVISO DE DATAS IMPORTANTES (MOVIDO PARA O FINAL) ---
     df_importantes = load_datas_importantes()
+    
     if not df_importantes.empty and not df_eventos.empty:
         # Verifica conflitos entre eventos_importantes e ausentes_futuros
         hoje = datetime.today().date()
