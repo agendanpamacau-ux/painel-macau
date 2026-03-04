@@ -3211,31 +3211,37 @@ else:
                 st.info("Não foi possível carregar a lista de aniversariantes.")
             else:
                 # Processar dados
-                # Colunas esperadas: B (Posto), E (Nome), H (Aniversário)
-                # Vamos tentar identificar pelo index se os nomes não baterem, mas assumiremos nomes primeiro ou index como fallback.
+                # Colunas esperadas: B (Posto), E (Nome), K (Data Nascimento DD/MM/AAAA)
                 
-                # Ajuste de índices (0-based): B=1, E=4, H=7
+                # Ajuste de índices (0-based): B=1, E=4, K=10
                 # Cria um DF limpo
                 dados_niver = []
                 
                 # Itera sobre as linhas (pulando header se necessário, mas o read já deve ter tratado)
                 for idx, row in df_niver_raw.iterrows():
-                    # Tenta pegar valores por posição para garantir (já que nomes podem mudar)
                     try:
                         posto = row.iloc[1]
                         nome = row.iloc[4]
-                        data_str = row.iloc[7]
+                        data_str = row.iloc[10]  # Coluna K
                         
                         if pd.notna(nome) and str(nome).strip() != "" and pd.notna(data_str):
-                            dt_niver = parse_aniversario_date(data_str)
-                            if pd.notna(dt_niver):
+                            # Parse da data de nascimento completa
+                            dt_nasc = pd.to_datetime(data_str, dayfirst=True, errors='coerce')
+                            if pd.isna(dt_nasc):
+                                dt_nasc = parse_aniversario_date(data_str)
+                            
+                            if pd.notna(dt_nasc):
+                                ano_atual = (datetime.utcnow() - timedelta(hours=3)).year
+                                idade = ano_atual - dt_nasc.year
+                                dt_niver = datetime(ano_atual, dt_nasc.month, dt_nasc.day)
                                 dados_niver.append({
                                     "Posto": posto,
                                     "Nome": nome,
                                     "DataOriginal": data_str,
                                     "Data": dt_niver,
                                     "Dia": dt_niver.day,
-                                    "Mês": dt_niver.month
+                                    "Mês": dt_niver.month,
+                                    "Idade": idade
                                 })
                     except:
                         continue
@@ -3318,7 +3324,7 @@ else:
                         if aniversariantes_dia.empty:
                             val = "Ninguém hoje"
                         else:
-                            lista_nomes = [f"{row['Posto']} {row['Nome']}" for _, row in aniversariantes_dia.iterrows()]
+                            lista_nomes = [f"{row['Posto']} {row['Nome']} ({row['Idade']} anos)" for _, row in aniversariantes_dia.iterrows()]
                             val = ", ".join(lista_nomes)
                         
                         st.markdown(f"""
@@ -3329,7 +3335,7 @@ else:
                         """, unsafe_allow_html=True)
                     
                     with c3:
-                        val = f"{ultimo['Posto']} {ultimo['Nome']} ({ultimo['Dia']:02d}/{ultimo['Mês']:02d})"
+                        val = f"{ultimo['Posto']} {ultimo['Nome']} ({ultimo['Dia']:02d}/{ultimo['Mês']:02d}) - {ultimo['Idade']} anos"
                         st.markdown(f"""
                         <div class="card-niver">
                             <div class="card-title">Último Aniversariante</div>
@@ -3338,7 +3344,7 @@ else:
                         """, unsafe_allow_html=True)
                     
                     with c4:
-                        val = f"{proximo['Posto']} {proximo['Nome']} ({proximo['Dia']:02d}/{proximo['Mês']:02d})"
+                        val = f"{proximo['Posto']} {proximo['Nome']} ({proximo['Dia']:02d}/{proximo['Mês']:02d}) - {proximo['Idade']} anos"
                         st.markdown(f"""
                         <div class="card-niver">
                             <div class="card-title">Próximo Aniversariante</div>
@@ -3369,7 +3375,7 @@ else:
                         # Formatar data para exibição
                         df_show["Data Aniversário"] = df_show.apply(lambda x: f"{x['Dia']:02d}/{x['Mês']:02d}", axis=1)
                         st.dataframe(
-                            df_show.sort_values(["Mês", "Dia"])[["Posto", "Nome", "Data Aniversário"]],
+                            df_show.sort_values(["Mês", "Dia"])[["Posto", "Nome", "Data Aniversário", "Idade"]],
                             use_container_width=True,
                             hide_index=True
                         )
