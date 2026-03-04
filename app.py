@@ -497,6 +497,92 @@ def make_echarts_bar(x_data, y_data, integer=True):
     return options
 
 # ============================================================
+# HELPER: ECHARTS GROUPED BAR
+# ============================================================
+def make_echarts_grouped_bar(x_data, series_list):
+    """
+    Gera um gráfico de barras agrupadas.
+    x_data: lista de categorias (ex: meses)
+    series_list: lista de dicts [{"name": "Serviço", "data": [...]}, ...]
+    """
+    colors = ["#4099ff", "#ff5370", "#2ed8b6", "#ffb64d", "#a3a3a3", "#7367f0", "#e83e8c"]
+    series = []
+    for i, s in enumerate(series_list):
+        series.append({
+            "name": s["name"],
+            "type": "bar",
+            "data": [int(v) for v in s["data"]],
+            "label": {
+                "show": True,
+                "position": "top",
+                "fontSize": 10
+            },
+            "itemStyle": {"color": colors[i % len(colors)]}
+        })
+    options = {
+        "legend": {"data": [s["name"] for s in series_list], "top": "0%"},
+        "xAxis": {
+            "type": "category",
+            "data": x_data,
+            "axisLabel": {"interval": 0, "rotate": 30}
+        },
+        "yAxis": {"type": "value"},
+        "series": series,
+        "tooltip": {
+            "trigger": "axis",
+            "backgroundColor": "rgba(50, 50, 50, 0.9)",
+            "borderColor": "#777",
+            "textStyle": {"color": "#fff"}
+        },
+        "grid": {"top": "15%", "bottom": "15%"}
+    }
+    return options
+
+# ============================================================
+# HELPER: ECHARTS DUAL LINE (Meta vs Realizado)
+# ============================================================
+def make_echarts_dual_line(x_data, y_meta, y_real, label_meta="Meta", label_real="Realizado"):
+    """
+    Gera um gráfico de 2 linhas sobrepostas (meta vs realizado).
+    """
+    y_meta_fmt = [f"{float(y):.1f}" if pd.notna(y) else "0.0" for y in y_meta]
+    y_real_fmt = [f"{float(y):.1f}" if pd.notna(y) else "0.0" for y in y_real]
+    options = {
+        "legend": {"data": [label_meta, label_real], "top": "0%"},
+        "xAxis": {
+            "type": "category",
+            "data": x_data,
+        },
+        "yAxis": {"type": "value", "axisLabel": {"formatter": "{value}%"}},
+        "series": [
+            {
+                "name": label_meta,
+                "data": y_meta_fmt,
+                "type": "line",
+                "lineStyle": {"type": "dashed", "color": "#ffb64d"},
+                "itemStyle": {"color": "#ffb64d"},
+                "label": {"show": True, "position": "top", "fontSize": 11, "formatter": "{c}%"}
+            },
+            {
+                "name": label_real,
+                "data": y_real_fmt,
+                "type": "line",
+                "lineStyle": {"color": "#4099ff"},
+                "itemStyle": {"color": "#4099ff"},
+                "label": {"show": True, "position": "bottom", "fontSize": 11, "formatter": "{c}%"}
+            }
+        ],
+        "tooltip": {
+            "trigger": "axis",
+            "backgroundColor": "rgba(50, 50, 50, 0.9)",
+            "borderColor": "#777",
+            "textStyle": {"color": "#fff"}
+        },
+        "grid": {"top": "12%", "bottom": "5%"}
+    }
+    return options
+
+# ============================================================
 # VERSÃO DO SCRIPT
 # ============================================================
 SCRIPT_VERSION = "v2.1 (Ícones Atualizados)"
@@ -697,6 +783,7 @@ URL_CARDAPIO = "https://docs.google.com/spreadsheets/d/1i3veE6cj4-h9toh_DIjm8vcy
 URL_ANIVERSARIOS = "https://docs.google.com/spreadsheets/d/1mcQlXU_sRYwqmBCHkL3qX1GS6bivUqIGqGVVCvZLc0U/edit?usp=sharing"
 URL_LOTACAO = "https://docs.google.com/spreadsheets/d/1c2l7-LlFsxMqzI4JkX6IDQ7I7w-v202YaSJU2gpkrx4/edit?usp=sharing"
 URL_TABELA_SERVICO = "https://docs.google.com/spreadsheets/d/1xWS42Q4WjKB5ERd8kXBXShzWzVa8fUtgo1bFdhTxE7E/edit?usp=sharing"
+URL_AUSENCIAS = "https://docs.google.com/spreadsheets/d/1BLBVdAUfJ4sYH2qLRTXs122L89HGCTrPPuxM8KK7_sU/edit?usp=sharing"
 
 def parse_bool(value) -> bool:
     """
@@ -910,6 +997,45 @@ def load_dias_mar():
             df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce')
             
     return df
+
+@st.cache_data(ttl=600, show_spinner="Carregando metas de férias...")
+def load_metas():
+    """Carrega dados da aba Metas da planilha de ausências.
+    Coluna A (linhas 2-13): meses (Jan-Dez)
+    Coluna B (linhas 2-13): meta % acumulada
+    Coluna C (linha 1): ano de referência
+    """
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df = conn.read(spreadsheet=URL_AUSENCIAS, worksheet="Metas", header=None, ttl="10m")
+        if df is None or df.empty:
+            return pd.DataFrame(), None
+        # Ano de referência: célula C1 (index [0, 2])
+        ano_ref = None
+        try:
+            ano_ref = int(float(df.iloc[0, 2]))
+        except:
+            pass
+        # Metas: linhas 2-13 (index 1-12), coluna A=mês, B=meta %
+        meses = []
+        metas = []
+        for i in range(1, 13):
+            if i < len(df):
+                meses.append(str(df.iloc[i, 0]).strip())
+                val = df.iloc[i, 1]
+                # Trata valores percentuais (pode vir como 0.05 ou 5 ou "5%")
+                try:
+                    v = float(str(val).replace("%", "").replace(",", ".").strip())
+                    if v <= 1:
+                        v = v * 100
+                    metas.append(round(v, 1))
+                except:
+                    metas.append(0.0)
+        df_metas = pd.DataFrame({"Mes": meses, "Meta": metas})
+        return df_metas, ano_ref
+    except Exception as e:
+        print(f"Erro ao carregar metas: {e}")
+        return pd.DataFrame(), None
 
 @st.cache_data(ttl=0, show_spinner="Carregando Tabela do Dia...")
 def load_tabela_servico_dia():
@@ -2311,25 +2437,92 @@ else:
                     
                     st.markdown("---")
                     
-                    col_fx1, col_fx2 = st.columns(2)
-                    df_escala = (df_ferias.groupby("Escala")["Nome"].nunique().reset_index(name="Militares").sort_values("Militares", ascending=False))
-                    with col_fx1:
-                        st.markdown("##### Militares de férias por serviço")
-                        opt_escala = make_echarts_bar(df_escala["Escala"].tolist(), df_escala["Militares"].tolist())
-                        st_echarts(options=opt_escala, height="500px")
-                    
+                    # --- GRÁFICO 1: % de militares de férias por mês ---
                     if not df_dias.empty:
                         df_dias_ferias = df_dias[df_dias["Tipo"] == "Férias"].copy()
                         if not df_dias_ferias.empty:
                             df_dias_ferias["Mes"] = df_dias_ferias["Data"].dt.to_period("M").dt.to_timestamp()
-                            df_mes_ferias = (df_dias_ferias[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
-                            with col_fx2:
-                                st.markdown("##### Quantidade de militares de férias por mês")
-                                x_mes_ferias = df_mes_ferias["Mes"].dt.strftime("%b/%Y").tolist()
-                                opt_mes_ferias = make_echarts_bar(x_mes_ferias, df_mes_ferias["Militares"].tolist())
-                                st_echarts(options=opt_mes_ferias, height="500px")
+                            df_mes_ferias = (df_dias_ferias[["Mes", "Nome"]].drop_duplicates()
+                                             .groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
+                            total_efetivo_ferias = df_raw["Nome"].nunique()
+                            df_mes_ferias["Perc"] = (df_mes_ferias["Militares"] / total_efetivo_ferias * 100).round(1)
+
+                            st.markdown("##### % de militares de férias por mês")
+                            x_mes_ferias = df_mes_ferias["Mes"].dt.strftime("%b/%Y").tolist()
+                            # Formata labels como percentual
+                            y_perc_fmt = [f"{v:.1f}" for v in df_mes_ferias["Perc"].tolist()]
+                            opt_perc_ferias = {
+                                "xAxis": {"type": "category", "data": x_mes_ferias, "axisLabel": {"interval": 0, "rotate": 30}},
+                                "yAxis": {"type": "value", "axisLabel": {"formatter": "{value}%"}},
+                                "series": [{"data": y_perc_fmt, "type": "bar",
+                                    "label": {"show": True, "position": "top", "fontSize": 12, "formatter": "{c}%"},
+                                    "itemStyle": {"color": "#4099ff"}
+                                }],
+                                "tooltip": {"trigger": "axis", "backgroundColor": "rgba(50,50,50,0.9)", "borderColor": "#777", "textStyle": {"color": "#fff"}}
+                            }
+                            st_echarts(options=opt_perc_ferias, height="400px")
+
+                            st.markdown("---")
+
+                            # --- GRÁFICO 2: Férias por serviço por mês (barras agrupadas) ---
+                            st.markdown("##### Militares de férias por serviço (por mês)")
+                            servicos_filtro = SERVICOS_CONSIDERADOS
+                            df_dias_ferias_srv = df_dias_ferias[df_dias_ferias["Escala"].isin(servicos_filtro)].copy()
+                            if not df_dias_ferias_srv.empty:
+                                # Agrupar por mês e serviço
+                                df_srv_mes = (df_dias_ferias_srv[["Mes", "Nome", "Escala"]].drop_duplicates()
+                                              .groupby(["Mes", "Escala"])["Nome"].nunique().reset_index(name="Militares"))
+                                meses_unicos = sorted(df_srv_mes["Mes"].unique())
+                                mapa_meses_abrev = {1:"Jan",2:"Fev",3:"Mar",4:"Abr",5:"Mai",6:"Jun",7:"Jul",8:"Ago",9:"Set",10:"Out",11:"Nov",12:"Dez"}
+                                x_meses = [mapa_meses_abrev.get(m.month, str(m.month)) + "/" + str(m.year) for m in meses_unicos]
+                                series_srv = []
+                                for srv in servicos_filtro:
+                                    vals = []
+                                    for m in meses_unicos:
+                                        v = df_srv_mes[(df_srv_mes["Mes"] == m) & (df_srv_mes["Escala"] == srv)]["Militares"].sum()
+                                        vals.append(int(v))
+                                    series_srv.append({"name": srv, "data": vals})
+                                opt_grouped = make_echarts_grouped_bar(x_meses, series_srv)
+                                st_echarts(options=opt_grouped, height="500px")
+                            else:
+                                st.info("Sem dados de férias para os serviços considerados.")
+
+                            st.markdown("---")
+
+                            # --- GRÁFICO 3: % férias gozadas vs Meta ---
+                            st.markdown("##### % de férias gozadas vs Meta")
+                            try:
+                                df_metas, ano_ref_metas = load_metas()
+                                if not df_metas.empty and ano_ref_metas:
+                                    st.caption(f"Ano de referência: **{ano_ref_metas}**")
+                                    # Calcular % realizado acumulado por mês
+                                    # Usar df_dias_ferias filtrado pelo ano de referência
+                                    df_ferias_ano = df_dias_ferias[df_dias_ferias["Data"].dt.year == ano_ref_metas].copy()
+                                    mapa_meses_nome = {1:"Janeiro",2:"Fevereiro",3:"Março",4:"Abril",5:"Maio",6:"Junho",
+                                                       7:"Julho",8:"Agosto",9:"Setembro",10:"Outubro",11:"Novembro",12:"Dezembro"}
+                                    total_efetivo_meta = df_raw["Nome"].nunique()
+                                    # Total de dias de férias esperado (30 dias/militar em média)
+                                    total_dias_esperado = total_efetivo_meta * 30
+
+                                    # Calcular dias de férias acumulados por mês
+                                    realizado_acum = []
+                                    dias_acumulados = 0
+                                    for mes_num in range(1, 13):
+                                        dias_mes = len(df_ferias_ano[df_ferias_ano["Data"].dt.month == mes_num])
+                                        dias_acumulados += dias_mes
+                                        perc = (dias_acumulados / total_dias_esperado * 100) if total_dias_esperado > 0 else 0
+                                        realizado_acum.append(round(perc, 1))
+
+                                    x_metas = df_metas["Mes"].tolist()
+                                    y_metas = df_metas["Meta"].tolist()
+                                    opt_metas = make_echarts_dual_line(x_metas, y_metas, realizado_acum, "Meta", "Realizado")
+                                    st_echarts(options=opt_metas, height="400px")
+                                else:
+                                    st.info("Não foi possível carregar as metas de férias.")
+                            except Exception as e:
+                                st.warning(f"Erro ao carregar gráfico de metas: {e}")
                         else:
-                            col_fx2.info("Sem dados diários suficientes para calcular férias por mês.")
+                            st.info("Sem dados diários suficientes para gerar gráficos de férias.")
 
                     st.markdown("---")
                     
