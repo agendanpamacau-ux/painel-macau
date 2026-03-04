@@ -9,8 +9,7 @@ from googleapiclient.discovery import build
 import base64
 import os
 from streamlit_echarts import st_echarts, JsCode
-
-
+import streamlit.components.v1 as components
 
 # ============================================================
 # 1. CONFIGURAÇÃO DA PÁGINA (MOVIDO PARA O TOPO)
@@ -1726,6 +1725,31 @@ with st.sidebar.container():
 
     st.markdown("---")
     
+    # Auto-collapse sidebar on mobile
+    components.html(
+        """
+        <script>
+        const doc = window.parent.document;
+        doc.addEventListener('click', function(e) {
+            // Find if the click happened on a sidebar radio label
+            if (e.target.closest('[data-testid="stSidebar"] div[role="radiogroup"] label')) {
+                if (doc.documentElement.clientWidth <= 768) {
+                    setTimeout(function() {
+                        const closeBtn = doc.querySelector('button[kind="headerNoPadding"][data-testid="baseButton-headerNoPadding"]') || 
+                                         doc.querySelector('[data-testid="stSidebarCollapseButton"] button');
+                        if (closeBtn) closeBtn.click();
+                        else {
+                            const escEvent = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true });
+                            doc.dispatchEvent(escEvent);
+                        }
+                    }, 100);
+                }
+            }
+        });
+        </script>
+        """,
+        height=0, width=0
+    )
     
     # Lógica de Logout via Menu
     if pagina == "Sair":
