@@ -1773,9 +1773,12 @@ elif pagina == "Ausentes":
                     tabela_mes = ausentes_mes_evt[["Posto", "Nome", "MotivoAgrupado", "Inicio", "Fim"]].copy()
                     # Limita as datas ao mês selecionado
                     ultimo_dia_mes = end_date - timedelta(days=1)
-                    tabela_mes["Início"] = tabela_mes["Inicio"].clip(lower=pd.Timestamp(start_date)).dt.strftime("%d/%m")
-                    tabela_mes["Fim"] = tabela_mes["Fim"].clip(upper=pd.Timestamp(ultimo_dia_mes)).dt.strftime("%d/%m")
-                    tabela_mes = tabela_mes.drop(columns=["Inicio"])
+                    _meses_abrev = {1:"JAN",2:"FEV",3:"MAR",4:"ABR",5:"MAI",6:"JUN",7:"JUL",8:"AGO",9:"SET",10:"OUT",11:"NOV",12:"DEZ"}
+                    ini_clamp = tabela_mes["Inicio"].clip(lower=pd.Timestamp(start_date))
+                    fim_clamp = tabela_mes["Fim"].clip(upper=pd.Timestamp(ultimo_dia_mes))
+                    tabela_mes["Período"] = ini_clamp.dt.day.astype(str).str.zfill(2) + " a " + fim_clamp.dt.day.astype(str).str.zfill(2) + fim_clamp.dt.month.map(_meses_abrev)
+                    tabela_mes = tabela_mes.rename(columns={"MotivoAgrupado": "Motivo"})
+                    tabela_mes = tabela_mes[["Posto", "Nome", "Motivo", "Período"]]
                     tabela_mes = tabela_mes.sort_values(by=["Nome"])
                     st.dataframe(tabela_mes, use_container_width=True, hide_index=True)
                 
