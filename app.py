@@ -3642,6 +3642,57 @@ else:
         else:
             st.info("df_eventos está vazio. Verifique se as colunas de datas estão corretamente preenchidas na planilha.")
 
+        st.markdown("---")
+        st.markdown("---")
+        st.markdown("### 🎂 O QUE O APP ESTÁ LENDO AGORA (URL_ANIVERSARIOS default)")
+        try:
+            df_niver_debug = load_aniversarios()
+            st.write(f"**Shape:** {df_niver_debug.shape}")
+            st.write(f"**Colunas ({len(df_niver_debug.columns)}):**")
+            for i, col in enumerate(df_niver_debug.columns):
+                st.write(f"- Índice {i} (Coluna {chr(65+i)}): `{col}`")
+            
+            st.write("**Primeiras 10 linhas da planilha carregada:**")
+            st.dataframe(df_niver_debug.head(10), use_container_width=True)
+            
+            st.warning("""
+            **Por que os aniversários não aparecem?**
+            Se você não estiver vendo uma coluna com as Datas de Nascimento (ex: "Data de Nascimento", "Aniversário", etc), 
+            é porque a planilha lida acima é a aba INCORRETA (ou a URL é de outra planilha).
+            Use a ferramenta de Investigação abaixo para encontrar a aba correta!
+            """)
+        except Exception as e:
+            st.error(f"Erro ao carregar URL_ANIVERSARIOS padrão: {e}")
+
+        st.markdown("---")
+        st.markdown("### 🔍 Investigador de Planilhas Google (Encontre sua Aba!)")
+        st.info("O Streamlit lê por padrão a PRIMEIRA ABA da planilha. Se os aniversários estiverem na segunda aba (ex: 'Aniversários'), você precisa testar aqui.")
+        
+        test_url = st.text_input("URL da Planilha", value=URL_ANIVERSARIOS, key="test_url")
+        test_sheet = st.text_input("Nome da Aba (Worksheet) - Deixe em branco para a primeira aba", value="Aniversários", key="test_sheet")
+        test_header = st.number_input("Linha de Cabeçalho (Ex: se o cabeçalho está na linha 8, digite 7)", value=7, min_value=0, max_value=20, key="test_header")
+        
+        if st.button("Testar Carga de Planilha"):
+            with st.spinner("Carregando..."):
+                try:
+                    conn_test = st.connection("gsheets", type=GSheetsConnection)
+                    kwargs = {"spreadsheet": test_url, "header": test_header, "ttl": 0}
+                    if test_sheet.strip():
+                        kwargs["worksheet"] = test_sheet.strip()
+                    else:
+                        st.warning("Nenhum nome de aba informado. Lendo a aba padrão (primeira).")
+                        
+                    df_test = conn_test.read(**kwargs)
+                    st.success(f"Sucesso! Aba carregada com {df_test.shape[0]} linhas e {df_test.shape[1]} colunas.")
+                    st.write("**Lista de Colunas encontradas:**")
+                    for i, col in enumerate(df_test.columns):
+                        st.write(f"- Índice {i} (Coluna {chr(65+i)}): `{col}`")
+                    st.write("**Dados Carregados:**")
+                    st.dataframe(df_test.head(15), use_container_width=True)
+                except Exception as e:
+                    st.error(f"Erro ao carregar: O nome da aba está correto? Detalhes do erro: {e}")
+
+
 
 # ============================================================
 # 12. RODAPÉ
