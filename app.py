@@ -928,21 +928,7 @@ def load_data():
 def load_aniversarios():
     """Carrega dados de aniversários"""
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(spreadsheet=URL_ANIVERSARIOS, header=7, ttl="1h")
-    
-    # Selecionar colunas B (Posto), E (Nome), H (Aniversário)
-    # Assumindo que o header está na linha 1 (padrão)
-    # Se B é a 2ª coluna, E a 5ª, H a 8ª.
-    # Vamos tentar pegar pelo nome se possível, ou pelo índice se os nomes variarem.
-    # O usuário disse: B (Posto e graduação), E (Nome de guerra), H (Aniversários)
-    
-    # Mapeamento seguro por índice (0-based: B=1, E=4, H=7)
-    # Mas o read() retorna um DF com headers. Vamos assumir que os headers existem.
-    # Se não, teríamos que ler sem header. Vamos assumir que tem header.
-    
-    # Filtrar colunas de interesse
-    # Precisamos identificar os nomes das colunas.
-    # Vamos pegar todas e renomear/filtrar depois.
+    df = conn.read(spreadsheet=URL_ANIVERSARIOS, worksheet="TRIPULAÇÃO", header=6, ttl="1h")
     
     return df
 
@@ -1175,10 +1161,8 @@ def load_calendar_events(calendar_id: str, start_date: str = None, end_date: str
 def load_tempo_bordo():
     """Carrega dados de tempo de embarque da planilha de Tripulação."""
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Header na linha 8 (index 7). Dados começam na 9.
-    # Mas se user diz "a partir da linha 8", pode ser header na 7.
-    # Vamos ler header=7 (Row 8).
-    df = conn.read(spreadsheet=URL_ANIVERSARIOS, header=7, ttl="1h")
+    # Header na linha 7 (index 6). Dados começam na 8.
+    df = conn.read(spreadsheet=URL_ANIVERSARIOS, worksheet="TRIPULAÇÃO", header=6, ttl="1h")
     
     # Coluna N é index 13. Vamos pegar pelo nome se possível, ou index fallback.
     # Se header=7 lê a linha 8 como header. A coluna N deve ter um título.
@@ -3669,8 +3653,8 @@ else:
         st.info("O Streamlit lê por padrão a PRIMEIRA ABA da planilha. Se os aniversários estiverem na segunda aba (ex: 'Aniversários'), você precisa testar aqui.")
         
         test_url = st.text_input("URL da Planilha", value=URL_ANIVERSARIOS, key="test_url")
-        test_sheet = st.text_input("Nome da Aba (Worksheet) - Deixe em branco para a primeira aba", value="Aniversários", key="test_sheet")
-        test_header = st.number_input("Linha de Cabeçalho (Ex: se o cabeçalho está na linha 8, digite 7)", value=7, min_value=0, max_value=20, key="test_header")
+        test_sheet = st.text_input("Nome da Aba (Worksheet) - Deixe em branco para a primeira aba", value="TRIPULAÇÃO", key="test_sheet")
+        test_header = st.number_input("Linha de Cabeçalho (Ex: se o cabeçalho está na linha 8, digite 7)", value=6, min_value=0, max_value=20, key="test_header")
         
         if st.button("Testar Carga de Planilha"):
             with st.spinner("Carregando..."):
