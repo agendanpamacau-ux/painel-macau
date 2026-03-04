@@ -1981,9 +1981,11 @@ elif pagina == "Ausentes":
                         conflitos_importantes.append(f"**{nome_evento}** ({str_periodo}): {qtd} militar(es) ausente(s) - {str_nomes}")
         
         if conflitos_importantes:
-            st.error("⚠️ **AVISO: Conflito com Datas Importantes!** Existem militares ausentes durante os seguintes eventos:")
+            st.error("AVISO: Conflito com Datas Importantes! Existem militares ausentes durante os seguintes eventos:")
             for aviso in conflitos_importantes:
                 st.write(f"- {aviso}")
+        else:
+            st.success("Não há militares com ausências previstas para períodos de datas importantes.")
 
 
 # --------------------------------------------------------
