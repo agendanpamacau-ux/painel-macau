@@ -1977,12 +1977,24 @@ elif pagina == "Ausentes":
                 ausentes_no_evento = df_eventos[mask_intersecao]
                 
                 if not ausentes_no_evento.empty:
-                    # Garantir que a coluna Nome seja string e preenchida
-                    nomes_ausentes = ausentes_no_evento["Nome"].dropna().astype(str).unique()
-                    if len(nomes_ausentes) > 0:
-                        qtd = len(nomes_ausentes)
+                    # Agrupar nomes com seus respectivos motivos
+                    ausentes_lista = []
+                    for _, row_aus in ausentes_no_evento.iterrows():
+                        nome = str(row_aus["Nome"]).strip()
+                        motivo = str(row_aus["MotivoAgrupado"]).strip() if "MotivoAgrupado" in row_aus else "N/I"
+                        if nome and nome != "nan":
+                            ausentes_lista.append(f"{nome} ({motivo})")
+                    
+                    # Remover duplicatas mantendo a ordem (caso a mesma pessoa tenha 2 eventos no período)
+                    ausentes_unicos = []
+                    for ausente in ausentes_lista:
+                        if ausente not in ausentes_unicos:
+                            ausentes_unicos.append(ausente)
+                            
+                    if len(ausentes_unicos) > 0:
+                        qtd = len(ausentes_unicos)
                         str_periodo = f"{ini_evento.strftime('%d/%m/%Y')} a {fim_evento.strftime('%d/%m/%Y')}" if ini_evento != fim_evento else f"{ini_evento.strftime('%d/%m/%Y')}"
-                        str_nomes = ", ".join(nomes_ausentes)
+                        str_nomes = ", ".join(ausentes_unicos)
                         
                         conflitos_importantes.append(f"**{nome_evento}** ({str_periodo}): {qtd} militar(es) ausente(s) - {str_nomes}")
         
