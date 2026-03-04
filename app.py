@@ -1821,41 +1821,6 @@ if pagina == "Presentes":
 elif pagina == "Ausentes":
     st.subheader("Ausentes")
     
-    # --- AVISO DE DATAS IMPORTANTES ---
-    df_importantes = load_datas_importantes()
-    if not df_importantes.empty and not df_eventos.empty:
-        # Verifica conflitos entre eventos_importantes e ausentes_futuros
-        hoje = datetime.today().date()
-        conflitos_importantes = []
-        
-        for _, evento_imp in df_importantes.iterrows():
-            nome_evento = evento_imp["Evento"]
-            ini_evento = evento_imp["Inicio"]
-            fim_evento = evento_imp["Fim"]
-            
-            # Só avisa de eventos que ainda não passaram
-            if fim_evento >= hoje:
-                # Filtra ausentes que têm interseção com este evento
-                # Interseção: (Inicio_Ausencia <= Fim_Evento) AND (Fim_Ausencia >= Inicio_Evento)
-                # Note que no df_eventos, Inicio e Fim são datetime, então extraímos o .date() para comparar
-                
-                # Criamos máscaras
-                mask_intersecao = (df_eventos["Inicio"].dt.date <= fim_evento) & (df_eventos["Fim"].dt.date >= ini_evento)
-                ausentes_no_evento = df_eventos[mask_intersecao]
-                
-                if not ausentes_no_evento.empty:
-                    nomes_ausentes = ausentes_no_evento["Nome"].unique()
-                    qtd = len(nomes_ausentes)
-                    str_periodo = f"{ini_evento.strftime('%d/%m/%Y')} a {fim_evento.strftime('%d/%m/%Y')}" if ini_evento != fim_evento else f"{ini_evento.strftime('%d/%m/%Y')}"
-                    
-                    conflitos_importantes.append(f"**{nome_evento}** ({str_periodo}): {qtd} militar(es) ausente(s) - {', '.join(nomes_ausentes)}")
-        
-        if conflitos_importantes:
-            st.error("⚠️ **AVISO: Conflito com Datas Importantes!** Existem militares ausentes durante os seguintes eventos:")
-            for aviso in conflitos_importantes:
-                st.write(f"- {aviso}")
-            st.markdown("---")
-    
     # --- SEÇÃO 1: AUSENTES HOJE (FIXO) ---
     st.markdown("### Ausentes Hoje")
     
@@ -1985,6 +1950,41 @@ elif pagina == "Ausentes":
              st.info("Sem dados para gerar gráficos com os filtros atuais.")
     else:
         st.info("Sem dados de ausências para gerar gráficos.")
+
+    st.markdown("---")
+    # --- AVISO DE DATAS IMPORTANTES (MOVIDO PARA O FINAL) ---
+    df_importantes = load_datas_importantes()
+    if not df_importantes.empty and not df_eventos.empty:
+        # Verifica conflitos entre eventos_importantes e ausentes_futuros
+        hoje = datetime.today().date()
+        conflitos_importantes = []
+        
+        for _, evento_imp in df_importantes.iterrows():
+            nome_evento = evento_imp["Evento"]
+            ini_evento = evento_imp["Inicio"]
+            fim_evento = evento_imp["Fim"]
+            
+            # Só avisa de eventos que ainda não passaram
+            if fim_evento >= hoje:
+                # Extrai apenas as datas para comparação
+                mask_intersecao = (df_eventos["Inicio"].dt.date <= fim_evento) & (df_eventos["Fim"].dt.date >= ini_evento)
+                ausentes_no_evento = df_eventos[mask_intersecao]
+                
+                if not ausentes_no_evento.empty:
+                    # Garantir que a coluna Nome seja string e preenchida
+                    nomes_ausentes = ausentes_no_evento["Nome"].dropna().astype(str).unique()
+                    if len(nomes_ausentes) > 0:
+                        qtd = len(nomes_ausentes)
+                        str_periodo = f"{ini_evento.strftime('%d/%m/%Y')} a {fim_evento.strftime('%d/%m/%Y')}" if ini_evento != fim_evento else f"{ini_evento.strftime('%d/%m/%Y')}"
+                        str_nomes = ", ".join(nomes_ausentes)
+                        
+                        conflitos_importantes.append(f"**{nome_evento}** ({str_periodo}): {qtd} militar(es) ausente(s) - {str_nomes}")
+        
+        if conflitos_importantes:
+            st.error("⚠️ **AVISO: Conflito com Datas Importantes!** Existem militares ausentes durante os seguintes eventos:")
+            for aviso in conflitos_importantes:
+                st.write(f"- {aviso}")
+
 
 # --------------------------------------------------------
 # NOVO: DIAS DE MAR
