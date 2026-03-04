@@ -1528,11 +1528,14 @@ def detectar_conflitos(df_eventos):
                     days_overlap = (end_overlap - start_overlap).days + 1
                     
                     periodo_conflito = f"{start_overlap.strftime('%d/%m')} - {end_overlap.strftime('%d/%m')}"
+                    # Inclui o motivo da ausência ao lado do nome
+                    motivo_1 = p1.get("MotivoAgrupado", "Ausente")
+                    motivo_2 = p2.get("MotivoAgrupado", "Ausente")
                     
                     conflict_data.append({
                         "Grupo": grupo,
-                        "Militar 1": f"{p1['Posto']} {p1['Nome']}",
-                        "Militar 2": f"{p2['Posto']} {p2['Nome']}",
+                        "Militar 1": f"{p1['Posto']} {p1['Nome']} ({motivo_1})",
+                        "Militar 2": f"{p2['Posto']} {p2['Nome']} ({motivo_2})",
                         "Período Conflito": periodo_conflito,
                         "Dias Conflito": days_overlap
                     })
@@ -1723,6 +1726,7 @@ with st.sidebar.container():
 
     st.markdown("---")
     
+    
     # Lógica de Logout via Menu
     if pagina == "Sair":
         st.session_state.clear()
@@ -1767,6 +1771,7 @@ if pagina == "Presentes":
     metrics_placeholder = st.container()
     table_placeholder = st.container()
     st.markdown("---")
+    
     st.markdown("##### Filtros & Data")
     col_f1, col_f2, col_f3, col_data = st.columns([1.5, 1.5, 1.5, 2])
     apenas_eqman = col_f1.checkbox("Apenas EqMan", key="pres_eqman")
@@ -1778,6 +1783,7 @@ if pagina == "Presentes":
     with metrics_placeholder:
         exibir_metricas_globais(hoje)
         st.markdown("---")
+    
 
     with table_placeholder:
         df_trip = filtrar_tripulacao(df_raw, apenas_eqman, apenas_in, apenas_gvi)
@@ -1854,6 +1860,7 @@ elif pagina == "Ausentes":
         st.info("Não há dados de eventos processados.")
 
     st.markdown("---")
+    
 
     # --- SEÇÃO 2: AUSENTES POR PERÍODO ---
     st.markdown("### Ausentes por Período")
@@ -1882,6 +1889,7 @@ elif pagina == "Ausentes":
 
     st.markdown("---")
     
+    
     if not df_dias.empty:
         df_dias_filt = filtrar_dias(df_dias, apenas_eqman, apenas_in, apenas_gvi)
         
@@ -1897,6 +1905,7 @@ elif pagina == "Ausentes":
             st_echarts(options=opt_aus_mes, height="400px")
             
             st.markdown("---")
+    
             
             st.subheader("Militares ausentes por dia (Mês Específico)")
             
@@ -1954,6 +1963,34 @@ elif pagina == "Ausentes":
              st.info("Sem dados para gerar gráficos com os filtros atuais.")
     else:
         st.info("Sem dados de ausências para gerar gráficos.")
+
+    st.markdown("---")
+    
+    # --- CONFLITOS DE AUSÊNCIA POR GRUPO (MOVIDO DA ABA FÉRIAS) ---
+    st.markdown("### Conflitos de Ausência por Grupo")
+    df_conflitos = detectar_conflitos(df_eventos)
+    
+    if not df_conflitos.empty:
+        # Formata e exibe
+        st.warning(f"Foram detectados {len(df_conflitos)} conflitos coincidentes entre militares do mesmo grupo.")
+        
+        # Ordena por Grupo e Militar 1
+        df_conflitos = df_conflitos.sort_values(["Grupo", "Militar 1"])
+        
+        st.dataframe(
+            df_conflitos,
+            column_config={
+                "Grupo": st.column_config.TextColumn("Grupo de Conflito"),
+                "Militar 1": st.column_config.TextColumn("Militar 1"),
+                "Militar 2": st.column_config.TextColumn("Militar 2"),
+                "Período Conflito": st.column_config.TextColumn("Período Coincidente"),
+                "Dias Conflito": st.column_config.NumberColumn("Dias", format="%d"),
+            },
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.success("Não foram detectados conflitos de ausência entre militares do mesmo grupo.")
 
     st.markdown("---")
     
@@ -2036,6 +2073,7 @@ elif pagina == "Dias de Mar":
             c4.metric("Média Milhas/Ano", f"{media_milhas_ano:,.0f}")
             
             st.markdown("---")
+    
             
             # Gráfico 1: Dias de Mar por Ano (LINHA)
             st.markdown("##### Dias de Mar por Ano")
@@ -2043,6 +2081,7 @@ elif pagina == "Dias de Mar":
             st_echarts(options=opt_ano, height="400px")
             
             st.markdown("---")
+    
             
             # Gráfico 2: Detalhamento Mensal (LINHA)
             st.subheader("Detalhamento Mensal")
@@ -2089,6 +2128,7 @@ elif pagina == "Dias de Mar":
                 else:
                     st.info(f"Sem dados de dias de mar para o ano {ano_sel_mar}.")
             st.markdown("---")
+    
             
             # Filtro por Período Personalizado
             st.subheader("Consulta por Período")
@@ -2242,6 +2282,7 @@ else:
                 )
         
         st.markdown("---")
+    
         
         col_sel, col_btn = st.columns([2, 2])
         with col_sel:
@@ -2284,6 +2325,7 @@ else:
                 st.info(f"Nenhum evento encontrado em **{nome_agenda}** para {sel_mes_nome}/{sel_ano}.")
             else:
                 st.markdown("---")
+    
                 cal_color = AGENDA_COLORS.get(nome_agenda, "#999999")
                 
                 for _, row in df_cal.iterrows():
@@ -2418,6 +2460,7 @@ else:
                     col_a2.metric("Média de dias de ausência por militar", f"{media_dias_por_militar:.1f}")
                     col_a3.metric("Média de dias de férias por militar", f"{media_dias_ferias:.1f}")
                     st.markdown("---")
+    
                     df_motivos_dias = (df_evt.groupby("MotivoAgrupado")["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False))
                     
                     # ECHARTS DONUT (VISÃO ANALÍTICA)
@@ -2429,6 +2472,7 @@ else:
                     st_echarts(options=opt_motivos, height="600px")
                     
                     st.markdown("---")
+    
                     
                     # df_top10 = (df_evt.groupby(["Nome", "Posto"])["Duracao_dias"].sum().reset_index().sort_values("Duracao_dias", ascending=False).head(10))
                     # st.markdown("##### Top 10 – Dias de ausência por militar")
@@ -2436,6 +2480,7 @@ else:
                     # st_echarts(options=opt_top10, height="500px")
                     if not df_dias.empty:
                         st.markdown("---")
+    
                         st.subheader("Média de militares ausentes por dia (por mês)")
                         df_dias_filtrado = df_dias.copy()
                         if not df_dias_filtrado.empty:
@@ -2483,6 +2528,7 @@ else:
                     st.info("Coluna %DG não encontrada na planilha para cálculo do percentual de férias gozadas.")
                 
                 st.markdown("---")
+    
 
                 if df_ferias.empty:
                     st.info("Nenhuma férias cadastrada.")
@@ -2546,6 +2592,7 @@ else:
                             st.info(f"Ninguém de férias em {sel_mes_nome}/{sel_ano}.")
 
                     st.markdown("---")
+    
                     
                     # 3. MÉTRICAS GERAIS E GRÁFICOS
                     col_f1m, col_f2m, col_f3m = st.columns(3)
@@ -2558,6 +2605,7 @@ else:
                     col_f3m.metric("Restam cadastrar", restam_cadastrar)
                     
                     st.markdown("---")
+    
                     
                     # --- GRÁFICO 1: % de militares de férias por mês ---
                     if not df_dias.empty:
@@ -2585,6 +2633,7 @@ else:
                             st_echarts(options=opt_perc_ferias, height="400px")
 
                             st.markdown("---")
+    
 
                             # --- GRÁFICO 2: Férias por serviço por mês (barras agrupadas) ---
                             st.markdown("##### Militares de férias por serviço (por mês)")
@@ -2610,6 +2659,7 @@ else:
                                 st.info("Sem dados de férias para os serviços considerados.")
 
                             st.markdown("---")
+    
 
                             # --- GRÁFICO 3: % férias gozadas vs Meta ---
                             st.markdown("##### % de férias gozadas vs Meta")
@@ -2647,30 +2697,7 @@ else:
                             st.info("Sem dados diários suficientes para gerar gráficos de férias.")
 
                     st.markdown("---")
-                    
-                    # 4. CONFLITOS DE FÉRIAS (NOVO REQUISITO)
-                    st.markdown("#### Conflitos de Ausência por Grupo")
-                    df_conflitos = detectar_conflitos(df_eventos)
-                    
-                    if not df_conflitos.empty:
-                        # Formata e exibe
-                        st.warning(f"Foram detectados {len(df_conflitos)} conflitos entre militares do mesmo grupo.")
-                        
-                        # Ordena por Grupo e Militar 1
-                        df_conflitos = df_conflitos.sort_values(["Grupo", "Militar 1"])
-                        
-                        st.dataframe(
-                            df_conflitos,
-                            column_config={
-                                "Grupo": st.column_config.TextColumn("Grupo de Conflito"),
-                                "Período Conflito": st.column_config.TextColumn("Período Coincidente"),
-                                "Dias Conflito": st.column_config.NumberColumn("Dias", format="%d"),
-                            },
-                            use_container_width=True,
-                            hide_index=True
-                        )
-                    else:
-                        st.info("Não foram detectados conflitos de ausência entre militares do mesmo grupo.")
+    
 
     elif pagina == "Cursos":
         st.subheader("Análises de Cursos")
@@ -2711,6 +2738,7 @@ else:
                             t_insc = t_insc.sort_values(by=["Início", "Nome"])
                             st.dataframe(t_insc, use_container_width=True, hide_index=True)
                     st.markdown("---")
+    
                     st.subheader("Estatísticas dos cursos realizados")
                     if realizados.empty:
                         st.info("Ainda não há cursos concluídos para gerar estatísticas.")
@@ -2723,6 +2751,7 @@ else:
                         col_k2.metric("Militares que já realizaram curso", militares_com_curso)
                         col_k3.metric("Tipos diferentes de cursos", cursos_diferentes)
                         st.markdown("---")
+    
                         col_g1, col_g2 = st.columns(2)
                         df_cursos_freq = (realizados.groupby("Motivo")["Nome"].nunique().reset_index(name="Militares").sort_values("Militares", ascending=False))
                         with col_g1:
@@ -2939,6 +2968,7 @@ else:
                         """, unsafe_allow_html=True)
                     
                     st.markdown("---")
+    
 
                     # --- SERVIÇO DIÁRIO ---
                     st.markdown("#### Serviço Diário")
@@ -2971,6 +3001,7 @@ else:
                                     """, unsafe_allow_html=True)
                                 
                     st.markdown("---")
+    
                     
                     # --- SERVIÇO DE QUARTO ---
                     st.markdown("#### Serviço de Quarto")
@@ -3060,6 +3091,7 @@ else:
                         return ""
                     st.dataframe(df_daily.style.map(color_scale_daily, subset=["Escala"]), use_container_width=True, hide_index=True)
                     st.markdown("---")
+    
             st.markdown("#### Escala Mensal")
             col_mes_sel, col_ano_sel = st.columns(2)
             meses_dict = {
@@ -3101,6 +3133,7 @@ else:
                 return ""
             st.dataframe(df_tabela.style.map(color_scale_monthly), use_container_width=True, hide_index=True)
             st.markdown("---")
+    
             st.markdown("#### Militares fora da escala")
             df_fora_escala = df_raw[df_raw[target_col].astype(str).str.contains("não concorre", case=False, na=False)].copy()
             if df_fora_escala.empty:
@@ -3110,6 +3143,7 @@ else:
                 st.dataframe(df_fora_escala[["Posto", "Nome", target_col]], use_container_width=True, hide_index=True)
 
             st.markdown("---")
+    
             st.markdown("#### Componentes das Escalas")
             cols_srv = st.columns(len(SERVICOS_CONSIDERADOS))
             tabs_escalas = st.tabs(SERVICOS_CONSIDERADOS)
@@ -3254,6 +3288,7 @@ else:
                         st.info(f"Não há cardápio cadastrado para hoje ({hoje_date.strftime('%d/%m/%Y')}).")
                     
                     st.markdown("---")
+    
                     
                     # --- VISÃO SEMANAL ---
                     st.markdown("### Visão Semanal")
@@ -3427,6 +3462,7 @@ else:
                         """, unsafe_allow_html=True)
                     
                     st.markdown("---")
+    
                     
                     # Filtros e Tabela
                     st.subheader("Pesquisar Aniversariantes")
@@ -3479,6 +3515,7 @@ else:
                 col_k3.metric("Balanço Geral", int(d_total), delta=int(d_total), delta_color="normal")
                 
                 st.markdown("---")
+    
                 
                 # 2. Listas de Faltas e Excessos
                 col_list1, col_list2 = st.columns(2)
@@ -3509,6 +3546,7 @@ else:
                         )
                 
                 st.markdown("---")
+    
                 
                 # 3. Gráficos Donut (ECharts)
                 st.markdown("### Análise Gráfica")
@@ -3583,6 +3621,7 @@ else:
                         st.error(f"Erro no gráfico: {e}")
 
                 st.markdown("---")
+    
                 
                 # 4. Gráfico de Barras (ECharts)
                 st.markdown("### Detalhamento por Especialidade")
@@ -3643,6 +3682,7 @@ else:
                     st_echarts(options=options, height="500px")
                 
                 st.markdown("---")
+    
                 
                 # 5. Tabela Completa
                 st.markdown("### Tabela Completa")
@@ -3689,6 +3729,7 @@ else:
             st.error("Colunas Gvi/GP ou IN não encontradas na planilha.")
             
         st.markdown("---")
+    
         st.markdown("### df_raw (dados brutos do Google Sheets)")
         st.write(f"Total de linhas em df_raw: **{len(df_raw)}**")
         st.write("Colunas disponíveis em df_raw:")
@@ -3696,6 +3737,7 @@ else:
         st.write("Prévia de df_raw (primeiras 15 linhas):")
         st.dataframe(df_raw.head(15), use_container_width=True)
         st.markdown("---")
+    
         st.markdown("### Blocos de datas detectados")
         if BLOCOS_DATAS:
             debug_blocos = []
@@ -3705,6 +3747,7 @@ else:
         else:
             st.info("Nenhum bloco de datas detectado.")
         st.markdown("---")
+    
         st.markdown("### df_eventos (eventos gerados)")
         st.write(f"Total de eventos em df_eventos: **{len(df_eventos)}**")
         if not df_eventos.empty:
@@ -3717,7 +3760,9 @@ else:
             st.info("df_eventos está vazio. Verifique se as colunas de datas estão corretamente preenchidas na planilha.")
 
         st.markdown("---")
+    
         st.markdown("---")
+    
         st.markdown("### 🎂 O QUE O APP ESTÁ LENDO AGORA (URL_ANIVERSARIOS default)")
         try:
             df_niver_debug = load_aniversarios()
@@ -3739,6 +3784,7 @@ else:
             st.error(f"Erro ao carregar URL_ANIVERSARIOS padrão: {e}")
 
         st.markdown("---")
+    
         st.markdown("### 🔍 Investigador de Planilhas Google (Encontre sua Aba!)")
         st.info("O Streamlit lê por padrão a PRIMEIRA ABA da planilha. Se os aniversários estiverem na segunda aba (ex: 'Aniversários'), você precisa testar aqui.")
         
