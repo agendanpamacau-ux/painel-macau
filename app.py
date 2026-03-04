@@ -812,32 +812,45 @@ def parse_bool(value) -> bool:
 
 def parse_aniversario_date(val):
     """
-    Parser para datas de aniversário no formato '6nov.' ou '15jan.'
+    Parser para datas de aniversário.
+    Aceita datetime objects, strings como '6nov.' ou '15/03'.
     Retorna uma data com o ano corrente.
     """
     if pd.isna(val) or str(val).strip() == "":
         return pd.NaT
-        
+    
+    ano_atual = (datetime.utcnow() - timedelta(hours=3)).year
+    
+    # Se já for datetime/Timestamp, extrai dia e mês
+    if isinstance(val, (datetime, pd.Timestamp)):
+        try:
+            return datetime(ano_atual, val.month, val.day)
+        except:
+            return pd.NaT
+    
     s = str(val).strip().lower().replace(".", "")
     
-    # Mapa de meses
+    # Tenta parse direto (ex: 2024-03-15 ou 15/03/2024)
+    try:
+        dt = pd.to_datetime(val, dayfirst=True)
+        return datetime(ano_atual, dt.month, dt.day)
+    except:
+        pass
+    
+    # Mapa de meses para formato '6nov'
     meses = {
         "jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
         "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12
     }
     
     try:
-        # Tenta extrair dia e mês (ex: 6nov -> dia 6, mes nov)
-        # Regex simples ou split manual
         import re
         match = re.match(r"(\d+)([a-zç]+)", s)
         if match:
             dia = int(match.group(1))
             mes_str = match.group(2)
-            
             if mes_str in meses:
                 mes = meses[mes_str]
-                ano_atual = (datetime.utcnow() - timedelta(hours=3)).year
                 return datetime(ano_atual, mes, dia)
     except:
         pass
@@ -915,7 +928,7 @@ def load_data():
 def load_aniversarios():
     """Carrega dados de aniversários"""
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(spreadsheet=URL_ANIVERSARIOS, ttl="1h")
+    df = conn.read(spreadsheet=URL_ANIVERSARIOS, header=7, ttl="1h")
     
     # Selecionar colunas B (Posto), E (Nome), H (Aniversário)
     # Assumindo que o header está na linha 1 (padrão)
@@ -2001,6 +2014,41 @@ elif pagina == "Dias de Mar":
                         st.warning("Coluna 'DATA INÍCIO' não encontrada ou inválida.")
                 else:
                     st.info(f"Sem dados de dias de mar para o ano {ano_sel_mar}.")
+            st.markdown("---")
+            
+            # Filtro por Período Personalizado
+            st.subheader("Consulta por Período")
+            col_p1, col_p2 = st.columns(2)
+            data_ini_mar = col_p1.date_input("Data Início", value=datetime(datetime.today().year, 1, 1), key="mar_ini", format="DD/MM/YYYY")
+            data_fim_mar = col_p2.date_input("Data Fim", value=datetime.today(), key="mar_fim", format="DD/MM/YYYY")
+            
+            dt_ini_mar = pd.to_datetime(data_ini_mar)
+            dt_fim_mar = pd.to_datetime(data_fim_mar)
+            
+            if "DATA INÍCIO" in df_mar.columns:
+                mask_periodo = (
+                    (df_mar["DATA INÍCIO"] >= dt_ini_mar) & 
+                    (df_mar["DATA INÍCIO"] <= dt_fim_mar)
+                )
+                df_mar_periodo = df_mar[mask_periodo].copy()
+                
+                if df_mar_periodo.empty:
+                    st.info(f"Sem registros de dias de mar no período selecionado.")
+                else:
+                    total_dias_periodo = df_mar_periodo["DIAS DE MAR"].sum()
+                    total_milhas_periodo = df_mar_periodo["MILHAS NAVEGADAS"].sum()
+                    total_comissoes = len(df_mar_periodo)
+                    
+                    cp1, cp2, cp3 = st.columns(3)
+                    cp1.metric("Dias de Mar (período)", f"{int(total_dias_periodo)}")
+                    cp2.metric("Milhas Navegadas (período)", f"{int(total_milhas_periodo)}")
+                    cp3.metric("Comissões (período)", total_comissoes)
+                    
+                    with st.expander("Ver dados do período"):
+                        df_show_periodo = df_mar_periodo[["TERMO DE VIAGEM", "DATA INÍCIO", "DATA TÉRMINO", "DIAS DE MAR", "MILHAS NAVEGADAS"]].copy()
+                        st.dataframe(df_show_periodo, use_container_width=True, hide_index=True)
+            else:
+                st.warning("Coluna 'DATA INÍCIO' não encontrada para filtro por período.")
 
     except Exception as e:
         st.error(f"Erro ao processar Dias de Mar: {e}")
