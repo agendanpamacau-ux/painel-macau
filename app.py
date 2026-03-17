@@ -3236,6 +3236,11 @@ else:
                         day_data = {"Data": date_obj, "DataStr": str(date_val)}
                         for meal_name, meal_vals in meals_data.items():
                             day_data[meal_name] = meal_vals[i] if i < len(meal_vals) else ""
+                            
+                        # Tradução do 'idem' no Jantar para o Almoço
+                        jantar_val = str(day_data.get("Jantar", "")).strip().lower()
+                        if "idem" in jantar_val and day_data.get("Almoço"):
+                            day_data["Jantar"] = day_data["Almoço"]
                         
                         structured_data.append(day_data)
                         
@@ -3265,6 +3270,10 @@ else:
                                 border: 1px solid rgba(128, 128, 128, 0.2);
                                 box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
                                 border-left: 5px solid #f97316; /* Orange */
+                                height: 100%;
+                                display: flex;
+                                flex-direction: column;
+                                justify-content: center;
                             }
                             .card-title {
                                 color: var(--text-color);
