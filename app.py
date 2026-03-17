@@ -382,7 +382,7 @@ def make_echarts_donut(data_list, title):
             {
                 "name": title,
                 "type": "pie",
-                "radius": ["35%", "55%"],
+                "radius": ["25%", "45%"],
                 "center": ["50%", "55%"],
                 "avoidLabelOverlap": True, # Evita sobreposição
                 "itemStyle": {
@@ -393,8 +393,8 @@ def make_echarts_donut(data_list, title):
                 "label": {
                     "show": True, 
                     "position": "outside",
-                    "formatter": "{b}: {d}%", # Nome: Porcentagem
-                    # "color": "#fff" # REMOVIDO: Deixar automático (cor da série) ou cinza
+                    "formatter": "{b}\n{c} ({d}%)", # Quebra a linha para poupar espaço horizontal
+                    "margin": 10,
                 },
                 "emphasis": {
                     "label": {
@@ -405,7 +405,8 @@ def make_echarts_donut(data_list, title):
                 },
                 "labelLine": {
                     "show": True,
-                    # "lineStyle": {"color": "#fff"} # REMOVIDO: Deixar automático
+                    "length": 15,    # Reduz o tamanho da primeira linha da legenda
+                    "length2": 15    # Reduz o tamanho da segunda linha da legenda
                 },
                 "data": data_list,
             }
