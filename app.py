@@ -382,7 +382,8 @@ def make_echarts_donut(data_list, title):
             {
                 "name": title,
                 "type": "pie",
-                "radius": ["40%", "70%"],
+                "radius": ["35%", "55%"],
+                "center": ["50%", "55%"],
                 "avoidLabelOverlap": True, # Evita sobreposição
                 "itemStyle": {
                     "borderRadius": 10,
@@ -431,6 +432,7 @@ def make_echarts_line(x_data, y_data, integer=False):
     
     options = {
         "toolbox": {"feature": {"saveAsImage": {"title": "Salvar Imagem"}}},
+        "grid": {"containLabel": True, "left": "5%", "right": "5%", "top": "15%", "bottom": "15%"},
         "xAxis": {
             "type": "category",
             "data": x_data,
@@ -473,6 +475,7 @@ def make_echarts_bar(x_data, y_data, integer=True):
     
     options = {
         "toolbox": {"feature": {"saveAsImage": {"title": "Salvar Imagem"}}},
+        "grid": {"containLabel": True, "left": "5%", "right": "5%", "top": "15%", "bottom": "15%"},
         "xAxis": {
             "type": "category",
             "data": x_data,
@@ -537,7 +540,7 @@ def make_echarts_grouped_bar(x_data, series_list):
             "borderColor": "#777",
             "textStyle": {"color": "#fff"}
         },
-        "grid": {"top": "15%", "bottom": "15%"}
+        "grid": {"containLabel": True, "left": "5%", "right": "5%", "top": "15%", "bottom": "15%"}
     }
     return options
 
@@ -582,7 +585,7 @@ def make_echarts_dual_line(x_data, y_meta, y_real, label_meta="Meta", label_real
             "borderColor": "#777",
             "textStyle": {"color": "#fff"}
         },
-        "grid": {"top": "12%", "bottom": "5%"}
+        "grid": {"containLabel": True, "left": "5%", "right": "5%", "top": "12%", "bottom": "15%"}
     }
     return options
 
