@@ -1211,12 +1211,12 @@ def load_tempo_bordo():
     # Header na linha 7 (index 6). Dados começam na 8.
     df = conn.read(spreadsheet=URL_ANIVERSARIOS, worksheet="TRIPULAÇÃO", header=6, ttl="1h")
     
-    # Coluna N é index 13. Vamos pegar pelo nome se possível, ou index fallback.
-    # Se header=7 lê a linha 8 como header. A coluna N deve ter um título.
+    # Coluna P é index 15. Vamos pegar pelo nome se possível, ou index fallback.
+    # Se header=7 lê a linha 8 como header. A coluna P deve ter um título.
     # Se não tiver, acessamos por iloc.
     col_data = None
-    if len(df.columns) > 13:
-        col_data = df.iloc[:, 13] # Coluna N
+    if len(df.columns) > 15:
+        col_data = df.iloc[:, 15] # Coluna P
     
     if col_data is None:
         return pd.DataFrame()
@@ -1687,6 +1687,7 @@ ICON_MAP = {
     "Cursos": "cursos.svg",
     "Tabela de Serviço": "icons8-tick-box-50.svg",
     "Tabela de Lotação": "icons8-directory-50.svg",
+    "Dados Pessoais": "icons8-directory-50.svg", # Utiliza um ícone similar ou genérico
     "Trocar Senha": "icons8-lock-50.svg",
     "Log / Debug": "log.svg",
     "Sair": "icons8-external-link-50.svg"
@@ -3353,18 +3354,18 @@ else:
                 st.info("Não foi possível carregar a lista de aniversariantes.")
             else:
                 # Processar dados
-                # Colunas esperadas: B (Posto), E (Nome), K (Data Nascimento DD/MM/AAAA)
+                # Colunas esperadas: D (Posto), G (Nome), M (Data Nascimento DD/MM/AAAA)
                 
-                # Ajuste de índices (0-based): B=1, E=4, K=10
+                # Ajuste de índices (0-based): D=3, G=6, M=12
                 # Cria um DF limpo
                 dados_niver = []
                 
                 # Itera sobre as linhas (pulando header se necessário, mas o read já deve ter tratado)
                 for idx, row in df_niver_raw.iterrows():
                     try:
-                        posto = row.iloc[1]
-                        nome = row.iloc[4]
-                        data_str = row.iloc[10]  # Coluna K
+                        posto = row.iloc[3]
+                        nome = row.iloc[6]
+                        data_str = row.iloc[12]  # Coluna M
                         
                         if pd.notna(nome) and str(nome).strip() != "" and pd.notna(data_str):
                             # Parse da data de nascimento completa
@@ -3735,6 +3736,79 @@ else:
                 
         except Exception as e:
             st.error(f"Erro ao processar Tabela de Lotação: {e}")
+
+    elif pagina == "Dados Pessoais":
+        st.subheader("Dados Pessoais")
+        st.markdown("Selecione um militar para visualizar todas as informações cadastradas.")
+        
+        try:
+            conn = st.connection("gsheets", type=GSheetsConnection)
+            # Lê com o header correto para garantir nomes de colunas (linha 7 = header index 6)
+            df_trip = conn.read(spreadsheet=URL_ANIVERSARIOS, worksheet="TRIPULAÇÃO", header=6, ttl="10m")
+            
+            # Limpa e prepara DF
+            if "Nome" in df_trip.columns:
+                df_trip = df_trip.dropna(subset=["Nome"])
+                df_trip = df_trip[df_trip["Nome"].astype(str).str.strip() != ""]
+                
+                # Prepara opções para o selectbox (Ex: "CB-MA SILVA")
+                # Se não existir a coluna "Posto / Grad", usa só o nome
+                opcoes_militar = []
+                for idx, row in df_trip.iterrows():
+                    nome = str(row["Nome"]).strip()
+                    posto = str(row.get("Posto / Grad", "")).strip()
+                    if posto and posto.lower() != "nan":
+                        desc = f"{posto} {nome}"
+                    else:
+                        desc = nome
+                    opcoes_militar.append((idx, desc))
+                
+                # Selectbox
+                opcoes_desc = [opt[1] for opt in opcoes_militar]
+                selecionado = st.selectbox("Buscar Militar:", opcoes_desc)
+                
+                if selecionado:
+                    st.markdown("---")
+                    # Acha o index correspondente
+                    idx_militar = next(opt[0] for opt in opcoes_militar if opt[1] == selecionado)
+                    dados_militar = df_trip.loc[idx_militar]
+                    
+                    # Nome em destaque
+                    st.markdown(f"### {selecionado}")
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # Exibir em duas colunas para layout mais limpo
+                    col1, col2 = st.columns(2)
+                    
+                    # Filtra colunas indesejadas que o pandas possa ter puxado vazias (ex: 'Unnamed: X')
+                    colunas_validas = [c for c in df_trip.columns if "Unnamed" not in str(c)]
+                    
+                    meio = len(colunas_validas) // 2
+                    
+                    for i, col_name in enumerate(colunas_validas):
+                        val = dados_militar[col_name]
+                        # Limpa valores nulos do pandas para exibição ("-")
+                        if pd.isna(val) or str(val).strip() == "" or str(val).strip().lower() == "nan":
+                            val_str = "-"
+                        else:
+                            val_str = str(val).strip()
+                            # Se a coluna for de data (ex: Nascimento), tentar formatar bonito se parecer data
+                            if "data" in str(col_name).lower():
+                                try:
+                                    dt = pd.to_datetime(val_str, dayfirst=True)
+                                    val_str = dt.strftime("%d/%m/%Y")
+                                except:
+                                    pass
+                                    
+                        # Coloca alternado nas colunas
+                        t_col = col1 if i < meio else col2
+                        with t_col:
+                            st.markdown(f"**{col_name}:** {val_str}")
+            else:
+                st.error("Coluna 'Nome' não encontrada na planilha. Verifique a estrutura.")
+                
+        except Exception as e:
+            st.error(f"Erro ao carregar dados da tripulação: {e}")
 
     elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
