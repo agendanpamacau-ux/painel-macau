@@ -3746,21 +3746,30 @@ else:
             # Lê com o header correto para garantir nomes de colunas (linha 7 = header index 6)
             df_trip = conn.read(spreadsheet=URL_ANIVERSARIOS, worksheet="TRIPULAÇÃO", header=6, ttl="10m")
             
-            # Limpa e prepara DF
-            if "Nome" in df_trip.columns:
-                df_trip = df_trip.dropna(subset=["Nome"])
-                df_trip = df_trip[df_trip["Nome"].astype(str).str.strip() != ""]
+            # Formata nomes das colunas
+            df_trip.columns = [str(c).strip() for c in df_trip.columns]
+            
+            # A coluna de Nome está no índice 5 (F), Nome de Guerra no 6 (G) e Posto no índice 3 (D)
+            if len(df_trip.columns) > 5:
+                nome_col = df_trip.columns[5]
                 
-                # Prepara opções para o selectbox (Ex: "CB-MA SILVA")
-                # Se não existir a coluna "Posto / Grad", usa só o nome
+                df_trip = df_trip.dropna(subset=[nome_col])
+                df_trip = df_trip[df_trip[nome_col].astype(str).str.strip() != ""]
+                
+                # Prepara opções para o selectbox
                 opcoes_militar = []
                 for idx, row in df_trip.iterrows():
-                    nome = str(row["Nome"]).strip()
-                    posto = str(row.get("Posto / Grad", "")).strip()
+                    nome_completo = str(row.iloc[5]).strip()
+                    nome_guerra = str(row.iloc[6]).strip() if len(row) > 6 else ""
+                    posto = str(row.iloc[3]).strip()
+                    
+                    # Usa o Nome de Guerra se disponível para o selectbox, ou o Nome
+                    nome_exibir = nome_guerra if nome_guerra and nome_guerra.lower() != "nan" else nome_completo
+                    
                     if posto and posto.lower() != "nan":
-                        desc = f"{posto} {nome}"
+                        desc = f"{posto} {nome_exibir}"
                     else:
-                        desc = nome
+                        desc = nome_exibir
                     opcoes_militar.append((idx, desc))
                 
                 # Selectbox
@@ -3805,7 +3814,7 @@ else:
                         with t_col:
                             st.markdown(f"**{col_name}:** {val_str}")
             else:
-                st.error("Coluna 'Nome' não encontrada na planilha. Verifique a estrutura.")
+                st.error("Planilha incompleta ou a coluna 'Nome' não está no local esperado (Coluna G).")
                 
         except Exception as e:
             st.error(f"Erro ao carregar dados da tripulação: {e}")
