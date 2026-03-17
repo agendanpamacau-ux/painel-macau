@@ -1687,7 +1687,7 @@ ICON_MAP = {
     "Cursos": "cursos.svg",
     "Tabela de Serviço": "icons8-tick-box-50.svg",
     "Tabela de Lotação": "icons8-directory-50.svg",
-    "Dados Pessoais": "icons8-directory-50.svg", # Utiliza um ícone similar ou genérico
+    "Dados Pessoais": "pessoal.svg",
     "Trocar Senha": "icons8-lock-50.svg",
     "Log / Debug": "log.svg",
     "Sair": "icons8-external-link-50.svg"
