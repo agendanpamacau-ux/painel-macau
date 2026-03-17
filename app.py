@@ -3246,6 +3246,41 @@ else:
                         
                     df_menu = pd.DataFrame(structured_data)
                     
+                    # --- CSS GLOBAL CARDÁPIO ---
+                    st.markdown("""
+                    <style>
+                        .card-menu {
+                            background-color: rgba(255, 255, 255, 0.07);
+                            color: var(--text-color);
+                            border-radius: 5px;
+                            padding: 15px;
+                            margin-bottom: 15px;
+                            transition: transform 0.2s;
+                            border: 1px solid rgba(128, 128, 128, 0.2);
+                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                            border-left: 5px solid #f97316; /* Orange */
+                            min-height: 150px; /* Garante tamanho uniforme */
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: center;
+                        }
+                        .card-title {
+                            color: var(--text-color);
+                            opacity: 0.8;
+                            font-size: 0.85rem;
+                            text-transform: uppercase;
+                            letter-spacing: 0.05em;
+                            font-weight: 600;
+                            margin-bottom: 5px;
+                        }
+                        .card-value {
+                            color: var(--text-color);
+                            font-size: 1.1rem;
+                            font-weight: 500;
+                        }
+                    </style>
+                    """, unsafe_allow_html=True)
+
                     # --- VISÃO DIÁRIA ---
                     st.markdown("### Cardápio do Dia")
                     hoje_date = (datetime.utcnow() - timedelta(hours=3)).date()
@@ -3257,78 +3292,45 @@ else:
                         row = df_hoje.iloc[0]
                         c1, c2, c3, c4 = st.columns(4)
                         
-                        # CSS for Cardápio Cards
-                        st.markdown("""
-                        <style>
-                            .card-menu {
-                                background-color: rgba(255, 255, 255, 0.07);
-                                color: var(--text-color);
-                                border-radius: 5px;
-                                padding: 15px;
-                                margin-bottom: 10px;
-                                transition: transform 0.2s;
-                                border: 1px solid rgba(128, 128, 128, 0.2);
-                                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                                border-left: 5px solid #f97316; /* Orange */
-                                height: 100%;
-                                display: flex;
-                                flex-direction: column;
-                                justify-content: center;
-                            }
-                            .card-title {
-                                color: var(--text-color);
-                                opacity: 0.8;
-                                font-size: 0.85rem;
-                                text-transform: uppercase;
-                                letter-spacing: 0.05em;
-                                font-weight: 600;
-                                margin-bottom: 5px;
-                            }
-                            .card-value {
-                                color: var(--text-color);
-                                font-size: 1.1rem;
-                                font-weight: 500;
-                            }
-                        </style>
-                        """, unsafe_allow_html=True)
-
                         with c1:
                             val = row["Café da Manhã"] if pd.notna(row["Café da Manhã"]) else "-"
-                            st.markdown(f"""
-                            <div class="card-menu">
-                                <div class="card-title">Café da Manhã</div>
-                                <div class="card-value">{val}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
+                            st.markdown(f'<div class="card-menu"><div class="card-title">Café da Manhã</div><div class="card-value">{val}</div></div>', unsafe_allow_html=True)
                         with c2:
                             val = row["Almoço"] if pd.notna(row["Almoço"]) else "-"
-                            st.markdown(f"""
-                            <div class="card-menu">
-                                <div class="card-title">Almoço</div>
-                                <div class="card-value">{val}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
+                            st.markdown(f'<div class="card-menu"><div class="card-title">Almoço</div><div class="card-value">{val}</div></div>', unsafe_allow_html=True)
                         with c3:
                             val = row["Jantar"] if pd.notna(row["Jantar"]) else "-"
-                            st.markdown(f"""
-                            <div class="card-menu">
-                                <div class="card-title">Jantar</div>
-                                <div class="card-value">{val}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
+                            st.markdown(f'<div class="card-menu"><div class="card-title">Jantar</div><div class="card-value">{val}</div></div>', unsafe_allow_html=True)
                         with c4:
                             val = row["Ceia"] if pd.notna(row["Ceia"]) else "-"
-                            st.markdown(f"""
-                            <div class="card-menu">
-                                <div class="card-title">Ceia</div>
-                                <div class="card-value">{val}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            st.markdown(f'<div class="card-menu"><div class="card-title">Ceia</div><div class="card-value">{val}</div></div>', unsafe_allow_html=True)
                     else:
                         st.info(f"Não há cardápio cadastrado para hoje ({hoje_date.strftime('%d/%m/%Y')}).")
+                    
+                    st.markdown("---")
+
+                    # --- VISÃO DE AMANHÃ ---
+                    st.markdown("### Cardápio de Amanhã")
+                    amanha_date = hoje_date + timedelta(days=1)
+                    df_amanha = df_menu[df_menu["Data"].dt.date == amanha_date]
+                    
+                    if not df_amanha.empty:
+                        row_am = df_amanha.iloc[0]
+                        c1, c2, c3, c4 = st.columns(4)
+                        with c1:
+                            val = row_am["Café da Manhã"] if pd.notna(row_am["Café da Manhã"]) else "-"
+                            st.markdown(f'<div class="card-menu" style="border-left-color: #3b82f6;"><div class="card-title">Café da Manhã</div><div class="card-value">{val}</div></div>', unsafe_allow_html=True)
+                        with c2:
+                            val = row_am["Almoço"] if pd.notna(row_am["Almoço"]) else "-"
+                            st.markdown(f'<div class="card-menu" style="border-left-color: #3b82f6;"><div class="card-title">Almoço</div><div class="card-value">{val}</div></div>', unsafe_allow_html=True)
+                        with c3:
+                            val = row_am["Jantar"] if pd.notna(row_am["Jantar"]) else "-"
+                            st.markdown(f'<div class="card-menu" style="border-left-color: #3b82f6;"><div class="card-title">Jantar</div><div class="card-value">{val}</div></div>', unsafe_allow_html=True)
+                        with c4:
+                            val = row_am["Ceia"] if pd.notna(row_am["Ceia"]) else "-"
+                            st.markdown(f'<div class="card-menu" style="border-left-color: #3b82f6;"><div class="card-title">Ceia</div><div class="card-value">{val}</div></div>', unsafe_allow_html=True)
+                    else:
+                        st.info(f"Não há cardápio cadastrado para amanhã ({amanha_date.strftime('%d/%m/%Y')}).")
                     
                     st.markdown("---")
     
