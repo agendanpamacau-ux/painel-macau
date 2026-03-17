@@ -365,6 +365,7 @@ def make_echarts_donut(data_list, title):
     title: Nome da série
     """
     options = {
+        "toolbox": {"feature": {"saveAsImage": {"title": "Salvar Imagem"}}},
         "tooltip": {
             "trigger": "item", 
             "formatter": "{b}: {c} ({d}%)",
@@ -429,6 +430,7 @@ def make_echarts_line(x_data, y_data, integer=False):
         y_data_fmt = [f"{float(y):.2f}" if pd.notna(y) else "0.00" for y in y_data]
     
     options = {
+        "toolbox": {"feature": {"saveAsImage": {"title": "Salvar Imagem"}}},
         "xAxis": {
             "type": "category",
             "data": x_data,
@@ -470,6 +472,7 @@ def make_echarts_bar(x_data, y_data, integer=True):
         y_data_fmt = [round(float(y), 2) if pd.notna(y) else 0.0 for y in y_data]
     
     options = {
+        "toolbox": {"feature": {"saveAsImage": {"title": "Salvar Imagem"}}},
         "xAxis": {
             "type": "category",
             "data": x_data,
@@ -519,6 +522,7 @@ def make_echarts_grouped_bar(x_data, series_list):
             "itemStyle": {"color": colors[i % len(colors)]}
         })
     options = {
+        "toolbox": {"feature": {"saveAsImage": {"title": "Salvar Imagem"}}},
         "legend": {"data": [s["name"] for s in series_list], "top": "0%"},
         "xAxis": {
             "type": "category",
@@ -547,6 +551,7 @@ def make_echarts_dual_line(x_data, y_meta, y_real, label_meta="Meta", label_real
     y_meta_fmt = [f"{float(y):.1f}" if pd.notna(y) else "0.0" for y in y_meta]
     y_real_fmt = [f"{float(y):.1f}" if pd.notna(y) else "0.0" for y in y_real]
     options = {
+        "toolbox": {"feature": {"saveAsImage": {"title": "Salvar Imagem"}}},
         "legend": {"data": [label_meta, label_real], "top": "0%"},
         "xAxis": {
             "type": "category",
