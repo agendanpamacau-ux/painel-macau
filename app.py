@@ -1689,6 +1689,7 @@ ICON_MAP = {
     "Tabela de Lotação": "icons8-directory-50.svg",
     "Dados Pessoais": "pessoal.svg",
     "Inspeção de Saúde": "saude.svg",
+    "Organograma": "organograma.svg",
     "Trocar Senha": "icons8-lock-50.svg",
     "Log / Debug": "log.svg",
     "Sair": "icons8-external-link-50.svg"
@@ -3935,6 +3936,126 @@ else:
                         
         except Exception as e:
             st.error(f"Erro ao carregar os dados de Inspeção de Saúde: {e}")
+
+    elif pagina == "Organograma":
+        st.subheader("Organograma do Navio")
+        
+        try:
+            conn = st.connection("gsheets", type=GSheetsConnection)
+            # Lê aba de tripulação
+            df_trip = conn.read(spreadsheet=URL_ANIVERSARIOS, worksheet="TRIPULAÇÃO", header=6, ttl="10m")
+            
+            tripulantes = []
+            
+            # Formata colunas para evitar erros de espaço em branco (Padrão mantido do app.py)
+            df_trip.columns = [str(c).strip() for c in df_trip.columns]
+            
+            for idx, row in df_trip.iterrows():
+                try:
+                    # Índices: Posto=3 (D), Nome=5 (F), Nome de Guerra=6 (G), Divisão=16 (Q)
+                    if len(row) > 16:
+                        posto = str(row.iloc[3]).strip()
+                        nome_completo = str(row.iloc[5]).strip()
+                        nome_guerra = str(row.iloc[6]).strip()
+                        divisao = str(row.iloc[16]).strip().lower()
+                        
+                        if not nome_completo or nome_completo.lower() == "nan":
+                            continue
+                            
+                        nome_exibir = nome_guerra if nome_guerra and nome_guerra.lower() != "nan" else nome_completo
+                        
+                        if posto and posto.lower() != "nan":
+                            desc = f"{posto} {nome_exibir}"
+                        else:
+                            desc = nome_exibir
+                            
+                        tripulantes.append({
+                            "Nome": desc,
+                            "Divisao": divisao
+                        })
+                except Exception:
+                    continue
+                    
+            if len(tripulantes) >= 2:
+                comandante = tripulantes[0]
+                imediato = tripulantes[1]
+                
+                # Exclui comandante e imediato da lista de divisões
+                outros = tripulantes[2:]
+                
+                div_arm = [t for t in outros if "arm" in t["Divisao"]]
+                div_ope = [t for t in outros if "ope" in t["Divisao"]]
+                div_maq = [t for t in outros if "maq" in t["Divisao"]]
+                
+                # CSS do Organograma
+                st.markdown("""
+                <style>
+                    .org-node {
+                        background-color: rgba(255, 255, 255, 0.07);
+                        border: 1px solid rgba(128, 128, 128, 0.2);
+                        border-radius: 8px;
+                        padding: 15px;
+                        text-align: center;
+                        margin: 10px auto;
+                        width: 90%;
+                        font-weight: 600;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                        transition: transform 0.2s;
+                    }
+                    .org-node:hover {
+                        transform: scale(1.02);
+                    }
+                    .cmd-node { width: 50%; max-width: 300px; border-top: 4px solid #f97316; }
+                    .imed-node { width: 50%; max-width: 300px; border-top: 4px solid #3b82f6; }
+                    .arm-node { border-left: 4px solid #ef4444; }
+                    .ope-node { border-left: 4px solid #10b981; }
+                    .maq-node { border-left: 4px solid #8b5cf6; }
+                    .div-title {
+                        text-align: center;
+                        font-size: 1.1rem;
+                        font-weight: 600;
+                        margin-bottom: 15px;
+                        color: rgba(255,255,255,0.9);
+                        border-bottom: 2px solid rgba(255,255,255,0.1);
+                        padding-bottom: 5px;
+                    }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                # Renderiza Comandante
+                st.markdown(f'<div class="org-node cmd-node">Comandante<br><span style="font-weight:normal;font-size:0.9em;opacity:0.8;">{comandante["Nome"]}</span></div>', unsafe_allow_html=True)
+                
+                # Linha conectora vertical
+                st.markdown("<div style='text-align: center; font-size: 24px; color: rgba(255,255,255,0.4);'>↓</div>", unsafe_allow_html=True)
+                
+                # Renderiza Imediato
+                st.markdown(f'<div class="org-node imed-node">Imediato<br><span style="font-weight:normal;font-size:0.9em;opacity:0.8;">{imediato["Nome"]}</span></div>', unsafe_allow_html=True)
+                
+                st.markdown("<div style='text-align: center; font-size: 24px; color: rgba(255,255,255,0.4); margin-bottom: 30px;'>↓</div>", unsafe_allow_html=True)
+                
+                # Branch out (3 Divisions)
+                c1, c2, c3 = st.columns(3)
+                
+                with c1:
+                    st.markdown('<div class="div-title" style="border-bottom-color: #ef4444;">Divisão de Armamento</div>', unsafe_allow_html=True)
+                    for m in div_arm:
+                        st.markdown(f'<div class="org-node arm-node" style="font-size:0.9em; font-weight:normal;">{m["Nome"]}</div>', unsafe_allow_html=True)
+                        
+                with c2:
+                    st.markdown('<div class="div-title" style="border-bottom-color: #10b981;">Divisão de Operações</div>', unsafe_allow_html=True)
+                    for m in div_ope:
+                        st.markdown(f'<div class="org-node ope-node" style="font-size:0.9em; font-weight:normal;">{m["Nome"]}</div>', unsafe_allow_html=True)
+                        
+                with c3:
+                    st.markdown('<div class="div-title" style="border-bottom-color: #8b5cf6;">Divisão de Máquinas</div>', unsafe_allow_html=True)
+                    for m in div_maq:
+                        st.markdown(f'<div class="org-node maq-node" style="font-size:0.9em; font-weight:normal;">{m["Nome"]}</div>', unsafe_allow_html=True)
+                        
+            else:
+                st.warning("Não há tripulantes suficientes listados para montar o organograma.")
+                
+        except Exception as e:
+            st.error(f"Erro ao carregar dados do Organograma: {e}")
 
     elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
