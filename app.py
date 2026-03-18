@@ -1688,6 +1688,7 @@ ICON_MAP = {
     "Tabela de Serviço": "icons8-tick-box-50.svg",
     "Tabela de Lotação": "icons8-directory-50.svg",
     "Dados Pessoais": "pessoal.svg",
+    "Inspeção de Saúde": "icons8-heart-monitor-50.svg", # Ou similar configurado pelo usuário
     "Trocar Senha": "icons8-lock-50.svg",
     "Log / Debug": "log.svg",
     "Sair": "icons8-external-link-50.svg"
@@ -3829,6 +3830,107 @@ else:
                 
         except Exception as e:
             st.error(f"Erro ao carregar dados da tripulação: {e}")
+
+    elif pagina == "Inspeção de Saúde":
+        st.subheader("Inspeção de Saúde")
+        
+        try:
+            conn = st.connection("gsheets", type=GSheetsConnection)
+            # Lê aba de tripulação
+            df_trip = conn.read(spreadsheet=URL_ANIVERSARIOS, worksheet="TRIPULAÇÃO", header=6, ttl="10m")
+            
+            dados_is = []
+            hoje = (datetime.utcnow() - timedelta(hours=3)).date()
+            
+            for idx, row in df_trip.iterrows():
+                try:
+                    posto = str(row.iloc[3]).strip() if len(row) > 3 else ""
+                    nome_completo = str(row.iloc[5]).strip() if len(row) > 5 else ""
+                    nome_guerra = str(row.iloc[6]).strip() if len(row) > 6 else ""
+                    is_str = str(row.iloc[10]).strip() if len(row) > 10 else ""
+                    
+                    if not nome_completo or nome_completo.lower() == "nan":
+                        continue
+                        
+                    nome_exibir = nome_guerra if nome_guerra and nome_guerra.lower() != "nan" else nome_completo
+                    if posto and posto.lower() != "nan":
+                        desc = f"{posto} {nome_exibir}"
+                    else:
+                        desc = nome_exibir
+                        
+                    if pd.notna(is_str) and is_str != "" and is_str.lower() != "nan":
+                        # Tenta converter
+                        dt_is = pd.to_datetime(is_str, dayfirst=True, errors='coerce')
+                        if pd.notna(dt_is):
+                            dados_is.append({
+                                "Militar": desc,
+                                "DataOriginal": is_str,
+                                "DataIS": dt_is.date(),
+                                "DiasDiff": (dt_is.date() - hoje).days
+                            })
+                except Exception as loop_e:
+                    continue
+                    
+            if not dados_is:
+                st.info("Nenhuma data de inspeção de saúde encontrada na planilha.")
+            else:
+                df_is = pd.DataFrame(dados_is)
+                
+                # 1. Vencidos (DiasDiff < 0)
+                vencidos = df_is[df_is["DiasDiff"] < 0].sort_values("DiasDiff")
+                
+                # 2. Próximo a vencer (DiasDiff >= 0), min DiasDiff
+                futuros = df_is[df_is["DiasDiff"] >= 0].sort_values("DiasDiff")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("### 🚨 Inspeções Vencidas")
+                    if vencidos.empty:
+                        st.success("Nenhuma inspeção de saúde vencida. Todos regulares!")
+                    else:
+                        st.error(f"**{len(vencidos)}** militar(es) com a IS vencida.")
+                        for _, v in vencidos.iterrows():
+                            st.markdown(f"- **{v['Militar']}** (venceu em {v['DataIS'].strftime('%d/%m/%Y')})")
+                            
+                with col2:
+                    st.markdown("### ⚠️ Próxima a Vencer")
+                    if futuros.empty:
+                        st.info("Nenhuma próxima inspeção cadastrada.")
+                    else:
+                        prox = futuros.iloc[0]
+                        dias = prox['DiasDiff']
+                        if dias == 0:
+                            vence_str = "hoje!"
+                        elif dias == 1:
+                            vence_str = "amanhã!"
+                        else:
+                            vence_str = f"em {dias} dias ({prox['DataIS'].strftime('%d/%m/%Y')})."
+                        st.warning(f"**{prox['Militar']}** vence {vence_str}")
+                
+                st.markdown("---")
+                
+                # Busca por ano
+                st.markdown("### 🔎 Busca por Ano")
+                anos_disponiveis = df_is["DataIS"].apply(lambda x: x.year).unique().tolist()
+                anos_disponiveis.sort()
+                
+                if not anos_disponiveis:
+                    st.info("Nenhum ano cadastrado.")
+                else:
+                    indice_padrao = anos_disponiveis.index(hoje.year) if hoje.year in anos_disponiveis else len(anos_disponiveis)-1
+                    ano_selecionado = st.selectbox("Selecione o ano de validade:", anos_disponiveis, index=indice_padrao)
+                    
+                    df_ano = df_is[df_is["DataIS"].apply(lambda x: x.year) == ano_selecionado].sort_values("DataIS")
+                    if df_ano.empty:
+                        st.info(f"Nenhum militar com a IS validada até {ano_selecionado}.")
+                    else:
+                        st.write(f"Militares cujo vencimento da IS ocorre em **{ano_selecionado}**:")
+                        df_display = df_ano[["Militar", "DataOriginal"]].copy()
+                        df_display.columns = ["Militar", "Validade (IS)"]
+                        st.dataframe(df_display, use_container_width=True, hide_index=True)
+                        
+        except Exception as e:
+            st.error(f"Erro ao carregar os dados de Inspeção de Saúde: {e}")
 
     elif pagina == "Log / Debug":
         st.subheader("Log / Debug")
