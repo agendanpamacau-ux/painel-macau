@@ -3884,7 +3884,7 @@ else:
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.markdown("### 🚨 Inspeções Vencidas")
+                    st.markdown("### Inspeções Vencidas")
                     if vencidos.empty:
                         st.success("Nenhuma inspeção de saúde vencida. Todos regulares!")
                     else:
@@ -3893,7 +3893,7 @@ else:
                             st.markdown(f"- **{v['Militar']}** (venceu em {v['DataIS'].strftime('%d/%m/%Y')})")
                             
                 with col2:
-                    st.markdown("### ⚠️ Próxima a Vencer")
+                    st.markdown("### Próxima a Vencer")
                     if futuros.empty:
                         st.info("Nenhuma próxima inspeção cadastrada.")
                     else:
@@ -3910,7 +3910,7 @@ else:
                 st.markdown("---")
                 
                 # Busca por ano
-                st.markdown("### 🔎 Busca por Ano")
+                st.markdown("### Busca por Ano")
                 anos_disponiveis = df_is["DataIS"].apply(lambda x: x.year).unique().tolist()
                 anos_disponiveis.sort()
                 
