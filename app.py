@@ -3958,6 +3958,7 @@ else:
                         nome_completo = str(row.iloc[5]).strip()
                         nome_guerra = str(row.iloc[6]).strip()
                         divisao = str(row.iloc[16]).strip().lower()
+                        situacao = str(row.iloc[17]).strip().lower() if len(row) > 17 else ""
                         
                         if not nome_completo or nome_completo.lower() == "nan":
                             continue
@@ -3968,6 +3969,9 @@ else:
                             desc = f"{posto} {nome_exibir}"
                         else:
                             desc = nome_exibir
+                            
+                        if "destacado" in situacao:
+                            desc += " (Destacado)"
                             
                         tripulantes.append({
                             "Nome": desc,
@@ -4015,8 +4019,9 @@ else:
                         font-size: 1.1rem;
                         font-weight: 600;
                         margin-bottom: 15px;
-                        color: rgba(255,255,255,0.9);
-                        border-bottom: 2px solid rgba(255,255,255,0.1);
+                        color: var(--text-color);
+                        opacity: 0.9;
+                        border-bottom: 2px solid rgba(128,128,128,0.2);
                         padding-bottom: 5px;
                     }
                 </style>
@@ -4026,12 +4031,12 @@ else:
                 st.markdown(f'<div class="org-node cmd-node">Comandante<br><span style="font-weight:normal;font-size:0.9em;opacity:0.8;">{comandante["Nome"]}</span></div>', unsafe_allow_html=True)
                 
                 # Linha conectora vertical
-                st.markdown("<div style='text-align: center; font-size: 24px; color: rgba(255,255,255,0.4);'>↓</div>", unsafe_allow_html=True)
+                st.markdown("<div style='text-align: center; font-size: 24px; color: var(--text-color); opacity: 0.4;'>↓</div>", unsafe_allow_html=True)
                 
                 # Renderiza Imediato
                 st.markdown(f'<div class="org-node imed-node">Imediato<br><span style="font-weight:normal;font-size:0.9em;opacity:0.8;">{imediato["Nome"]}</span></div>', unsafe_allow_html=True)
                 
-                st.markdown("<div style='text-align: center; font-size: 24px; color: rgba(255,255,255,0.4); margin-bottom: 30px;'>↓</div>", unsafe_allow_html=True)
+                st.markdown("<div style='text-align: center; font-size: 24px; color: var(--text-color); opacity: 0.4; margin-bottom: 30px;'>↓</div>", unsafe_allow_html=True)
                 
                 # Branch out (3 Divisions)
                 c1, c2, c3 = st.columns(3)
