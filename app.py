@@ -1688,7 +1688,7 @@ ICON_MAP = {
     "Tabela de Serviço": "icons8-tick-box-50.svg",
     "Tabela de Lotação": "icons8-directory-50.svg",
     "Dados Pessoais": "pessoal.svg",
-    "Inspeção de Saúde": "icons8-heart-monitor-50.svg", # Ou similar configurado pelo usuário
+    "Inspeção de Saúde": "saude.svg",
     "Trocar Senha": "icons8-lock-50.svg",
     "Log / Debug": "log.svg",
     "Sair": "icons8-external-link-50.svg"
