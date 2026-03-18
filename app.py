@@ -2735,7 +2735,7 @@ else:
     
 
     elif pagina == "Cursos":
-        st.subheader("Análises de Cursos")
+        st.subheader("Análise de cursos presenciais")
         content_container = st.container()
         with content_container:
             if df_eventos.empty:
