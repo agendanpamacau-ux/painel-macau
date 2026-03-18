@@ -3456,6 +3456,10 @@ else:
                             border: 1px solid rgba(128, 128, 128, 0.2);
                             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
                             border-left: 5px solid #ec4899; /* Pink */
+                            min-height: 150px;
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: center;
                         }
                         /* Reuse .card-title and .card-value if already defined, but define here to be safe if tabs are separate */
                         .card-title {
