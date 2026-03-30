@@ -2934,6 +2934,11 @@ else:
                         concluidos = len(col_t[col_t == "CONCLUÍDO"])
                         qualificando = len(col_t[col_t == "QUALIFICANDO"])
                         
+                        cadernetas_headers = []
+                        if df_pqs.shape[1] > 17:
+                            for idx_col in range(6, 18):
+                                cadernetas_headers.append(str(df_pqs.iloc[0, idx_col]).strip())
+                                
                         # Extração da lista de Militares em Qualificação
                         lista_qualificando = []
                         for idx, val in col_t.items():
@@ -2945,10 +2950,22 @@ else:
                                 nome_usar = ng if ng and ng.lower() != "nan" else nc
                                 posto_usar = posto if posto and posto.lower() != "nan" else ""
                                 
+                                pendentes = []
+                                if df_pqs.shape[1] > 17:
+                                    for idx_col in range(6, 18):
+                                        status_cad = str(df_pqs.iloc[idx, idx_col]).strip().upper()
+                                        if status_cad == "A" or status_cad == "A - ANDAMENTO" or status_cad.startswith("A"):
+                                            nome_caderneta = cadernetas_headers[idx_col - 6]
+                                            if nome_caderneta and nome_caderneta.lower() != "nan":
+                                                pendentes.append(nome_caderneta)
+                                
+                                str_pendentes = "; ".join(pendentes) if pendentes else "Nenhuma especificada"
+                                
                                 lista_qualificando.append({
                                     "Posto": posto_usar,
                                     "Militar": nome_usar,
-                                    "Status PQS": "Qualificando"
+                                    "Em Andamento": str_pendentes,
+                                    "Status PQS": "Qualificando",
                                 })
                         
                         if concluidos == 0 and qualificando == 0:
