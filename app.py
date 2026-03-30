@@ -2831,10 +2831,10 @@ else:
                     if not df_grafico.empty:
                         opt_bar = make_echarts_grouped_bar(
                             x_data=df_grafico["Curso"].tolist(),
-                            series_dict={
-                                "Realizados": df_grafico["Real"].tolist(),
-                                "Requisito": df_grafico["Requisito"].tolist()
-                            }
+                            series_list=[
+                                {"name": "Realizados", "data": df_grafico["Real"].tolist()},
+                                {"name": "Requisito", "data": df_grafico["Requisito"].tolist()}
+                            ]
                         )
                         st_echarts(options=opt_bar, height="450px")
                     
