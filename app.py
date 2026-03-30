@@ -2749,24 +2749,28 @@ else:
                 df_pqs = conn.read(spreadsheet=URL_ADESTRAMENTO, worksheet="PQS", header=None, ttl="10m")
                 
                 # --- PARSER - OFICIAIS ---
-                # Cursos = linha 7 (index 6), colunas D:AE (3:31)
-                cursos_ofi = [str(c).strip() for c in df_ofi.iloc[6, 3:31].tolist()]
-                # Requisitos = linha 3 (index 2)
-                req_ofi = [int(float(x)) if pd.notna(x) and str(x).strip() != "" else 0 for x in df_ofi.iloc[2, 3:31].tolist()]
+                # NIP = coluna 2 (index 1), Guerra = coluna 3 (index 2), Completo = coluna 4 (index 3)
+                # Cursos = colunas E:AF (4:32)
+                cursos_ofi = [str(c).strip() for c in df_ofi.iloc[6, 4:32].tolist()]
+                req_ofi = [int(float(x)) if pd.notna(x) and str(x).strip() != "" else 0 for x in df_ofi.iloc[2, 4:32].tolist()]
                 
                 militares_ofi = []
                 for i in range(7, len(df_ofi)):
-                    ng = str(df_ofi.iloc[i, 1]).strip()
-                    if not ng or ng.lower() == "nan":
-                        continue
-                    nc = str(df_ofi.iloc[i, 2]).strip()
-                    mil = {"guerra": ng, "completo": nc, "cursos": []}
-                    for j in range(3, 31):
-                        val = str(df_ofi.iloc[i, j]).strip()
-                        if val == "1" or val == "1.0":
-                            # Verifica se a coluna tem um nome de curso válido antes de mapear
-                            if j-3 < len(cursos_ofi) and cursos_ofi[j-3].lower() != "nan":
-                                mil["cursos"].append(cursos_ofi[j-3])
+                    nip = str(df_ofi.iloc[i, 1]).strip()
+                    if nip.endswith(".0"): nip = nip[:-2]
+                    nip = nip.replace(".", "").replace("-", "").replace(" ", "")
+                    
+                    ng = str(df_ofi.iloc[i, 2]).strip()
+                    if not ng or ng.lower() == "nan": continue
+                    
+                    nc = str(df_ofi.iloc[i, 3]).strip()
+                    mil = {"nip": nip, "guerra": ng, "completo": nc, "cursos": []}
+                    for j in range(4, 32):
+                        if j < len(df_ofi.columns):
+                            val = str(df_ofi.iloc[i, j]).strip()
+                            if val == "1" or val == "1.0":
+                                if j-4 < len(cursos_ofi) and cursos_ofi[j-4].lower() != "nan":
+                                    mil["cursos"].append(cursos_ofi[j-4])
                     militares_ofi.append(mil)
                     
                 totais_ofi = [0] * len(cursos_ofi)
@@ -2777,24 +2781,27 @@ else:
                             totais_ofi[idx] += 1
                             
                 # --- PARSER - PRAÇAS ---
-                # Cursos = linha 7 (index 6), colunas D:BH (3:60)
-                cursos_pra = [str(c).strip() for c in df_pra.iloc[6, 3:60].tolist()]
-                # Requisitos = linha 3 (index 2)
-                req_pra = [int(float(x)) if pd.notna(x) and str(x).strip() != "" else 0 for x in df_pra.iloc[2, 3:60].tolist()]
+                # Cursos = colunas E:BI (4:61)
+                cursos_pra = [str(c).strip() for c in df_pra.iloc[6, 4:61].tolist()]
+                req_pra = [int(float(x)) if pd.notna(x) and str(x).strip() != "" else 0 for x in df_pra.iloc[2, 4:61].tolist()]
                 
                 militares_pra = []
                 for i in range(7, len(df_pra)):
-                    ng = str(df_pra.iloc[i, 1]).strip()
-                    if not ng or ng.lower() == "nan":
-                        continue
-                    nc = str(df_pra.iloc[i, 2]).strip()
-                    mil = {"guerra": ng, "completo": nc, "cursos": []}
-                    for j in range(3, 60):
+                    nip = str(df_pra.iloc[i, 1]).strip()
+                    if nip.endswith(".0"): nip = nip[:-2]
+                    nip = nip.replace(".", "").replace("-", "").replace(" ", "")
+                    
+                    ng = str(df_pra.iloc[i, 2]).strip()
+                    if not ng or ng.lower() == "nan": continue
+                    
+                    nc = str(df_pra.iloc[i, 3]).strip()
+                    mil = {"nip": nip, "guerra": ng, "completo": nc, "cursos": []}
+                    for j in range(4, 61):
                         if j < len(df_pra.columns):
                             val = str(df_pra.iloc[i, j]).strip()
                             if val == "1" or val == "1.0":
-                                if j-3 < len(cursos_pra) and cursos_pra[j-3].lower() != "nan":
-                                    mil["cursos"].append(cursos_pra[j-3])
+                                if j-4 < len(cursos_pra) and cursos_pra[j-4].lower() != "nan":
+                                    mil["cursos"].append(cursos_pra[j-4])
                     militares_pra.append(mil)
                     
                 totais_pra = [0] * len(cursos_pra)
@@ -4030,25 +4037,44 @@ else:
                     nome_completo_sel = str(dados_militar.iloc[5]).strip().upper()
                     nome_guerra_sel = str(dados_militar.iloc[6]).strip().upper() if len(dados_militar) > 6 else ""
                     
+                    nip_sel = ""
+                    for col in dados_militar.index: 
+                        if "NIP" in str(col).upper():
+                            nip_sel = str(dados_militar[col]).strip()
+                            if nip_sel.endswith(".0"): nip_sel = nip_sel[:-2]
+                            nip_sel = nip_sel.replace(".", "").replace("-", "").replace(" ", "")
+                            break
+                    
                     cursos_encontrados = []
                     
                     def mapear_cursos(df_sheet):
                         encontrados = []
                         nomes_cursos = []
                         if df_sheet.shape[0] > 6:
-                            for idx_col in range(3, df_sheet.shape[1]):
+                            for idx_col in range(4, df_sheet.shape[1]):
                                 nomes_cursos.append(str(df_sheet.iloc[6, idx_col]).strip())
                                 
                         for idx, r_row in df_sheet.iterrows():
                             if idx < 7: continue
-                            r_nome_g = str(r_row.iloc[1]).strip().upper() if df_sheet.shape[1] > 1 else ""
-                            r_nome_c = str(r_row.iloc[2]).strip().upper() if df_sheet.shape[1] > 2 else ""
                             
-                            # Verifica correspondência (completo ou guerra)
-                            if (r_nome_c == nome_completo_sel and nome_completo_sel != "") or \
-                               (r_nome_g == nome_guerra_sel and nome_guerra_sel != "") or \
-                               (r_nome_g in selecionado.upper()):
-                               for id_c, val in enumerate(r_row[3:]):
+                            r_nip = str(r_row.iloc[1]).strip() if df_sheet.shape[1] > 1 else ""
+                            if r_nip.endswith(".0"): r_nip = r_nip[:-2]
+                            r_nip = r_nip.replace(".", "").replace("-", "").replace(" ", "")
+                            
+                            r_nome_g = str(r_row.iloc[2]).strip().upper() if df_sheet.shape[1] > 2 else ""
+                            r_nome_c = str(r_row.iloc[3]).strip().upper() if df_sheet.shape[1] > 3 else ""
+                            
+                            # Verifica correspondência (NIP ou completo ou guerra)
+                            match = False
+                            if nip_sel and r_nip and nip_sel == r_nip: match = True
+                            elif not nip_sel:
+                                if (r_nome_c == nome_completo_sel and nome_completo_sel != "") or \
+                                   (r_nome_g == nome_guerra_sel and nome_guerra_sel != "") or \
+                                   (r_nome_g in selecionado.upper()):
+                                    match = True
+                            
+                            if match:
+                               for id_c, val in enumerate(r_row[4:]):
                                    if str(val) == "1" and id_c < len(nomes_cursos):
                                        c_name = nomes_cursos[id_c]
                                        if c_name and c_name.lower() != "nan":
