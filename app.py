@@ -2826,6 +2826,23 @@ else:
                 # --- VISÃO GLOBAL ---
                 tab_estatistica, tab_militar, tab_pqs = st.tabs(["Estatísticas RMC", "Pesquisa por Militar", "Qualificação PQS"])
                 
+                def simplifica_curso(nome):
+                    n = str(nome).upper()
+                    substituicoes = {
+                        "CURSO EXPEDITO DE ": "C-EXP ",
+                        "CURSO EXPEDITO ": "C-EXP ",
+                        "CURSO ESPECIAL DE ": "C-ESP ",
+                        "CURSO ESPECIAL ": "C-ESP ",
+                        "CURSO DE ": "",
+                        "CURSO ": "C. ",
+                        "EST-LISTA-AGE": "EST-L.AGE",
+                        "AMBIENTE DE INFORMAÇÕES": "AMB. INFO.",
+                        "DE CONSELHO DE GESTÃO": "CONS. GESTÃO"
+                    }
+                    for k, v in substituicoes.items():
+                        n = n.replace(k, v)
+                    return n if len(n) <= 18 else n[:16] + ".."
+                
                 with tab_estatistica:
                     st.markdown("### Situação dos Cursos: Oficiais")
                     
@@ -2834,8 +2851,9 @@ else:
                     df_grafico_ofi = df_grafico_ofi.sort_values(by="Requisito", ascending=False).head(20)
                     
                     if not df_grafico_ofi.empty:
+                        eixos_x_ofi = [simplifica_curso(c) for c in df_grafico_ofi["Curso"].tolist()]
                         opt_bar_ofi = make_echarts_grouped_bar(
-                            x_data=df_grafico_ofi["Curso"].tolist(),
+                            x_data=eixos_x_ofi,
                             series_list=[
                                 {"name": "Realizados", "data": df_grafico_ofi["Real"].tolist()},
                                 {"name": "Requisito", "data": df_grafico_ofi["Requisito"].tolist()}
@@ -2853,8 +2871,9 @@ else:
                     df_grafico_pra = df_grafico_pra.sort_values(by="Requisito", ascending=False).head(20)
                     
                     if not df_grafico_pra.empty:
+                        eixos_x_pra = [simplifica_curso(c) for c in df_grafico_pra["Curso"].tolist()]
                         opt_bar_pra = make_echarts_grouped_bar(
-                            x_data=df_grafico_pra["Curso"].tolist(),
+                            x_data=eixos_x_pra,
                             series_list=[
                                 {"name": "Realizados", "data": df_grafico_pra["Real"].tolist()},
                                 {"name": "Requisito", "data": df_grafico_pra["Requisito"].tolist()}
@@ -2915,6 +2934,23 @@ else:
                         concluidos = len(col_t[col_t == "CONCLUÍDO"])
                         qualificando = len(col_t[col_t == "QUALIFICANDO"])
                         
+                        # Extração da lista de Militares em Qualificação
+                        lista_qualificando = []
+                        for idx, val in col_t.items():
+                            if val == "QUALIFICANDO":
+                                posto = str(df_pqs.iloc[idx, 1]).strip() if df_pqs.shape[1] > 1 else ""
+                                ng = str(df_pqs.iloc[idx, 4]).strip() if df_pqs.shape[1] > 4 else ""
+                                nc = str(df_pqs.iloc[idx, 3]).strip() if df_pqs.shape[1] > 3 else ""
+                                
+                                nome_usar = ng if ng and ng.lower() != "nan" else nc
+                                posto_usar = posto if posto and posto.lower() != "nan" else ""
+                                
+                                lista_qualificando.append({
+                                    "Posto": posto_usar,
+                                    "Militar": nome_usar,
+                                    "Status PQS": "Qualificando"
+                                })
+                        
                         if concluidos == 0 and qualificando == 0:
                             st.info("Sem dados estatísticos de PQS na coluna T.")
                         else:
@@ -2926,6 +2962,14 @@ else:
                                 title="Status de Qualificação"
                             )
                             st_echarts(options=opt_pqs, height="450px")
+                            
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            with st.expander("Ver Militares em Qualificação"):
+                                if len(lista_qualificando) > 0:
+                                    df_q = pd.DataFrame(lista_qualificando)
+                                    st.dataframe(df_q, use_container_width=True, hide_index=True)
+                                else:
+                                    st.success("Não há militares com pendência de qualificação neste momento.")
                     else:
                         st.error("A aba PQS não possui a Coluna T.")
                     
