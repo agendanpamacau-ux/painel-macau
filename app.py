@@ -2815,13 +2815,16 @@ else:
                     if c and c.lower() != "nan" and c != "":
                         dados_cursos_pra.append({"Curso": c, "Real": totais_pra[i], "Requisito": req_pra[i]})
                         
-                # Consolidação para matemática final (Deficit, etc)
+                # Consolidação para matemática final
                 dados_cursos = dados_cursos_ofi + dados_cursos_pra
                 
-                # Classificadores Matemáticos 
-                deficit = [d for d in dados_cursos if d["Real"] < d["Requisito"]]
-                excesso = [d for d in dados_cursos if d["Real"] > d["Requisito"]]
-                rmc     = [d for d in dados_cursos if d["Real"] == d["Requisito"] and d["Requisito"] > 0]
+                deficit_ofi = [d for d in dados_cursos_ofi if d["Real"] < d["Requisito"]]
+                excesso_ofi = [d for d in dados_cursos_ofi if d["Real"] > d["Requisito"]]
+                rmc_ofi     = [d for d in dados_cursos_ofi if d["Real"] == d["Requisito"] and d["Requisito"] > 0]
+                
+                deficit_pra = [d for d in dados_cursos_pra if d["Real"] < d["Requisito"]]
+                excesso_pra = [d for d in dados_cursos_pra if d["Real"] > d["Requisito"]]
+                rmc_pra     = [d for d in dados_cursos_pra if d["Real"] == d["Requisito"] and d["Requisito"] > 0]
                 
                 # --- VISÃO GLOBAL ---
                 tab_estatistica, tab_militar, tab_pqs = st.tabs(["Estatísticas RMC", "Pesquisa por Militar", "Qualificação PQS"])
@@ -2863,6 +2866,21 @@ else:
                     else:
                         st.info("Não há requisitos de cursos para oficiais.")
                         
+                    with st.expander("Painel de Cursos dos Oficiais"):
+                        tb_o1, tb_o2, tb_o3 = st.columns(3)
+                        with tb_o1:
+                            st.markdown("#### Déficit")
+                            if deficit_ofi: st.dataframe(pd.DataFrame(deficit_ofi), use_container_width=True, hide_index=True)
+                            else: st.info("Nenhum curso em déficit.")
+                        with tb_o2:
+                            st.markdown("#### Excesso")
+                            if excesso_ofi: st.dataframe(pd.DataFrame(excesso_ofi), use_container_width=True, hide_index=True)
+                            else: st.info("Nenhum curso em excesso.")
+                        with tb_o3:
+                            st.markdown("#### Dentro da RMC")
+                            if rmc_ofi: st.dataframe(pd.DataFrame(rmc_ofi), use_container_width=True, hide_index=True)
+                            else: st.info("Nenhum curso exato na RMC.")
+                        
                     st.markdown("---")
                     st.markdown("### Situação dos Cursos: Praças")
                     
@@ -2883,34 +2901,20 @@ else:
                     else:
                         st.info("Não há requisitos de cursos para praças.")
                     
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    with st.expander("Revelar Painel de Cursos (Déficit, Excesso e RMC)"):
-                        df_deficit = pd.DataFrame(deficit)
-                        df_excesso = pd.DataFrame(excesso)
-                        df_rmc = pd.DataFrame(rmc)
-                        
-                        tb_c1, tb_c2, tb_c3 = st.columns(3)
-                        
-                        with tb_c1:
+                    with st.expander("Painel de Cursos das Praças"):
+                        tb_p1, tb_p2, tb_p3 = st.columns(3)
+                        with tb_p1:
                             st.markdown("#### Déficit")
-                            if not df_deficit.empty:
-                                st.dataframe(df_deficit, use_container_width=True, hide_index=True)
-                            else:
-                                st.info("Nenhum curso em déficit.")
-                                
-                        with tb_c2:
+                            if deficit_pra: st.dataframe(pd.DataFrame(deficit_pra), use_container_width=True, hide_index=True)
+                            else: st.info("Nenhum curso em déficit.")
+                        with tb_p2:
                             st.markdown("#### Excesso")
-                            if not df_excesso.empty:
-                                st.dataframe(df_excesso, use_container_width=True, hide_index=True)
-                            else:
-                                st.info("Nenhum curso em excesso.")
-                                
-                        with tb_c3:
+                            if excesso_pra: st.dataframe(pd.DataFrame(excesso_pra), use_container_width=True, hide_index=True)
+                            else: st.info("Nenhum curso em excesso.")
+                        with tb_p3:
                             st.markdown("#### Dentro da RMC")
-                            if not df_rmc.empty:
-                                st.dataframe(df_rmc, use_container_width=True, hide_index=True)
-                            else:
-                                st.info("Nenhum curso encontrado exato na RMC.")
+                            if rmc_pra: st.dataframe(pd.DataFrame(rmc_pra), use_container_width=True, hide_index=True)
+                            else: st.info("Nenhum curso exato na RMC.")
 
                 with tab_militar:
                     st.markdown("### Histórico do Militar")
