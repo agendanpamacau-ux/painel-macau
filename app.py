@@ -2881,12 +2881,11 @@ else:
                         st.info("Sem dados estatísticos de PQS na coluna T.")
                     else:
                         opt_pqs = make_echarts_donut(
-                            data=[
+                            data_list=[
                                 {"value": concluidos, "name": "Concluído"},
                                 {"value": qualificando, "name": "Qualificando"}
                             ],
-                            title="Status de Qualificação",
-                            color=["#10b981", "#3b82f6"] # Verde esmeralda e Azul royal
+                            title="Status de Qualificação"
                         )
                         st_echarts(options=opt_pqs, height="450px")
                 else:
