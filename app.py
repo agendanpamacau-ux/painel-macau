@@ -789,6 +789,7 @@ SERVICOS_CONSIDERADOS = [
 URL_DIAS_MAR = "https://docs.google.com/spreadsheets/d/1CEVh0EQsnINcuVP4-RbS3KgfAQNKXCwAszbqjDq8phU/edit?usp=sharing"
 URL_CARDAPIO = "https://docs.google.com/spreadsheets/d/1i3veE6cj4-h9toh_DIjm8vcyz4kJ0DoKpJDrA2Xn77s/edit?usp=sharing"
 URL_ANIVERSARIOS = "https://docs.google.com/spreadsheets/d/1mcQlXU_sRYwqmBCHkL3qX1GS6bivUqIGqGVVCvZLc0U/edit?usp=sharing"
+URL_ADESTRAMENTO = "https://docs.google.com/spreadsheets/d/1F2aovawDlvuTGbMn2EDHMYXVAX4eFn49w0MxWd-EkWs/edit?usp=sharing"
 URL_LOTACAO = "https://docs.google.com/spreadsheets/d/1c2l7-LlFsxMqzI4JkX6IDQ7I7w-v202YaSJU2gpkrx4/edit?usp=sharing"
 URL_TABELA_SERVICO = "https://docs.google.com/spreadsheets/d/1xWS42Q4WjKB5ERd8kXBXShzWzVa8fUtgo1bFdhTxE7E/edit?usp=sharing"
 URL_AUSENCIAS = "https://docs.google.com/spreadsheets/d/1BLBVdAUfJ4sYH2qLRTXs122L89HGCTrPPuxM8KK7_sU/edit?usp=sharing"
@@ -1684,7 +1685,7 @@ ICON_MAP = {
     "Equipes Operativas": "equipe_operativa.svg",
     "Estatísticas & Análises": "analise.svg",
     "Férias": "icons8-sun-50.svg",
-    "Cursos": "cursos.svg",
+    "Adestramento": "cursos.svg",
     "Tabela de Serviço": "icons8-tick-box-50.svg",
     "Tabela de Lotação": "icons8-directory-50.svg",
     "Dados Pessoais": "pessoal.svg",
@@ -2735,77 +2736,164 @@ else:
                     st.markdown("---")
     
 
-    elif pagina == "Cursos":
-        st.subheader("Análise de cursos presenciais")
+    elif pagina == "Adestramento":
+        st.subheader("Adestramento")
         content_container = st.container()
         with content_container:
-            if df_eventos.empty:
-                st.write("Sem dados de cursos registrados.")
-            else:
-                df_cursos = df_eventos[df_eventos["Tipo"] == "Curso"].copy()
-                if df_cursos.empty:
-                    st.info("Nenhum curso cadastrado.")
-                else:
-                    realizados = df_cursos[df_cursos["Fim"] < hoje].copy()
-                    inscritos  = df_cursos[df_cursos["Fim"] >= hoje].copy()
-                    col_c1, col_c2 = st.columns(2)
-                    with col_c1:
-                        st.markdown("### Cursos realizados")
-                        if realizados.empty:
-                            st.info("Nenhum curso finalizado até a data de referência.")
-                        else:
-                            t_real = realizados[["Posto", "Nome", "Motivo", "Inicio", "Fim", "Duracao_dias"]].copy()
-                            t_real["Início"] = t_real["Inicio"].dt.strftime("%d/%m/%Y")
-                            t_real["Término"] = t_real["Fim"].dt.strftime("%d/%m/%Y")
-                            t_real = t_real.drop(columns=["Inicio", "Fim"])
-                            t_real = t_real.rename(columns={"Motivo": "Curso", "Duracao_dias": "Dias"})
-                            t_real = t_real.sort_values(by=["Nome", "Início"])
-                            st.dataframe(t_real, use_container_width=True, hide_index=True)
-                    with col_c2:
-                        st.markdown("### Cursos em andamento / futuros")
-                        if inscritos.empty:
-                            st.info("Nenhum militar com curso em andamento ou futuro.")
-                        else:
-                            t_insc = inscritos[["Posto", "Nome", "Motivo", "Inicio", "Fim", "Duracao_dias"]].copy()
-                            t_insc["Início"] = t_insc["Inicio"].dt.strftime("%d/%m/%Y")
-                            t_insc["Término"] = t_insc["Fim"].dt.strftime("%d/%m/%Y")
-                            t_insc = t_insc.drop(columns=["Inicio", "Fim"])
-                            t_insc = t_insc.rename(columns={"Motivo": "Curso", "Duracao_dias": "Dias"})
-                            t_insc = t_insc.sort_values(by=["Início", "Nome"])
-                            st.dataframe(t_insc, use_container_width=True, hide_index=True)
-                    st.markdown("---")
-    
-                    st.subheader("Estatísticas dos cursos realizados")
-                    if realizados.empty:
-                        st.info("Ainda não há cursos concluídos para gerar estatísticas.")
+            try:
+                conn = st.connection("gsheets", type=GSheetsConnection)
+                
+                # Lendo as abas usando header=None para navegar explicitamente por índices de linhas e colunas
+                df_ofi = conn.read(spreadsheet=URL_ADESTRAMENTO, worksheet="GERAL - OFICIAIS", header=None, ttl="10m")
+                df_pra = conn.read(spreadsheet=URL_ADESTRAMENTO, worksheet="GERAL - PRAÇAS", header=None, ttl="10m")
+                df_pqs = conn.read(spreadsheet=URL_ADESTRAMENTO, worksheet="PQS", header=None, ttl="10m")
+                
+                # --- PARSER - OFICIAIS ---
+                # Cursos = linha 7 (index 6), colunas D:AE (3:31)
+                cursos_ofi = [str(c).strip() for c in df_ofi.iloc[6, 3:31].tolist()]
+                # Requisitos = linha 3 (index 2)
+                req_ofi = [int(float(x)) if pd.notna(x) and str(x).strip() != "" else 0 for x in df_ofi.iloc[2, 3:31].tolist()]
+                
+                militares_ofi = []
+                for i in range(7, len(df_ofi)):
+                    ng = str(df_ofi.iloc[i, 1]).strip()
+                    if not ng or ng.lower() == "nan":
+                        continue
+                    nc = str(df_ofi.iloc[i, 2]).strip()
+                    mil = {"guerra": ng, "completo": nc, "cursos": []}
+                    for j in range(3, 31):
+                        val = str(df_ofi.iloc[i, j]).strip()
+                        if val == "1" or val == "1.0":
+                            # Verifica se a coluna tem um nome de curso válido antes de mapear
+                            if j-3 < len(cursos_ofi) and cursos_ofi[j-3].lower() != "nan":
+                                mil["cursos"].append(cursos_ofi[j-3])
+                    militares_ofi.append(mil)
+                    
+                totais_ofi = [0] * len(cursos_ofi)
+                for mil in militares_ofi:
+                    for c in mil["cursos"]:
+                        if c in cursos_ofi:
+                            idx = cursos_ofi.index(c)
+                            totais_ofi[idx] += 1
+                            
+                # --- PARSER - PRAÇAS ---
+                # Cursos = linha 7 (index 6), colunas D:BH (3:60)
+                cursos_pra = [str(c).strip() for c in df_pra.iloc[6, 3:60].tolist()]
+                # Requisitos = linha 3 (index 2)
+                req_pra = [int(float(x)) if pd.notna(x) and str(x).strip() != "" else 0 for x in df_pra.iloc[2, 3:60].tolist()]
+                
+                militares_pra = []
+                for i in range(7, len(df_pra)):
+                    ng = str(df_pra.iloc[i, 1]).strip()
+                    if not ng or ng.lower() == "nan":
+                        continue
+                    nc = str(df_pra.iloc[i, 2]).strip()
+                    mil = {"guerra": ng, "completo": nc, "cursos": []}
+                    for j in range(3, 60):
+                        if j < len(df_pra.columns):
+                            val = str(df_pra.iloc[i, j]).strip()
+                            if val == "1" or val == "1.0":
+                                if j-3 < len(cursos_pra) and cursos_pra[j-3].lower() != "nan":
+                                    mil["cursos"].append(cursos_pra[j-3])
+                    militares_pra.append(mil)
+                    
+                totais_pra = [0] * len(cursos_pra)
+                for mil in militares_pra:
+                    for c in mil["cursos"]:
+                        if c in cursos_pra:
+                            idx = cursos_pra.index(c)
+                            totais_pra[idx] += 1
+                            
+                # Agrupando todos os dados de cursos para as listas matemáticas
+                dados_cursos = []
+                for i, c in enumerate(cursos_ofi):
+                    if c and c.lower() != "nan" and c != "":
+                        dados_cursos.append({"Curso": c, "Real": totais_ofi[i], "Requisito": req_ofi[i]})
+                for i, c in enumerate(cursos_pra):
+                    if c and c.lower() != "nan" and c != "":
+                        dados_cursos.append({"Curso": c, "Real": totais_pra[i], "Requisito": req_pra[i]})
+                        
+                # Classificadores Matemáticos 
+                deficit = [d for d in dados_cursos if d["Real"] < d["Requisito"]]
+                excesso = [d for d in dados_cursos if d["Real"] > d["Requisito"]]
+                rmc     = [d for d in dados_cursos if d["Real"] == d["Requisito"] and d["Requisito"] > 0]
+                
+                # --- VISÃO GLOBAL ---
+                tab_estatistica, tab_militar = st.tabs(["Estatísticas RMC", "Pesquisa por Militar"])
+                
+                with tab_estatistica:
+                    st.markdown("### Situação Global dos Cursos")
+                    
+                    df_grafico = pd.DataFrame(dados_cursos)
+                    df_grafico = df_grafico[df_grafico["Requisito"] > 0] # Filtra os invalidos
+                    df_grafico = df_grafico.sort_values(by="Requisito", ascending=False).head(20) # Top 20 para o grafico de barras
+                    
+                    if not df_grafico.empty:
+                        opt_bar = make_echarts_grouped_bar(
+                            x_data=df_grafico["Curso"].tolist(),
+                            series_dict={
+                                "Realizados": df_grafico["Real"].tolist(),
+                                "Requisito": df_grafico["Requisito"].tolist()
+                            }
+                        )
+                        st_echarts(options=opt_bar, height="450px")
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        st.markdown("#### Déficit")
+                        for d in deficit:
+                            st.write(f"- **{d['Curso']}** ({d['Real']}/{d['Requisito']})")
+                    with c2:
+                        st.markdown("#### Excesso")
+                        for d in excesso:
+                            st.write(f"- **{d['Curso']}** ({d['Real']}/{d['Requisito']})")
+                    with c3:
+                        st.markdown("#### Dentro da RMC")
+                        for d in rmc:
+                            st.write(f"- **{d['Curso']}** ({d['Real']}/{d['Requisito']})")
+
+                with tab_militar:
+                    st.markdown("### Histórico do Militar")
+                    # Unifica as listas iteráveis para o dropdown
+                    todos_militares = militares_ofi + militares_pra
+                    opcoes_nomes = [f"{m['guerra']} - {m['completo']}" for m in todos_militares]
+                    
+                    selecionado = st.selectbox("Selecione o militar:", opcoes_nomes)
+                    if selecionado:
+                        militar_obj = next((m for m in todos_militares if f"{m['guerra']} - {m['completo']}" == selecionado), None)
+                        if militar_obj:
+                            st.markdown(f"**Cursos concluídos ({len(militar_obj['cursos'])})**")
+                            for c in militar_obj["cursos"]:
+                                st.write(f"- {c}")
+                                
+                # --- PQS (Gráfico Rosca) ---
+                st.markdown("---")
+                st.markdown("### Qualificação PQS")
+                
+                # Coluna T é o Index 19. Como usamos header=None, lemos as linhas a partir da segunda (index 1)
+                if df_pqs.shape[1] > 19:
+                    col_t = df_pqs.iloc[1:, 19].dropna().astype(str).str.strip().str.upper()
+                    concluidos = len(col_t[col_t == "CONCLUÍDO"])
+                    qualificando = len(col_t[col_t == "QUALIFICANDO"])
+                    
+                    if concluidos == 0 and qualificando == 0:
+                        st.info("Sem dados estatísticos de PQS na coluna T.")
                     else:
-                        col_k1, col_k2, col_k3 = st.columns(3)
-                        total_cursos_realizados = len(realizados)
-                        militares_com_curso = realizados["Nome"].nunique()
-                        cursos_diferentes = realizados["Motivo"].nunique()
-                        col_k1.metric("Cursos realizados (eventos)", total_cursos_realizados)
-                        col_k2.metric("Militares que já realizaram curso", militares_com_curso)
-                        col_k3.metric("Tipos diferentes de cursos", cursos_diferentes)
-                        st.markdown("---")
-    
-                        col_g1, col_g2 = st.columns(2)
-                        df_cursos_freq = (realizados.groupby("Motivo")["Nome"].nunique().reset_index(name="Militares").sort_values("Militares", ascending=False))
-                        with col_g1:
-                            st.markdown("##### Cursos realizados")
-                            opt_cursos_freq = make_echarts_bar(df_cursos_freq["Motivo"].tolist(), df_cursos_freq["Militares"].tolist())
-                            st_echarts(options=opt_cursos_freq, height="500px")
-                        if not df_dias.empty:
-                            df_dias_cursos = df_dias[df_dias["Tipo"] == "Curso"].copy()
-                            if not df_dias_cursos.empty:
-                                df_dias_cursos["Mes"] = df_dias_cursos["Data"].dt.to_period("M").dt.to_timestamp()
-                                df_curso_mes = (df_dias_cursos[["Mes", "Nome"]].drop_duplicates().groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
-                                with col_g2:
-                                    st.markdown("##### Militares em curso por mês")
-                                    x_curso_mes = df_curso_mes["Mes"].dt.strftime("%b/%Y").tolist()
-                                    opt_curso_mes = make_echarts_line(x_curso_mes, df_curso_mes["Militares"].tolist(), integer=True)
-                                    st_echarts(options=opt_curso_mes, height="400px")
-                            else:
-                                col_g2.info("Sem dados diários suficientes para análise mensal de cursos.")
+                        opt_pqs = make_echarts_donut(
+                            data=[
+                                {"value": concluidos, "name": "Concluído"},
+                                {"value": qualificando, "name": "Qualificando"}
+                            ],
+                            title="Status de Qualificação",
+                            color=["#10b981", "#3b82f6"] # Verde esmeralda e Azul royal
+                        )
+                        st_echarts(options=opt_pqs, height="450px")
+                else:
+                    st.error("A aba PQS não possui a Coluna T.")
+                    
+            except Exception as e:
+                st.error(f"Erro ao carregar os dados de Adestramento: {e}")
 
     elif pagina == "Tabela de Serviço":
         st.subheader("Tabela de Serviço")
