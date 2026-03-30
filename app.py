@@ -2804,15 +2804,20 @@ else:
                             idx = cursos_pra.index(c)
                             totais_pra[idx] += 1
                             
-                # Agrupando todos os dados de cursos para as listas matemáticas
-                dados_cursos = []
+                # Agrupando dados de cursos formatados
+                dados_cursos_ofi = []
                 for i, c in enumerate(cursos_ofi):
                     if c and c.lower() != "nan" and c != "":
-                        dados_cursos.append({"Curso": c, "Real": totais_ofi[i], "Requisito": req_ofi[i]})
+                        dados_cursos_ofi.append({"Curso": c, "Real": totais_ofi[i], "Requisito": req_ofi[i]})
+                        
+                dados_cursos_pra = []
                 for i, c in enumerate(cursos_pra):
                     if c and c.lower() != "nan" and c != "":
-                        dados_cursos.append({"Curso": c, "Real": totais_pra[i], "Requisito": req_pra[i]})
+                        dados_cursos_pra.append({"Curso": c, "Real": totais_pra[i], "Requisito": req_pra[i]})
                         
+                # Consolidação para matemática final (Deficit, etc)
+                dados_cursos = dados_cursos_ofi + dados_cursos_pra
+                
                 # Classificadores Matemáticos 
                 deficit = [d for d in dados_cursos if d["Real"] < d["Requisito"]]
                 excesso = [d for d in dados_cursos if d["Real"] > d["Requisito"]]
@@ -2822,21 +2827,42 @@ else:
                 tab_estatistica, tab_militar, tab_pqs = st.tabs(["Estatísticas RMC", "Pesquisa por Militar", "Qualificação PQS"])
                 
                 with tab_estatistica:
-                    st.markdown("### Situação Global dos Cursos")
+                    st.markdown("### Situação dos Cursos: Oficiais")
                     
-                    df_grafico = pd.DataFrame(dados_cursos)
-                    df_grafico = df_grafico[df_grafico["Requisito"] > 0] # Filtra os invalidos
-                    df_grafico = df_grafico.sort_values(by="Requisito", ascending=False).head(20) # Top 20 para o grafico de barras
+                    df_grafico_ofi = pd.DataFrame(dados_cursos_ofi)
+                    df_grafico_ofi = df_grafico_ofi[df_grafico_ofi["Requisito"] > 0]
+                    df_grafico_ofi = df_grafico_ofi.sort_values(by="Requisito", ascending=False).head(20)
                     
-                    if not df_grafico.empty:
-                        opt_bar = make_echarts_grouped_bar(
-                            x_data=df_grafico["Curso"].tolist(),
+                    if not df_grafico_ofi.empty:
+                        opt_bar_ofi = make_echarts_grouped_bar(
+                            x_data=df_grafico_ofi["Curso"].tolist(),
                             series_list=[
-                                {"name": "Realizados", "data": df_grafico["Real"].tolist()},
-                                {"name": "Requisito", "data": df_grafico["Requisito"].tolist()}
+                                {"name": "Realizados", "data": df_grafico_ofi["Real"].tolist()},
+                                {"name": "Requisito", "data": df_grafico_ofi["Requisito"].tolist()}
                             ]
                         )
-                        st_echarts(options=opt_bar, height="450px")
+                        st_echarts(options=opt_bar_ofi, height="350px")
+                    else:
+                        st.info("Não há requisitos de cursos para oficiais.")
+                        
+                    st.markdown("---")
+                    st.markdown("### Situação dos Cursos: Praças")
+                    
+                    df_grafico_pra = pd.DataFrame(dados_cursos_pra)
+                    df_grafico_pra = df_grafico_pra[df_grafico_pra["Requisito"] > 0]
+                    df_grafico_pra = df_grafico_pra.sort_values(by="Requisito", ascending=False).head(20)
+                    
+                    if not df_grafico_pra.empty:
+                        opt_bar_pra = make_echarts_grouped_bar(
+                            x_data=df_grafico_pra["Curso"].tolist(),
+                            series_list=[
+                                {"name": "Realizados", "data": df_grafico_pra["Real"].tolist()},
+                                {"name": "Requisito", "data": df_grafico_pra["Requisito"].tolist()}
+                            ]
+                        )
+                        st_echarts(options=opt_bar_pra, height="350px")
+                    else:
+                        st.info("Não há requisitos de cursos para praças.")
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     with st.expander("Revelar Painel de Cursos (Déficit, Excesso e RMC)"):
