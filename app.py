@@ -4020,6 +4020,50 @@ else:
                         t_col = col1 if i < meio else col2
                         with t_col:
                             st.markdown(f"**{col_name}:** {val_str}")
+                            
+                    st.markdown("---")
+                    st.markdown("### Cursos do Militar")
+                    
+                    df_ofi = conn.read(spreadsheet=URL_ADESTRAMENTO, worksheet="GERAL - OFICIAIS", header=None, ttl="10m")
+                    df_pra = conn.read(spreadsheet=URL_ADESTRAMENTO, worksheet="GERAL - PRAÇAS", header=None, ttl="10m")
+                    
+                    nome_completo_sel = str(dados_militar.iloc[5]).strip().upper()
+                    nome_guerra_sel = str(dados_militar.iloc[6]).strip().upper() if len(dados_militar) > 6 else ""
+                    
+                    cursos_encontrados = []
+                    
+                    def mapear_cursos(df_sheet):
+                        encontrados = []
+                        nomes_cursos = []
+                        if df_sheet.shape[0] > 6:
+                            for idx_col in range(3, df_sheet.shape[1]):
+                                nomes_cursos.append(str(df_sheet.iloc[6, idx_col]).strip())
+                                
+                        for idx, r_row in df_sheet.iterrows():
+                            if idx < 7: continue
+                            r_nome_g = str(r_row.iloc[1]).strip().upper() if df_sheet.shape[1] > 1 else ""
+                            r_nome_c = str(r_row.iloc[2]).strip().upper() if df_sheet.shape[1] > 2 else ""
+                            
+                            # Verifica correspondência (completo ou guerra)
+                            if (r_nome_c == nome_completo_sel and nome_completo_sel != "") or \
+                               (r_nome_g == nome_guerra_sel and nome_guerra_sel != "") or \
+                               (r_nome_g in selecionado.upper()):
+                               for id_c, val in enumerate(r_row[3:]):
+                                   if str(val) == "1" and id_c < len(nomes_cursos):
+                                       c_name = nomes_cursos[id_c]
+                                       if c_name and c_name.lower() != "nan":
+                                           encontrados.append(c_name)
+                               break
+                        return encontrados
+                    
+                    cursos_encontrados.extend(mapear_cursos(df_ofi))
+                    cursos_encontrados.extend(mapear_cursos(df_pra))
+                    
+                    if len(cursos_encontrados) > 0:
+                        for crs in cursos_encontrados:
+                            st.markdown(f"- {crs}")
+                    else:
+                        st.info("Não constam cursos registrados para este militar na planilha de Adestramento.")
             else:
                 st.error("Planilha incompleta ou a coluna 'Nome' não está no local esperado (Coluna G).")
                 
