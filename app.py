@@ -2819,7 +2819,7 @@ else:
                 rmc     = [d for d in dados_cursos if d["Real"] == d["Requisito"] and d["Requisito"] > 0]
                 
                 # --- VISÃO GLOBAL ---
-                tab_estatistica, tab_militar = st.tabs(["Estatísticas RMC", "Pesquisa por Militar"])
+                tab_estatistica, tab_militar, tab_pqs = st.tabs(["Estatísticas RMC", "Pesquisa por Militar", "Qualificação PQS"])
                 
                 with tab_estatistica:
                     st.markdown("### Situação Global dos Cursos")
@@ -2839,19 +2839,33 @@ else:
                         st_echarts(options=opt_bar, height="450px")
                     
                     st.markdown("<br>", unsafe_allow_html=True)
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        st.markdown("#### Déficit")
-                        for d in deficit:
-                            st.write(f"- **{d['Curso']}** ({d['Real']}/{d['Requisito']})")
-                    with c2:
-                        st.markdown("#### Excesso")
-                        for d in excesso:
-                            st.write(f"- **{d['Curso']}** ({d['Real']}/{d['Requisito']})")
-                    with c3:
-                        st.markdown("#### Dentro da RMC")
-                        for d in rmc:
-                            st.write(f"- **{d['Curso']}** ({d['Real']}/{d['Requisito']})")
+                    with st.expander("Revelar Painel de Cursos (Déficit, Excesso e RMC)"):
+                        df_deficit = pd.DataFrame(deficit)
+                        df_excesso = pd.DataFrame(excesso)
+                        df_rmc = pd.DataFrame(rmc)
+                        
+                        tb_c1, tb_c2, tb_c3 = st.columns(3)
+                        
+                        with tb_c1:
+                            st.markdown("#### Déficit")
+                            if not df_deficit.empty:
+                                st.dataframe(df_deficit, use_container_width=True, hide_index=True)
+                            else:
+                                st.info("Nenhum curso em déficit.")
+                                
+                        with tb_c2:
+                            st.markdown("#### Excesso")
+                            if not df_excesso.empty:
+                                st.dataframe(df_excesso, use_container_width=True, hide_index=True)
+                            else:
+                                st.info("Nenhum curso em excesso.")
+                                
+                        with tb_c3:
+                            st.markdown("#### Dentro da RMC")
+                            if not df_rmc.empty:
+                                st.dataframe(df_rmc, use_container_width=True, hide_index=True)
+                            else:
+                                st.info("Nenhum curso encontrado exato na RMC.")
 
                 with tab_militar:
                     st.markdown("### Histórico do Militar")
@@ -2867,29 +2881,27 @@ else:
                             for c in militar_obj["cursos"]:
                                 st.write(f"- {c}")
                                 
-                # --- PQS (Gráfico Rosca) ---
-                st.markdown("---")
-                st.markdown("### Qualificação PQS")
-                
-                # Coluna T é o Index 19. Como usamos header=None, lemos as linhas a partir da segunda (index 1)
-                if df_pqs.shape[1] > 19:
-                    col_t = df_pqs.iloc[1:, 19].dropna().astype(str).str.strip().str.upper()
-                    concluidos = len(col_t[col_t == "CONCLUÍDO"])
-                    qualificando = len(col_t[col_t == "QUALIFICANDO"])
+                with tab_pqs:
+                    st.markdown("### Qualificação PQS")
                     
-                    if concluidos == 0 and qualificando == 0:
-                        st.info("Sem dados estatísticos de PQS na coluna T.")
+                    if df_pqs.shape[1] > 19:
+                        col_t = df_pqs.iloc[1:, 19].dropna().astype(str).str.strip().str.upper()
+                        concluidos = len(col_t[col_t == "CONCLUÍDO"])
+                        qualificando = len(col_t[col_t == "QUALIFICANDO"])
+                        
+                        if concluidos == 0 and qualificando == 0:
+                            st.info("Sem dados estatísticos de PQS na coluna T.")
+                        else:
+                            opt_pqs = make_echarts_donut(
+                                data_list=[
+                                    {"value": concluidos, "name": "Concluído"},
+                                    {"value": qualificando, "name": "Qualificando"}
+                                ],
+                                title="Status de Qualificação"
+                            )
+                            st_echarts(options=opt_pqs, height="450px")
                     else:
-                        opt_pqs = make_echarts_donut(
-                            data_list=[
-                                {"value": concluidos, "name": "Concluído"},
-                                {"value": qualificando, "name": "Qualificando"}
-                            ],
-                            title="Status de Qualificação"
-                        )
-                        st_echarts(options=opt_pqs, height="450px")
-                else:
-                    st.error("A aba PQS não possui a Coluna T.")
+                        st.error("A aba PQS não possui a Coluna T.")
                     
             except Exception as e:
                 st.error(f"Erro ao carregar os dados de Adestramento: {e}")
