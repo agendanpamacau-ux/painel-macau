@@ -1887,6 +1887,33 @@ if pagina == "Presentes":
             st_echarts(options=opt_prontidao, height="500px")
         else:
             st.info("Não há efetivo na visão atual para calcular a prontidão.")
+            
+        st.markdown("---")
+        st.markdown("##### Consulta Exclusiva por Divisão")
+        st.caption("Esta tabela permite visualizar rapidamente os militares de uma divisão específica, independente do filtro de setor escolhido acima.")
+        div_consulta = st.selectbox("Escolha a Divisão para consultar", ["Comandante", "Imediato", "OPE", "ARM", "MAQ"], key="pres_consulta_div_indep")
+        
+        # Recula todos os presentes usando a Divisão="Todos" para torná-la 100% independente do filtro primário
+        df_trip_indep = filtrar_tripulacao(df_raw, apenas_eqman, apenas_in, apenas_gvi, "Todos")
+        if not df_eventos.empty:
+            ausentes_hoje_indep = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
+            ausentes_hoje_indep = filtrar_eventos(ausentes_hoje_indep, apenas_eqman, apenas_in, apenas_gvi, "Todos")
+            nomes_ausentes_indep = set(ausentes_hoje_indep["Nome"].unique())
+        else:
+            nomes_ausentes_indep = set()
+        
+        df_presentes_indep = df_trip_indep[~df_trip_indep["Nome"].isin(nomes_ausentes_indep)].copy()
+        
+        if "Divisão" in df_presentes_indep.columns:
+            df_div = df_presentes_indep[df_presentes_indep["Divisão"].astype(str).str.strip().str.upper() == div_consulta.upper()].copy()
+            if not df_div.empty:
+                st.markdown(f"**Total presente na {div_consulta}:** {len(df_div)}")
+                tab_consulta = df_div[["Posto", "Nome", "Divisão", "Serviço", "EqMan", "IN"]].copy()
+                if "IN" in tab_consulta.columns:
+                    tab_consulta["IN"] = tab_consulta["IN"].apply(lambda v: "Sim" if parse_bool(v) else "Não")
+                st.dataframe(tab_consulta, use_container_width=True, hide_index=True)
+            else:
+                st.info(f"Nenhum militar presente listado para a divisão {div_consulta}.")
 
 # --------------------------------------------------------
 # AUSENTES
