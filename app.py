@@ -4049,100 +4049,117 @@ else:
                     idx_militar = next(opt[0] for opt in opcoes_militar if opt[1] == selecionado)
                     dados_militar = df_trip.loc[idx_militar]
                     
-                    # Nome em destaque
-                    st.markdown(f"### {selecionado}")
-                    st.markdown("<br>", unsafe_allow_html=True)
+                    texto_exportacao = f"--- FICHA DE DADOS PESSOAIS ---\n\nMILITAR: {selecionado}\n\n[DADOS GERAIS]\n"
                     
-                    # Exibir em duas colunas para layout mais limpo
-                    col1, col2 = st.columns(2)
-                    
-                    # Filtra colunas indesejadas que o pandas possa ter puxado vazias (ex: 'Unnamed: X')
-                    colunas_validas = [c for c in df_trip.columns if "Unnamed" not in str(c)]
-                    
-                    meio = len(colunas_validas) // 2
-                    
-                    for i, col_name in enumerate(colunas_validas):
-                        val = dados_militar[col_name]
-                        # Limpa valores nulos do pandas para exibição ("-")
-                        if pd.isna(val) or str(val).strip() == "" or str(val).strip().lower() == "nan":
-                            val_str = "-"
-                        else:
-                            val_str = str(val).strip()
-                            # Se a coluna for de data (ex: Nascimento), tentar formatar bonito se parecer data
-                            if "data" in str(col_name).lower():
-                                try:
-                                    dt = pd.to_datetime(val_str, dayfirst=True)
-                                    val_str = dt.strftime("%d/%m/%Y")
-                                except:
-                                    pass
-                                    
-                        # Coloca alternado nas colunas
-                        t_col = col1 if i < meio else col2
-                        with t_col:
-                            st.markdown(f"**{col_name}:** {val_str}")
+                    with st.container(border=True):
+                        # Nome em destaque
+                        st.markdown(f"### 🪪 {selecionado}")
+                        st.divider()
+                        
+                        # Exibir em duas colunas para layout mais limpo
+                        col1, col2 = st.columns(2)
+                        
+                        # Filtra colunas indesejadas que o pandas possa ter puxado vazias (ex: 'Unnamed: X')
+                        colunas_validas = [c for c in df_trip.columns if "Unnamed" not in str(c)]
+                        
+                        meio = len(colunas_validas) // 2
+                        
+                        for i, col_name in enumerate(colunas_validas):
+                            val = dados_militar[col_name]
+                            # Limpa valores nulos do pandas para exibição ("-")
+                            if pd.isna(val) or str(val).strip() == "" or str(val).strip().lower() == "nan":
+                                val_str = "-"
+                            else:
+                                val_str = str(val).strip()
+                                # Se a coluna for de data (ex: Nascimento), tentar formatar bonito se parecer data
+                                if "data" in str(col_name).lower():
+                                    try:
+                                        dt = pd.to_datetime(val_str, dayfirst=True)
+                                        val_str = dt.strftime("%d/%m/%Y")
+                                    except:
+                                        pass
+                                        
+                            texto_exportacao += f"{col_name}: {val_str}\n"
                             
-                    st.markdown("---")
-                    st.markdown("### Cursos do Militar")
-                    
-                    df_ofi = conn.read(spreadsheet=URL_ADESTRAMENTO, worksheet="GERAL - OFICIAIS", header=None, ttl="10m")
-                    df_pra = conn.read(spreadsheet=URL_ADESTRAMENTO, worksheet="GERAL - PRAÇAS", header=None, ttl="10m")
-                    
-                    nome_completo_sel = str(dados_militar.iloc[5]).strip().upper()
-                    nome_guerra_sel = str(dados_militar.iloc[6]).strip().upper() if len(dados_militar) > 6 else ""
-                    
-                    nip_sel = ""
-                    for col in dados_militar.index: 
-                        if "NIP" in str(col).upper():
-                            nip_sel = str(dados_militar[col]).strip()
-                            if nip_sel.endswith(".0"): nip_sel = nip_sel[:-2]
-                            nip_sel = nip_sel.replace(".", "").replace("-", "").replace(" ", "")
-                            break
-                    
-                    cursos_encontrados = []
-                    
-                    def mapear_cursos(df_sheet):
-                        encontrados = []
-                        nomes_cursos = []
-                        if df_sheet.shape[0] > 6:
-                            for idx_col in range(4, df_sheet.shape[1]):
-                                nomes_cursos.append(str(df_sheet.iloc[6, idx_col]).strip())
+                            # Coloca alternado nas colunas
+                            t_col = col1 if i < meio else col2
+                            with t_col:
+                                st.markdown(f"**{col_name}:** {val_str}")
                                 
-                        for idx, r_row in df_sheet.iterrows():
-                            if idx < 7: continue
+                        st.divider()
+                        st.markdown("#### 📚 Cursos do Militar")
+                        
+                        texto_exportacao += "\n[CURSOS REGISTRADOS]\n"
+                        
+                        df_ofi = conn.read(spreadsheet=URL_ADESTRAMENTO, worksheet="GERAL - OFICIAIS", header=None, ttl="10m")
+                        df_pra = conn.read(spreadsheet=URL_ADESTRAMENTO, worksheet="GERAL - PRAÇAS", header=None, ttl="10m")
+                        
+                        nome_completo_sel = str(dados_militar.iloc[5]).strip().upper()
+                        nome_guerra_sel = str(dados_militar.iloc[6]).strip().upper() if len(dados_militar) > 6 else ""
+                        
+                        nip_sel = ""
+                        for col in dados_militar.index: 
+                            if "NIP" in str(col).upper():
+                                nip_sel = str(dados_militar[col]).strip()
+                                if nip_sel.endswith(".0"): nip_sel = nip_sel[:-2]
+                                nip_sel = nip_sel.replace(".", "").replace("-", "").replace(" ", "")
+                                break
+                        
+                        cursos_encontrados = []
+                        
+                        def mapear_cursos(df_sheet):
+                            encontrados = []
+                            nomes_cursos = []
+                            if df_sheet.shape[0] > 6:
+                                for idx_col in range(4, df_sheet.shape[1]):
+                                    nomes_cursos.append(str(df_sheet.iloc[6, idx_col]).strip())
+                                    
+                            for idx, r_row in df_sheet.iterrows():
+                                if idx < 7: continue
+                                
+                                r_nip = str(r_row.iloc[1]).strip() if df_sheet.shape[1] > 1 else ""
+                                if r_nip.endswith(".0"): r_nip = r_nip[:-2]
+                                r_nip = r_nip.replace(".", "").replace("-", "").replace(" ", "")
+                                
+                                r_nome_g = str(r_row.iloc[2]).strip().upper() if df_sheet.shape[1] > 2 else ""
+                                r_nome_c = str(r_row.iloc[3]).strip().upper() if df_sheet.shape[1] > 3 else ""
+                                
+                                # Verifica correspondência (NIP ou completo ou guerra)
+                                match = False
+                                if nip_sel and r_nip and nip_sel == r_nip: match = True
+                                elif not nip_sel:
+                                    if (r_nome_c == nome_completo_sel and nome_completo_sel != "") or \
+                                       (r_nome_g == nome_guerra_sel and nome_guerra_sel != "") or \
+                                       (r_nome_g in selecionado.upper()):
+                                        match = True
+                                
+                                if match:
+                                   for id_c, val in enumerate(r_row[4:]):
+                                       if str(val) == "1" and id_c < len(nomes_cursos):
+                                           c_name = nomes_cursos[id_c]
+                                           if c_name and c_name.lower() != "nan":
+                                               encontrados.append(c_name)
+                                   break
+                            return encontrados
+                        
+                        cursos_encontrados.extend(mapear_cursos(df_ofi))
+                        cursos_encontrados.extend(mapear_cursos(df_pra))
+                        
+                        if len(cursos_encontrados) > 0:
+                            for crs in cursos_encontrados:
+                                st.markdown(f"- {crs}")
+                                texto_exportacao += f"- {crs}\n"
+                        else:
+                            st.info("Não constam cursos registrados para este militar na planilha de Adestramento.")
+                            texto_exportacao += "Nenhum curso registrado.\n"
                             
-                            r_nip = str(r_row.iloc[1]).strip() if df_sheet.shape[1] > 1 else ""
-                            if r_nip.endswith(".0"): r_nip = r_nip[:-2]
-                            r_nip = r_nip.replace(".", "").replace("-", "").replace(" ", "")
-                            
-                            r_nome_g = str(r_row.iloc[2]).strip().upper() if df_sheet.shape[1] > 2 else ""
-                            r_nome_c = str(r_row.iloc[3]).strip().upper() if df_sheet.shape[1] > 3 else ""
-                            
-                            # Verifica correspondência (NIP ou completo ou guerra)
-                            match = False
-                            if nip_sel and r_nip and nip_sel == r_nip: match = True
-                            elif not nip_sel:
-                                if (r_nome_c == nome_completo_sel and nome_completo_sel != "") or \
-                                   (r_nome_g == nome_guerra_sel and nome_guerra_sel != "") or \
-                                   (r_nome_g in selecionado.upper()):
-                                    match = True
-                            
-                            if match:
-                               for id_c, val in enumerate(r_row[4:]):
-                                   if str(val) == "1" and id_c < len(nomes_cursos):
-                                       c_name = nomes_cursos[id_c]
-                                       if c_name and c_name.lower() != "nan":
-                                           encontrados.append(c_name)
-                               break
-                        return encontrados
-                    
-                    cursos_encontrados.extend(mapear_cursos(df_ofi))
-                    cursos_encontrados.extend(mapear_cursos(df_pra))
-                    
-                    if len(cursos_encontrados) > 0:
-                        for crs in cursos_encontrados:
-                            st.markdown(f"- {crs}")
-                    else:
-                        st.info("Não constam cursos registrados para este militar na planilha de Adestramento.")
+                    st.download_button(
+                        label="📥 Baixar Ficha do Militar (TXT)",
+                        data=texto_exportacao,
+                        file_name=f"Ficha_{nome_guerra_sel if nome_guerra_sel else 'Militar'}.txt",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
             else:
                 st.error("Planilha incompleta ou a coluna 'Nome' não está no local esperado (Coluna G).")
                 
