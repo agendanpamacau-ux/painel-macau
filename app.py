@@ -449,7 +449,7 @@ def make_echarts_line(x_data, y_data, integer=False, mark_line_y=None, mark_line
             "label": {
                 "show": True, 
                 "position": "end", 
-                "formatter": "{b}"
+                "formatter": "{c} - {b}"
             },
             "data": [
                 {
