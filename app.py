@@ -419,7 +419,7 @@ def make_echarts_donut(data_list, title):
 # ============================================================
 # HELPER: ECHARTS LINE
 # ============================================================
-def make_echarts_line(x_data, y_data, integer=False):
+def make_echarts_line(x_data, y_data, integer=False, mark_line_y=None, mark_line_name=""):
     """
     Gera um gráfico de linha simples.
     x_data: lista de categorias
@@ -431,6 +431,35 @@ def make_echarts_line(x_data, y_data, integer=False):
     else:
         y_data_fmt = [f"{float(y):.2f}" if pd.notna(y) else "0.00" for y in y_data]
     
+    series_obj = {
+        "data": y_data_fmt, 
+        "type": "line",
+        "label": {
+            "show": True, 
+            "position": "top",
+            "color": "inherit", 
+            "fontSize": 12,
+            "formatter": "{c}"
+        }
+    }
+    
+    if mark_line_y is not None:
+        series_obj["markLine"] = {
+            "symbol": "none",
+            "label": {
+                "show": True, 
+                "position": "end", 
+                "formatter": "{b}"
+            },
+            "data": [
+                {
+                    "yAxis": mark_line_y, 
+                    "name": mark_line_name, 
+                    "lineStyle": {"color": "#ff4d4f", "type": "dashed", "width": 2}
+                }
+            ]
+        }
+    
     options = {
         "toolbox": {"feature": {"saveAsImage": {"title": "Salvar Imagem"}}},
         "grid": {"containLabel": True, "left": "5%", "right": "5%", "top": "15%", "bottom": "15%"},
@@ -439,17 +468,7 @@ def make_echarts_line(x_data, y_data, integer=False):
             "data": x_data,
         },
         "yAxis": {"type": "value"},
-        "series": [{
-            "data": y_data_fmt, 
-            "type": "line",
-            "label": {
-                "show": True, 
-                "position": "top",
-                "color": "inherit", 
-                "fontSize": 12,
-                "formatter": "{c}"
-            }
-        }],
+        "series": [series_obj],
         "tooltip": {
             "trigger": "axis",
             "backgroundColor": "rgba(50, 50, 50, 0.9)",
@@ -2114,7 +2133,13 @@ elif pagina == "Dias de Mar":
             
             # Gráfico 1: Dias de Mar por Ano (LINHA)
             st.markdown("##### Dias de Mar por Ano")
-            opt_ano = make_echarts_line(df_por_ano["ANO"].astype(str).tolist(), df_por_ano["DIAS DE MAR"].tolist(), integer=True)
+            opt_ano = make_echarts_line(
+                x_data=df_por_ano["ANO"].astype(str).tolist(), 
+                y_data=df_por_ano["DIAS DE MAR"].tolist(), 
+                integer=True,
+                mark_line_y=94,
+                mark_line_name="IDA do Navio"
+            )
             st_echarts(options=opt_ano, height="400px")
             
             st.markdown("---")
