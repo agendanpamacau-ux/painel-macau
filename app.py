@@ -2612,7 +2612,7 @@ else:
                                 df_raw_temp["PostoNome"] = df_raw_temp["Posto"].astype(str) + " " + df_raw_temp["Nome"].astype(str)
                                 opts_militares = sorted(df_raw_temp["PostoNome"].unique().tolist())
                                 
-                                sel_militar = st.selectbox("Selecione o Militar", ["Selecione..."] + opts_militares, key="search_mil_ferias" + key_suffix)
+                                sel_militar = st.selectbox("Selecione o Militar", ["Selecione..."] + opts_militares, key="searchmilferias" + key_suffix)
                                 
                                 if sel_militar != "Selecione...":
                                     df_ferias["PostoNome"] = df_ferias["Posto"].astype(str) + " " + df_ferias["Nome"].astype(str)
@@ -2635,8 +2635,8 @@ else:
                                 "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
                             }
                             hoje_br = datetime.utcnow() - timedelta(hours=3)
-                            sel_mes_nome = c_m.selectbox("Mês", list(meses_dict.keys()), index=hoje_br.month-1, key="ferias_mes_search" + key_suffix)
-                            sel_ano = c_a.number_input("Ano", value=hoje_br.year, min_value=2020, max_value=2030, key="ferias_ano_search" + key_suffix)
+                            sel_mes_nome = c_m.selectbox("Mês", list(meses_dict.keys()), index=hoje_br.month-1, key="feriasmessearch" + key_suffix)
+                            sel_ano = c_a.number_input("Ano", value=hoje_br.year, min_value=2020, max_value=2030, key="feriasanosearch" + key_suffix)
                             
                             sel_mes = meses_dict[sel_mes_nome]
                             
@@ -2691,7 +2691,7 @@ else:
                                     }],
                                     "tooltip": {"trigger": "axis", "backgroundColor": "rgba(50,50,50,0.9)", "borderColor": "#777", "textStyle": {"color": "#fff"}}
                                 }
-                                st_echarts(options=opt_perc_ferias, height="400px", key="perc_graf_"+key_suffix)
+                                st_echarts(options=opt_perc_ferias, height="400px", key="percgraf"+key_suffix)
     
                                 st.markdown("---")
         
@@ -2713,7 +2713,7 @@ else:
                                             vals.append(int(v))
                                         series_srv.append({"name": srv, "data": vals})
                                     opt_grouped = make_echarts_grouped_bar(x_meses, series_srv)
-                                    st_echarts(options=opt_grouped, height="500px", key="group_graf_"+key_suffix)
+                                    st_echarts(options=opt_grouped, height="500px", key="groupgraf"+key_suffix)
                                 else:
                                     st.info("Sem dados de férias para os serviços associados nesta visão.")
     
@@ -2740,7 +2740,7 @@ else:
                                         x_metas = df_metas["Mes"].tolist()
                                         y_metas = df_metas["Meta"].tolist()
                                         opt_metas = make_echarts_dual_line(x_metas, y_metas, realizado_acum, "Meta", "Realizado")
-                                        st_echarts(options=opt_metas, height="400px", key="metas_graf_"+key_suffix)
+                                        st_echarts(options=opt_metas, height="400px", key="metasgraf"+key_suffix)
                                     else:
                                         st.info("Não foi possível carregar as metas de férias.")
                                 except Exception as e:
@@ -2750,16 +2750,16 @@ else:
 
             abas = st.tabs(["Geral", "Divisão"])
             with abas[0]:
-                render_ferias_aba(df_eventos, df_raw, df_dias, "_geral")
+                render_ferias_aba(df_eventos, df_raw, df_dias, "Geral")
             with abas[1]:
                 st.markdown("#### Filtrar por Divisão")
-                divisao_sel_ferias = st.selectbox("Selecione a Divisão", ["Comandante", "Imediato", "OPE", "ARM", "MAQ"], key="ferias_divisao_sel")
+                divisao_sel_ferias = st.selectbox("Selecione a Divisão", ["Comandante", "Imediato", "OPE", "ARM", "MAQ"], key="feriasdivisaosel")
                 
                 d_eventos_div = df_eventos[df_eventos["Divisão"].astype(str).str.strip().str.upper() == divisao_sel_ferias.upper()].copy() if "Divisão" in df_eventos.columns else df_eventos.copy()
                 d_raw_div = df_raw[df_raw["Divisão"].astype(str).str.strip().str.upper() == divisao_sel_ferias.upper()].copy() if "Divisão" in df_raw.columns else df_raw.copy()
                 d_dias_div = df_dias[df_dias["Divisão"].astype(str).str.strip().str.upper() == divisao_sel_ferias.upper()].copy() if "Divisão" in df_dias.columns else df_dias.copy()
                 
-                render_ferias_aba(d_eventos_div, d_raw_div, d_dias_div, "_divisao")
+                render_ferias_aba(d_eventos_div, d_raw_div, d_dias_div, "Divisao")
     
 
     elif pagina == "Adestramento":
