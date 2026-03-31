@@ -1455,6 +1455,7 @@ def construir_eventos(df_raw: pd.DataFrame, blocos) -> pd.DataFrame:
         militar_info = {
             "Posto": posto,
             "Nome": nome,
+            "Divisão": str(row.get("Divisão", "")).strip(),
             "Escala": escala,
             "EqMan": eqman,
             "GVI": gvi,
@@ -1590,6 +1591,7 @@ def expandir_eventos_por_dia(df_eventos: pd.DataFrame) -> pd.DataFrame:
                 "Data": data,
                 "Posto": ev["Posto"],
                 "Nome": ev["Nome"],
+                "Divisão": ev["Divisão"],
                 "Escala": ev["Escala"],
                 "EqMan": ev["EqMan"],
                 "GVI": ev["GVI"],
@@ -1626,8 +1628,10 @@ def get_status_em_data(row, data_ref, blocos_cols):
 # 7. FUNÇÕES DE FILTRO E GRÁFICOS
 # ============================================================
 
-def filtrar_tripulacao(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
+def filtrar_tripulacao(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool, divisao: str = "Todos") -> pd.DataFrame:
     res = df.copy()
+    if divisao != "Todos" and "Divisão" in res.columns:
+        res = res[res["Divisão"].astype(str).str.strip().str.upper() == divisao.strip().upper()]
     if apenas_eqman and "EqMan" in res.columns:
         res = res[(res["EqMan"].notna()) & (res["EqMan"].astype(str) != "Não") & (res["EqMan"].astype(str) != "-")]
     if apenas_in and "IN" in res.columns:
@@ -1636,8 +1640,10 @@ def filtrar_tripulacao(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, ap
         res = res[res["Gvi/GP"].apply(parse_bool)]
     return res
 
-def filtrar_eventos(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool) -> pd.DataFrame:
+def filtrar_eventos(df: pd.DataFrame, apenas_eqman: bool, apenas_in: bool, apenas_gvi: bool, divisao: str = "Todos") -> pd.DataFrame:
     res = df.copy()
+    if divisao != "Todos" and "Divisão" in res.columns:
+        res = res[res["Divisão"].astype(str).str.strip().str.upper() == divisao.strip().upper()]
     if apenas_eqman:
         res = res[res["EqMan"] != "Não"]
     if apenas_in:
@@ -1829,11 +1835,12 @@ if pagina == "Presentes":
     st.markdown("---")
     
     st.markdown("##### Filtros & Data")
-    col_f1, col_f2, col_f3, col_data = st.columns([1.5, 1.5, 1.5, 2])
+    col_f1, col_f2, col_f3, col_data, col_div = st.columns([1, 1, 1, 1.5, 1.5])
     apenas_eqman = col_f1.checkbox("Apenas EqMan", key="pres_eqman")
     apenas_in    = col_f2.checkbox("Apenas IN", key="pres_in")
     apenas_gvi   = col_f3.checkbox("Apenas GVI/GP", key="pres_gvi")
-    data_ref = col_data.date_input("Data de Referência", hoje_padrao, key="data_pres", format="DD/MM/YYYY")
+    data_ref = col_data.date_input("Data Referência", hoje_padrao, key="data_pres", format="DD/MM/YYYY")
+    divisao_sel = col_div.selectbox("Divisão", ["Todos", "Comandante", "Imediato", "OPE", "ARM", "MAQ"], key="pres_div")
     hoje = pd.to_datetime(data_ref)
 
     with metrics_placeholder:
@@ -1842,10 +1849,10 @@ if pagina == "Presentes":
     
 
     with table_placeholder:
-        df_trip = filtrar_tripulacao(df_raw, apenas_eqman, apenas_in, apenas_gvi)
+        df_trip = filtrar_tripulacao(df_raw, apenas_eqman, apenas_in, apenas_gvi, divisao_sel)
         if not df_eventos.empty:
             ausentes_hoje = df_eventos[(df_eventos["Inicio"] <= hoje) & (df_eventos["Fim"] >= hoje)]
-            ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi)
+            ausentes_hoje = filtrar_eventos(ausentes_hoje, apenas_eqman, apenas_in, apenas_gvi, divisao_sel)
             nomes_ausentes = set(ausentes_hoje["Nome"].unique())
         else:
             nomes_ausentes = set()
@@ -1856,7 +1863,7 @@ if pagina == "Presentes":
         if df_presentes.empty:
             st.info("Nenhum militar presente para os filtros atuais.")
         else:
-            tabela = df_presentes[["Posto", "Nome", "Serviço", "EqMan", "Gvi/GP", "IN"]].copy()
+            tabela = df_presentes[["Posto", "Nome", "Divisão", "Serviço", "EqMan", "Gvi/GP", "IN"]].copy()
             if "Gvi/GP" in tabela.columns:
                 tabela["GVI/GP"] = tabela["Gvi/GP"].apply(lambda v: "Sim" if parse_bool(v) else "Não")
             if "IN" in tabela.columns:
@@ -2561,204 +2568,198 @@ else:
         st.subheader("Férias cadastradas")
         content_container = st.container()
         with content_container:
-            if df_eventos.empty:
-                st.write("Sem dados de férias registrados.")
-            else:
-                df_ferias = df_eventos[df_eventos["Tipo"] == "Férias"].copy()
-                
-                # 1. GRÁFICO DE ROSCA (PRIMEIRA INFORMAÇÃO)
-                st.markdown("### % de férias gozadas (tripulação)")
-                if "%DG" in df_raw.columns:
-                    media_percentual = df_raw["%DG"].mean(skipna=True)
-                    if pd.notna(media_percentual):
-                        if media_percentual <= 1:
-                            perc_gozado = media_percentual * 100
-                        else:
-                            perc_gozado = media_percentual
-                        perc_nao = max(0.0, 100.0 - perc_gozado)
-                        
-                        # ECHARTS DONUT
-                        data_ferias = [
-                            {"value": round(perc_gozado, 1), "name": "Gozado"},
-                            {"value": round(perc_nao, 1), "name": "Não gozado"}
-                        ]
-                        opt_ferias = make_echarts_donut(data_ferias, "Férias Gozadas")
-                        st_echarts(options=opt_ferias, height="400px")
-                    else:
-                        st.info("Não foi possível calcular a média da coluna %DG.")
+            def render_ferias_aba(df_eventos_l, df_raw_l, df_dias_l, key_suffix=""):
+                if df_eventos_l.empty:
+                    st.write("Sem dados de férias registrados para esta visão.")
                 else:
-                    st.info("Coluna %DG não encontrada na planilha para cálculo do percentual de férias gozadas.")
-                
-                st.markdown("---")
-    
-
-                if df_ferias.empty:
-                    st.info("Nenhuma férias cadastrada.")
-                else:
-                    # 2. CARDS DE PESQUISA
-                    c_search1, c_search2 = st.columns(2)
+                    df_ferias = df_eventos_l[df_eventos_l["Tipo"] == "Férias"].copy()
                     
-                    with c_search1:
-                        st.markdown("#### Buscar por Militar")
-                        # Cria lista combinada Posto + Nome para facilitar busca
-                        # Usa df_raw para garantir que todos apareçam na lista, mesmo sem férias
-                        df_raw_temp = df_raw.copy()
-                        if "Posto" in df_raw_temp.columns and "Nome" in df_raw_temp.columns:
-                            df_raw_temp["PostoNome"] = df_raw_temp["Posto"].astype(str) + " " + df_raw_temp["Nome"].astype(str)
-                            opts_militares = sorted(df_raw_temp["PostoNome"].unique().tolist())
-                            
-                            sel_militar = st.selectbox("Selecione o Militar", ["Selecione..."] + opts_militares, key="search_mil_ferias")
-                            
-                            if sel_militar != "Selecione...":
-                                # Filtra df_ferias
-                                df_ferias["PostoNome"] = df_ferias["Posto"].astype(str) + " " + df_ferias["Nome"].astype(str)
-                                res_militar = df_ferias[df_ferias["PostoNome"] == sel_militar].copy()
-                                
-                                if not res_militar.empty:
-                                    res_militar["Início"] = res_militar["Inicio"].dt.strftime("%d/%m/%Y")
-                                    res_militar["Término"] = res_militar["Fim"].dt.strftime("%d/%m/%Y")
-                                    st.dataframe(res_militar[["Início", "Término", "Duracao_dias"]].rename(columns={"Duracao_dias": "Dias"}), use_container_width=True, hide_index=True)
-                                else:
-                                    st.info("Nenhum período de férias encontrado para este militar.")
-                        else:
-                            st.error("Colunas Posto/Nome não encontradas.")
-
-                    with c_search2:
-                        st.markdown("#### Buscar por Mês/Ano")
-                        c_m, c_a = st.columns(2)
-                        meses_dict = {
-                            "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
-                            "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
-                        }
-                        hoje_br = datetime.utcnow() - timedelta(hours=3)
-                        sel_mes_nome = c_m.selectbox("Mês", list(meses_dict.keys()), index=hoje_br.month-1, key="ferias_mes_search")
-                        sel_ano = c_a.number_input("Ano", value=hoje_br.year, min_value=2020, max_value=2030, key="ferias_ano_search")
-                        
-                        sel_mes = meses_dict[sel_mes_nome]
-                        
-                        # Lógica de sobreposição de datas
-                        import calendar
-                        last_day = calendar.monthrange(sel_ano, sel_mes)[1]
-                        start_of_month = datetime(sel_ano, sel_mes, 1)
-                        end_of_month = datetime(sel_ano, sel_mes, last_day, 23, 59, 59)
-                        
-                        # Filtro: Inicio das férias <= Fim do Mês E Fim das férias >= Inicio do Mês
-                        mask = (df_ferias["Inicio"] <= end_of_month) & (df_ferias["Fim"] >= start_of_month)
-                        res_mes = df_ferias[mask].copy()
-                        
-                        if not res_mes.empty:
-                             res_mes["Início"] = res_mes["Inicio"].dt.strftime("%d/%m/%Y")
-                             res_mes["Término"] = res_mes["Fim"].dt.strftime("%d/%m/%Y")
-                             st.dataframe(res_mes[["Posto", "Nome", "Início", "Término"]], use_container_width=True, hide_index=True)
-                        else:
-                            st.info(f"Ninguém de férias em {sel_mes_nome}/{sel_ano}.")
-
-                    st.markdown("---")
-    
-                    
-                    # 3. MÉTRICAS GERAIS E GRÁFICOS
-                    col_f1m, col_f2m, col_f3m = st.columns(3)
-                    total_militares_com_ferias = df_ferias["Nome"].nunique()
-                    dias_totais_ferias = df_ferias["Duracao_dias"].sum()
-                    total_efetivo = df_raw["Nome"].nunique()
-                    restam_cadastrar = max(0, total_efetivo - total_militares_com_ferias)
-                    col_f1m.metric("Militares com férias", total_militares_com_ferias)
-                    col_f2m.metric("Dias totais", int(dias_totais_ferias))
-                    col_f3m.metric("Restam cadastrar", restam_cadastrar)
-                    
-                    st.markdown("---")
-    
-                    
-                    # --- GRÁFICO 1: % de militares de férias por mês ---
-                    if not df_dias.empty:
-                        df_dias_ferias = df_dias[df_dias["Tipo"] == "Férias"].copy()
-                        if not df_dias_ferias.empty:
-                            df_dias_ferias["Mes"] = df_dias_ferias["Data"].dt.to_period("M").dt.to_timestamp()
-                            df_mes_ferias = (df_dias_ferias[["Mes", "Nome"]].drop_duplicates()
-                                             .groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
-                            total_efetivo_ferias = df_raw["Nome"].nunique()
-                            df_mes_ferias["Perc"] = (df_mes_ferias["Militares"] / total_efetivo_ferias * 100).round(1)
-
-                            st.markdown("##### % de militares de férias por mês")
-                            x_mes_ferias = df_mes_ferias["Mes"].dt.strftime("%b/%Y").tolist()
-                            # Formata labels como percentual
-                            y_perc_fmt = [f"{v:.1f}" for v in df_mes_ferias["Perc"].tolist()]
-                            opt_perc_ferias = {
-                                "xAxis": {"type": "category", "data": x_mes_ferias, "axisLabel": {"interval": 0, "rotate": 30}},
-                                "yAxis": {"type": "value", "axisLabel": {"formatter": "{value}%"}},
-                                "series": [{"data": y_perc_fmt, "type": "bar",
-                                    "label": {"show": True, "position": "top", "fontSize": 12, "formatter": "{c}%"},
-                                    "itemStyle": {"color": "#4099ff"}
-                                }],
-                                "tooltip": {"trigger": "axis", "backgroundColor": "rgba(50,50,50,0.9)", "borderColor": "#777", "textStyle": {"color": "#fff"}}
-                            }
-                            st_echarts(options=opt_perc_ferias, height="400px")
-
-                            st.markdown("---")
-    
-
-                            # --- GRÁFICO 2: Férias por serviço por mês (barras agrupadas) ---
-                            st.markdown("##### Militares de férias por serviço (por mês)")
-                            servicos_filtro = SERVICOS_CONSIDERADOS
-                            df_dias_ferias_srv = df_dias_ferias[df_dias_ferias["Escala"].isin(servicos_filtro)].copy()
-                            if not df_dias_ferias_srv.empty:
-                                # Agrupar por mês e serviço
-                                df_srv_mes = (df_dias_ferias_srv[["Mes", "Nome", "Escala"]].drop_duplicates()
-                                              .groupby(["Mes", "Escala"])["Nome"].nunique().reset_index(name="Militares"))
-                                meses_unicos = sorted(df_srv_mes["Mes"].unique())
-                                mapa_meses_abrev = {1:"Jan",2:"Fev",3:"Mar",4:"Abr",5:"Mai",6:"Jun",7:"Jul",8:"Ago",9:"Set",10:"Out",11:"Nov",12:"Dez"}
-                                x_meses = [mapa_meses_abrev.get(m.month, str(m.month)) + "/" + str(m.year) for m in meses_unicos]
-                                series_srv = []
-                                for srv in servicos_filtro:
-                                    vals = []
-                                    for m in meses_unicos:
-                                        v = df_srv_mes[(df_srv_mes["Mes"] == m) & (df_srv_mes["Escala"] == srv)]["Militares"].sum()
-                                        vals.append(int(v))
-                                    series_srv.append({"name": srv, "data": vals})
-                                opt_grouped = make_echarts_grouped_bar(x_meses, series_srv)
-                                st_echarts(options=opt_grouped, height="500px")
+                    # 1. GRÁFICO DE ROSCA (PRIMEIRA INFORMAÇÃO)
+                    st.markdown("### % de férias gozadas (tripulação)")
+                    if "%DG" in df_raw_l.columns:
+                        media_percentual = df_raw_l["%DG"].mean(skipna=True)
+                        if pd.notna(media_percentual):
+                            if media_percentual <= 1:
+                                perc_gozado = media_percentual * 100
                             else:
-                                st.info("Sem dados de férias para os serviços considerados.")
-
-                            st.markdown("---")
-    
-
-                            # --- GRÁFICO 3: % férias gozadas vs Meta ---
-                            st.markdown("##### % de férias gozadas vs Meta")
-                            try:
-                                df_metas, ano_ref_metas = load_metas()
-                                if not df_metas.empty and ano_ref_metas:
-                                    st.caption(f"Ano de referência: **{ano_ref_metas}**")
-                                    # Calcular % realizado acumulado por mês
-                                    # Usar df_dias_ferias filtrado pelo ano de referência
-                                    df_ferias_ano = df_dias_ferias[df_dias_ferias["Data"].dt.year == ano_ref_metas].copy()
-                                    mapa_meses_nome = {1:"Janeiro",2:"Fevereiro",3:"Março",4:"Abril",5:"Maio",6:"Junho",
-                                                       7:"Julho",8:"Agosto",9:"Setembro",10:"Outubro",11:"Novembro",12:"Dezembro"}
-                                    total_efetivo_meta = df_raw["Nome"].nunique()
-                                    # Total de dias de férias esperado (30 dias/militar em média)
-                                    total_dias_esperado = total_efetivo_meta * 30
-
-                                    # Calcular dias de férias acumulados por mês
-                                    realizado_acum = []
-                                    dias_acumulados = 0
-                                    for mes_num in range(1, 13):
-                                        dias_mes = len(df_ferias_ano[df_ferias_ano["Data"].dt.month == mes_num])
-                                        dias_acumulados += dias_mes
-                                        perc = (dias_acumulados / total_dias_esperado * 100) if total_dias_esperado > 0 else 0
-                                        realizado_acum.append(round(perc, 1))
-
-                                    x_metas = df_metas["Mes"].tolist()
-                                    y_metas = df_metas["Meta"].tolist()
-                                    opt_metas = make_echarts_dual_line(x_metas, y_metas, realizado_acum, "Meta", "Realizado")
-                                    st_echarts(options=opt_metas, height="400px")
-                                else:
-                                    st.info("Não foi possível carregar as metas de férias.")
-                            except Exception as e:
-                                st.warning(f"Erro ao carregar gráfico de metas: {e}")
+                                perc_gozado = media_percentual
+                            perc_nao = max(0.0, 100.0 - perc_gozado)
+                            
+                            # ECHARTS DONUT
+                            data_ferias = [
+                                {"value": round(perc_gozado, 1), "name": "Gozado"},
+                                {"value": round(perc_nao, 1), "name": "Não gozado"}
+                            ]
+                            opt_ferias = make_echarts_donut(data_ferias, "Férias Gozadas")
+                            st_echarts(options=opt_ferias, height="400px", key="donut" + key_suffix)
                         else:
-                            st.info("Sem dados diários suficientes para gerar gráficos de férias.")
-
+                            st.info("Não foi possível calcular a média da coluna %DG.")
+                    else:
+                        st.info("Coluna %DG não encontrada na planilha para cálculo do percentual de férias gozadas.")
+                    
                     st.markdown("---")
+        
+                    if df_ferias.empty:
+                        st.info("Nenhuma férias cadastrada para esta visão.")
+                    else:
+                        # 2. CARDS DE PESQUISA
+                        c_search1, c_search2 = st.columns(2)
+                        
+                        with c_search1:
+                            st.markdown("#### Buscar por Militar")
+                            df_raw_temp = df_raw_l.copy()
+                            if "Posto" in df_raw_temp.columns and "Nome" in df_raw_temp.columns:
+                                df_raw_temp["PostoNome"] = df_raw_temp["Posto"].astype(str) + " " + df_raw_temp["Nome"].astype(str)
+                                opts_militares = sorted(df_raw_temp["PostoNome"].unique().tolist())
+                                
+                                sel_militar = st.selectbox("Selecione o Militar", ["Selecione..."] + opts_militares, key="search_mil_ferias" + key_suffix)
+                                
+                                if sel_militar != "Selecione...":
+                                    df_ferias["PostoNome"] = df_ferias["Posto"].astype(str) + " " + df_ferias["Nome"].astype(str)
+                                    res_militar = df_ferias[df_ferias["PostoNome"] == sel_militar].copy()
+                                    
+                                    if not res_militar.empty:
+                                        res_militar["Início"] = res_militar["Inicio"].dt.strftime("%d/%m/%Y")
+                                        res_militar["Término"] = res_militar["Fim"].dt.strftime("%d/%m/%Y")
+                                        st.dataframe(res_militar[["Início", "Término", "Duracao_dias"]].rename(columns={"Duracao_dias": "Dias"}), use_container_width=True, hide_index=True)
+                                    else:
+                                        st.info("Nenhum período de férias encontrado para este militar na visão atual.")
+                            else:
+                                st.error("Colunas Posto/Nome não encontradas.")
+    
+                        with c_search2:
+                            st.markdown("#### Buscar por Mês/Ano")
+                            c_m, c_a = st.columns(2)
+                            meses_dict = {
+                                "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, "Maio": 5, "Junho": 6,
+                                "Julho": 7, "Agosto": 8, "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
+                            }
+                            hoje_br = datetime.utcnow() - timedelta(hours=3)
+                            sel_mes_nome = c_m.selectbox("Mês", list(meses_dict.keys()), index=hoje_br.month-1, key="ferias_mes_search" + key_suffix)
+                            sel_ano = c_a.number_input("Ano", value=hoje_br.year, min_value=2020, max_value=2030, key="ferias_ano_search" + key_suffix)
+                            
+                            sel_mes = meses_dict[sel_mes_nome]
+                            
+                            import calendar
+                            last_day = calendar.monthrange(sel_ano, sel_mes)[1]
+                            start_of_month = datetime(sel_ano, sel_mes, 1)
+                            end_of_month = datetime(sel_ano, sel_mes, last_day, 23, 59, 59)
+                            
+                            mask = (df_ferias["Inicio"] <= end_of_month) & (df_ferias["Fim"] >= start_of_month)
+                            res_mes = df_ferias[mask].copy()
+                            
+                            if not res_mes.empty:
+                                 res_mes["Início"] = res_mes["Inicio"].dt.strftime("%d/%m/%Y")
+                                 res_mes["Término"] = res_mes["Fim"].dt.strftime("%d/%m/%Y")
+                                 st.dataframe(res_mes[["Posto", "Nome", "Início", "Término"]], use_container_width=True, hide_index=True)
+                            else:
+                                st.info(f"Ninguém de férias em {sel_mes_nome}/{sel_ano} nesta divisão.")
+    
+                        st.markdown("---")
+        
+                        # 3. MÉTRICAS GERAIS E GRÁFICOS
+                        col_f1m, col_f2m, col_f3m = st.columns(3)
+                        total_militares_com_ferias = df_ferias["Nome"].nunique()
+                        dias_totais_ferias = df_ferias["Duracao_dias"].sum()
+                        total_efetivo = df_raw_l["Nome"].nunique()
+                        restam_cadastrar = max(0, total_efetivo - total_militares_com_ferias)
+                        col_f1m.metric("Militares com férias", total_militares_com_ferias)
+                        col_f2m.metric("Dias totais", int(dias_totais_ferias))
+                        col_f3m.metric("Restam cadastrar", restam_cadastrar)
+                        
+                        st.markdown("---")
+        
+                        # --- GRÁFICO 1: % de militares de férias por mês ---
+                        if not df_dias_l.empty:
+                            df_dias_ferias = df_dias_l[df_dias_l["Tipo"] == "Férias"].copy()
+                            if not df_dias_ferias.empty:
+                                df_dias_ferias["Mes"] = df_dias_ferias["Data"].dt.to_period("M").dt.to_timestamp()
+                                df_mes_ferias = (df_dias_ferias[["Mes", "Nome"]].drop_duplicates()
+                                                 .groupby("Mes")["Nome"].nunique().reset_index(name="Militares"))
+                                total_efetivo_ferias = df_raw_l["Nome"].nunique()
+                                df_mes_ferias["Perc"] = (df_mes_ferias["Militares"] / total_efetivo_ferias * 100).round(1) if total_efetivo_ferias > 0 else 0
+    
+                                st.markdown("##### % de militares de férias por mês")
+                                x_mes_ferias = df_mes_ferias["Mes"].dt.strftime("%b/%Y").tolist()
+                                y_perc_fmt = [f"{v:.1f}" for v in df_mes_ferias["Perc"].tolist()]
+                                opt_perc_ferias = {
+                                    "xAxis": {"type": "category", "data": x_mes_ferias, "axisLabel": {"interval": 0, "rotate": 30}},
+                                    "yAxis": {"type": "value", "axisLabel": {"formatter": "{value}%"}},
+                                    "series": [{"data": y_perc_fmt, "type": "bar",
+                                        "label": {"show": True, "position": "top", "fontSize": 12, "formatter": "{c}%"},
+                                        "itemStyle": {"color": "#4099ff"}
+                                    }],
+                                    "tooltip": {"trigger": "axis", "backgroundColor": "rgba(50,50,50,0.9)", "borderColor": "#777", "textStyle": {"color": "#fff"}}
+                                }
+                                st_echarts(options=opt_perc_ferias, height="400px", key="perc_graf_"+key_suffix)
+    
+                                st.markdown("---")
+        
+                                # --- GRÁFICO 2: Férias por serviço por mês (barras agrupadas) ---
+                                st.markdown("##### Militares de férias por serviço (por mês)")
+                                servicos_filtro = SERVICOS_CONSIDERADOS
+                                df_dias_ferias_srv = df_dias_ferias[df_dias_ferias["Escala"].isin(servicos_filtro)].copy()
+                                if not df_dias_ferias_srv.empty:
+                                    df_srv_mes = (df_dias_ferias_srv[["Mes", "Nome", "Escala"]].drop_duplicates()
+                                                  .groupby(["Mes", "Escala"])["Nome"].nunique().reset_index(name="Militares"))
+                                    meses_unicos = sorted(df_srv_mes["Mes"].unique())
+                                    mapa_meses_abrev = {1:"Jan",2:"Fev",3:"Mar",4:"Abr",5:"Mai",6:"Jun",7:"Jul",8:"Ago",9:"Set",10:"Out",11:"Nov",12:"Dez"}
+                                    x_meses = [mapa_meses_abrev.get(m.month, str(m.month)) + "/" + str(m.year) for m in meses_unicos]
+                                    series_srv = []
+                                    for srv in servicos_filtro:
+                                        vals = []
+                                        for m in meses_unicos:
+                                            v = df_srv_mes[(df_srv_mes["Mes"] == m) & (df_srv_mes["Escala"] == srv)]["Militares"].sum()
+                                            vals.append(int(v))
+                                        series_srv.append({"name": srv, "data": vals})
+                                    opt_grouped = make_echarts_grouped_bar(x_meses, series_srv)
+                                    st_echarts(options=opt_grouped, height="500px", key="group_graf_"+key_suffix)
+                                else:
+                                    st.info("Sem dados de férias para os serviços associados nesta visão.")
+    
+                                st.markdown("---")
+        
+                                # --- GRÁFICO 3: % férias gozadas vs Meta ---
+                                st.markdown("##### % de férias gozadas vs Meta")
+                                try:
+                                    df_metas, ano_ref_metas = load_metas()
+                                    if not df_metas.empty and ano_ref_metas:
+                                        st.caption(f"Ano de referência: **{ano_ref_metas}**")
+                                        df_ferias_ano = df_dias_ferias[df_dias_ferias["Data"].dt.year == ano_ref_metas].copy()
+                                        total_efetivo_meta = df_raw_l["Nome"].nunique()
+                                        total_dias_esperado = total_efetivo_meta * 30
+    
+                                        realizado_acum = []
+                                        dias_acumulados = 0
+                                        for mes_num in range(1, 13):
+                                            dias_mes = len(df_ferias_ano[df_ferias_ano["Data"].dt.month == mes_num])
+                                            dias_acumulados += dias_mes
+                                            perc = (dias_acumulados / total_dias_esperado * 100) if total_dias_esperado > 0 else 0
+                                            realizado_acum.append(round(perc, 1))
+    
+                                        x_metas = df_metas["Mes"].tolist()
+                                        y_metas = df_metas["Meta"].tolist()
+                                        opt_metas = make_echarts_dual_line(x_metas, y_metas, realizado_acum, "Meta", "Realizado")
+                                        st_echarts(options=opt_metas, height="400px", key="metas_graf_"+key_suffix)
+                                    else:
+                                        st.info("Não foi possível carregar as metas de férias.")
+                                except Exception as e:
+                                    st.warning(f"Erro ao carregar gráfico de metas: {e}")
+                            else:
+                                st.info("Sem dados diários suficientes para gerar gráficos de férias nesta visão.")
+
+            abas = st.tabs(["Geral", "Divisão"])
+            with abas[0]:
+                render_ferias_aba(df_eventos, df_raw, df_dias, "_geral")
+            with abas[1]:
+                st.markdown("#### Filtrar por Divisão")
+                divisao_sel_ferias = st.selectbox("Selecione a Divisão", ["Comandante", "Imediato", "OPE", "ARM", "MAQ"], key="ferias_divisao_sel")
+                
+                d_eventos_div = df_eventos[df_eventos["Divisão"].astype(str).str.strip().str.upper() == divisao_sel_ferias.upper()].copy() if "Divisão" in df_eventos.columns else df_eventos.copy()
+                d_raw_div = df_raw[df_raw["Divisão"].astype(str).str.strip().str.upper() == divisao_sel_ferias.upper()].copy() if "Divisão" in df_raw.columns else df_raw.copy()
+                d_dias_div = df_dias[df_dias["Divisão"].astype(str).str.strip().str.upper() == divisao_sel_ferias.upper()].copy() if "Divisão" in df_dias.columns else df_dias.copy()
+                
+                render_ferias_aba(d_eventos_div, d_raw_div, d_dias_div, "_divisao")
     
 
     elif pagina == "Adestramento":
